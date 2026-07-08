@@ -1,0 +1,6 @@
+.env
+.DS_Store
+.clasp.json
+.claude/
+.superpowers/
+node_modules/

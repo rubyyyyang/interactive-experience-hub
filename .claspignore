@@ -1,0 +1,7 @@
+CLAUDE.md
+.claude/**
+.superpowers/**
+docs/**
+.clasp.json
+.gitignore
+.DS_Store
