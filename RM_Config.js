@@ -150,6 +150,8 @@ const ENHANCED_CONFIG = {
     CTA_LINK: "CTALink",
     GROUP: "Group",
     CREATOR_EMPLOYEE_ADVOC: "Creator Employee Advocacy Link",
+    DURATION: "Duration",
+    DESCRIPTION_FOR_SEO: "Description for SEO",
 
     // Production
     PROD_ARCADE_LINK: "Production Link",
