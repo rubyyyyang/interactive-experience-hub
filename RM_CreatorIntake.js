@@ -257,8 +257,6 @@ function extractCreatorFormData(event) {
     mobileFriendly: getLastNonEmptyByHeader("Mobile-friendly design considered?"),
     creatorEmployeeAdvocacy: getLastNonEmptyByHeader("Optional: Have an Employee Advocacy link? Add it here."),
     group: getLastNonEmptyByHeader("Optional: Should this IE be grouped with another or part of a larger collection? If yes, add the name of the IE it belongs with."),
-    duration: getLastNonEmptyByHeader("Duration"),
-    descriptionForSeo: getLastNonEmptyByHeader("Description for SEO"),
 
     globalId: normalizeString(globalIdRaw).replace(/^'/, "")
   };
@@ -345,8 +343,6 @@ function buildCreatorPayload(formData) {
     [ENHANCED_CONFIG.COLUMNS.CTA_LINK]: formData.ctaLink,
     [ENHANCED_CONFIG.COLUMNS.GROUP]: formData.group,
     [ENHANCED_CONFIG.COLUMNS.CREATOR_EMPLOYEE_ADVOC]: formData.creatorEmployeeAdvocacy,
-    [ENHANCED_CONFIG.COLUMNS.DURATION]: formData.duration,
-    [ENHANCED_CONFIG.COLUMNS.DESCRIPTION_FOR_SEO]: formData.descriptionForSeo,
 
     [ENHANCED_CONFIG.COLUMNS.CONTENT_TYPE]: formData.contentType,
     [ENHANCED_CONFIG.COLUMNS.PRIMARY_PRODUCT]: formData.primaryProduct,
@@ -528,8 +524,6 @@ function prepareCreatorOnlyDocumentData(formData) {
     [ENHANCED_CONFIG.COLUMNS.CTA_LINK]: formData.ctaLink,
     [ENHANCED_CONFIG.COLUMNS.GROUP]: formData.group,
     [ENHANCED_CONFIG.COLUMNS.CREATOR_EMPLOYEE_ADVOC]: formData.creatorEmployeeAdvocacy,
-    [ENHANCED_CONFIG.COLUMNS.DURATION]: formData.duration,
-    [ENHANCED_CONFIG.COLUMNS.DESCRIPTION_FOR_SEO]: formData.descriptionForSeo,
 
     [ENHANCED_CONFIG.COLUMNS.CONTENT_TYPE]: formData.contentType,
     [ENHANCED_CONFIG.COLUMNS.PRIMARY_PRODUCT]: formData.primaryProduct,
