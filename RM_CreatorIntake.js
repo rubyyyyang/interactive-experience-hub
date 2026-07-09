@@ -284,7 +284,8 @@ function handleCreatorWithExistingGlobalId(formData) {
 
     const existingRequest = getMasterRowByGlobalId(formData.globalId);
     if (!existingRequest || existingRequest.rowIndex === -1) {
-      throw new Error(`No existing request found for Global ID: ${formData.globalId}`);
+      console.log(`No existing request found for Global ID: ${formData.globalId}. Treating as new creator-only submission.`);
+      return handleCreatorWithoutGlobalId(formData);
     }
 
     const creatorPayload = buildCreatorPayload(formData);
@@ -414,7 +415,7 @@ function handleCreatorWithoutGlobalId(formData) {
   try {
     console.log("Processing creator-only submission (no Global ID)");
 
-    const newGlobalId = Utilities.getUuid();
+    const newGlobalId = formData.globalId || Utilities.getUuid();
     formData.globalId = newGlobalId;
 
     const documentData = prepareCreatorOnlyDocumentData(formData);
