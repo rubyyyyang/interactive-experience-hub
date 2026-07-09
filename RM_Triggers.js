@@ -1,424 +1,600 @@
 /************************************************************
- * Enhanced_Utils.gs - Unified Utility Functions
+ * Enhanced_Triggers.gs - Event-Driven Trigger Management
  *
- * Shared helpers used across workflow, creator intake,
- * triggers, and data sync.
+ * Centralized trigger management for:
+ * - onEdit
+ * - onFormSubmit
+ * - trigger installation
+ * - status validation
+ * - production link auto-advance
+ *
+ * NOTE:
+ * - Version sync trigger lives in Enhanced_DataSync.gs:
+ *   onEdit_VersionSync
+ * - Orphan cleanup on row deletion lives in Enhanced_DataSync.gs:
+ *   onChange_VersionCleanup
  ************************************************************/
 
 /* =========================
-   DOCUMENT MANAGEMENT
+   EVENT SYSTEM
 ========================= */
 
+const eventSubscribers = new Map();
+const eventQueue = [];
+const EVENT_PROCESSING_DELAY = 100;
+
 /**
- * Unified document creation from template
+ * Publish event for loose coupling
  */
-function createDocumentFromTemplate(data) {
+function publishEvent(event) {
   try {
-    if (!data) {
-      throw new Error("Document data is required");
-    }
-
-    const templateId = getTemplateId();
-    const folderId = getOutputFolderId();
-
-    if (!templateId) {
-      throw new Error("Template ID not configured");
-    }
-    if (!folderId) {
-      throw new Error("Output folder ID not configured");
-    }
-
-    const template = DriveApp.getFileById(templateId);
-    const folder = DriveApp.getFolderById(folderId);
-
-    const docTitle = data.docTitle || generateDocumentTitle(data);
-
-    const newFile = template.makeCopy(docTitle, folder);
-    const doc = DocumentApp.openById(newFile.getId());
-    const body = doc.getBody();
-
-    replaceDocumentTokens(body, data);
-
-    doc.saveAndClose();
-
-    console.log(`Document created successfully: ${docTitle}`);
-    return newFile.getUrl();
-
-  } catch (error) {
-    console.error(`Failed to create document: ${error.message}`);
-    throw new Error(`Document creation failed: ${error.message}`);
-  }
-}
-
-/**
- * Generate document title with fallbacks
- */
-function generateDocumentTitle(data) {
-  const origin = data.originType || ENHANCED_CONFIG.ORIGIN_TYPES.REQUEST_FORM;
-  const title =
-    data.finalDemoTitle ||
-    data.demoTitle ||
-    data.productPrimary ||
-    data.product ||
-    "(No title)";
-  const creator = data.creatorName || data.requestorName || "Unknown";
-  const globalId = data.globalId || "";
-
-  return `${origin} – ${title} – ${creator} – ${globalId}`;
-}
-
-/**
- * Replace supported tokens in the document
- */function replaceDocumentTokens(body, data) {
-  const replaceIfExists = (token, value) => {
-    if (value != null && String(value).trim() !== "") {
-      body.replaceText(token, String(value).trim());
-    }
-  };
-
-  body.replaceText("<<OriginType>>", String(data.originType || ""));
-  body.replaceText("<<GlobalID>>", String(data.globalId || ""));
-  body.replaceText("<<Timestamp>>", String(data.timestamp || ""));
-  replaceIfExists("<<CreatorTimestamp>>", data.creatorTimestamp);
-
-  replaceIfExists("<<DemoTitle>>", data.demoTitle);
-  replaceIfExists("<<RequestorName>>", data.requestorName);
-  replaceIfExists("<<RequestorEmail>>", data.requestorEmail);
-  replaceIfExists("<<RequestorTeam>>", data.team || data.requestorTeam);
-  replaceIfExists("<<Priority>>", data.priority);
-  replaceIfExists("<<Deadline>>", data.deadline);
-  replaceIfExists("<<ContactedBU>>", data.contactedBU);
-  replaceIfExists("<<CheckedExisting>>", data.checkedDemo);
-
-  // Product and content fields
-  replaceIfExists("<<PrimaryProduct>>", data.productPrimary || data.primaryProduct);
-  replaceIfExists("<<Product>>", data.product);
-  replaceIfExists("<<ContentType>>", data.contentType);
-  replaceIfExists("<<TDP>>", data.tdp);
-  replaceIfExists("<<SalesTactic>>", data.salesTactic);
-  replaceIfExists("<<MarketingProgram>>", data.marketingProg || data.marketingProgram);
-  replaceIfExists("<<Event>>", data.event);
-  replaceIfExists("<<Audience>>", data.audience);
-  replaceIfExists("<<Personas>>", data.personas);
-  replaceIfExists("<<Verticals>>", data.verticals || data.vertical);
-  replaceIfExists("<<PainPoints>>", data.painPoints);
-  replaceIfExists("<<ContextDescription>>", data.description || data.demoDescription);
-  replaceIfExists("<<Links>>", data.links);
-  replaceIfExists("<<Destination>>", data.destination);
-  replaceIfExists("<<EmployeeAdvocacy>>", data.employeeAdvoc || data.creatorEmpAdv || data.creatorEmployeeAdvocacy);
-
-  replaceIfExists("<<CreatorName>>", data.creatorName);
-  replaceIfExists("<<CreatorEmail>>", data.creatorEmail);
-  replaceIfExists("<<CreatorTeam>>", data.creatorTeam);
-  replaceIfExists("<<FinalDemoTitle>>", data.finalDemoTitle);
-  replaceIfExists("<<CreationLink>>", data.creationLink);
-  replaceIfExists("<<Quarter>>", data.quarter);
-  replaceIfExists("<<DemoDescription>>", data.demoDescription);
-  replaceIfExists("<<Language>>", data.language);
-  replaceIfExists("<<SyntheticVoice>>", data.syntheticVoice);
-  replaceIfExists("<<Translation>>", data.translation);
-  replaceIfExists("<<MobileFriendly>>", data.mobileFriendly);
-  replaceIfExists("<<SEOWords>>", data.seoWords);
-  replaceIfExists("<<CTALink>>", data.ctaLink);
-  replaceIfExists("<<Group>>", data.group);
-  replaceIfExists("<<CreatorEmployeeAdvocacy>>", data.creatorEmployeeAdvocacy || data.creatorEmpAdv);
-}
-
-/**
- * Update existing document tokens by URL
- */
-function updateDocumentTokens(requestDocUrl, data) {
-  if (!requestDocUrl) {
-    console.warn("No document URL provided for update");
-    return;
-  }
-
-  try {
-    const docIdMatch = String(requestDocUrl).match(/\/d\/([a-zA-Z0-9-_]+)/);
-    if (!docIdMatch) {
-      throw new Error(`Could not parse document ID from URL: ${requestDocUrl}`);
-    }
-
-    const docId = docIdMatch[1];
-    const doc = DocumentApp.openById(docId);
-    const body = doc.getBody();
-
-    replaceDocumentTokens(body, data);
-
-    doc.saveAndClose();
-    console.log(`Document updated successfully: ${docId}`);
-
-  } catch (error) {
-    console.error(`Failed to update document: ${error.message}`);
-  }
-}
-
-/* =========================
-   SHEET UTILITIES
-========================= */
-
-const headerCache = new Map();
-const HEADER_CACHE_TTL = ENHANCED_CONFIG.PERFORMANCE.CACHE_TTL_MINUTES * 60 * 1000;
-
-/**
- * Build header map with caching
- */
-function getHeaderMapFromSheet(sheet, headerRow = 1) {
-  if (!sheet) {
-    throw new Error("Sheet is required for header mapping");
-  }
-
-  const sheetId = sheet.getSheetId();
-  const cacheKey = `${sheetId}_${headerRow}`;
-  const cached = headerCache.get(cacheKey);
-
-  if (cached && (Date.now() - cached.timestamp) < HEADER_CACHE_TTL) {
-    return cached.map;
-  }
-
-  try {
-    const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const map = {};
-
-    for (let i = 0; i < headers.length; i++) {
-      const name = String(headers[i] || "").trim();
-      if (name) {
-        map[name] = i;
-      }
-    }
-
-    headerCache.set(cacheKey, {
-      map,
-      timestamp: Date.now()
+    eventQueue.push({
+      ...event,
+      timestamp: new Date(),
+      id: Utilities.getUuid()
     });
 
-    return map;
+    Utilities.sleep(EVENT_PROCESSING_DELAY);
+    processEventQueue();
 
   } catch (error) {
-    console.error(`Failed to get header map: ${error.message}`);
-    throw new Error(`Header mapping failed: ${error.message}`);
+    logError("publishEvent", error, { event });
   }
 }
 
 /**
- * Safe value retrieval from row data by column name
+ * Subscribe to events
  */
-function safeGetByName(row, headerMap, columnName) {
-  if (!row || !headerMap || !columnName) {
-    return "";
+function subscribeToEvent(eventType, callback) {
+  if (!eventSubscribers.has(eventType)) {
+    eventSubscribers.set(eventType, []);
   }
+  eventSubscribers.get(eventType).push(callback);
+}
 
-  const index = headerMap[columnName];
-  if (index === undefined || index === null) {
-    return "";
+/**
+ * Process queued events
+ */
+function processEventQueue() {
+  while (eventQueue.length > 0) {
+    const event = eventQueue.shift();
+
+    try {
+      const subscribers = eventSubscribers.get(event.type) || [];
+      for (const callback of subscribers) {
+        safeExecute(`event_${event.type}`, () => callback(event));
+      }
+    } catch (error) {
+      logError("processEventQueue", error, { event });
+    }
   }
-
-  const value = row[index];
-  return value !== undefined && value !== null ? value : "";
 }
 
 /* =========================
-   STATUS UTILITIES
+   MAIN TRIGGER HANDLERS
 ========================= */
 
 /**
- * Normalize status values to canonical config values
+ * Main spreadsheet edit trigger
  */
-function normalizeStatusCanonical(rawStatus) {
-  if (!rawStatus) return "";
-
-  const cleaned = normalizeString(rawStatus);
-  if (!cleaned) return "";
-
-  const lowercase = cleaned.toLowerCase();
-
-  const canonicalStatuses = Object.values(ENHANCED_CONFIG.STATUS);
-  const exactMatch = canonicalStatuses.find(status => status.toLowerCase() === lowercase);
-  if (exactMatch) return exactMatch;
-
-  const legacyMappings = {
-    "open": ENHANCED_CONFIG.STATUS.REQUEST_OPEN,
-    "approved": ENHANCED_CONFIG.STATUS.REQUEST_APPROVED,
-    "request approved": ENHANCED_CONFIG.STATUS.REQUEST_APPROVED,
-    "received": ENHANCED_CONFIG.STATUS.IE_RECEIVED,
-    "reviewed": ENHANCED_CONFIG.STATUS.IE_REVIEWED,
-    "published": ENHANCED_CONFIG.STATUS.IE_PUBLISHED,
-    "retired": ENHANCED_CONFIG.STATUS.IE_RETIRED,
-    "closed": ENHANCED_CONFIG.STATUS.CLOSED
-  };
-
-  return legacyMappings[lowercase] || cleaned;
-}
-
-/**
- * Check whether a status is a final state
- */
-function isFinalStatus(rawStatus) {
-  const canonical = normalizeStatusCanonical(rawStatus);
-  return canonical === ENHANCED_CONFIG.STATUS.REQUEST_APPROVED ||
-         canonical === ENHANCED_CONFIG.STATUS.CLOSED;
-}
-
-/* =========================
-   DATE / STRING UTILITIES
-========================= */
-
-/**
- * Format dates safely
- */
-function formatDate(value) {
-  if (!value) return "—";
-
+function onEdit(event) {
   try {
-    if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value)) {
-      return Utilities.formatDate(value, Session.getScriptTimeZone(), "EEE MMM dd yyyy");
+    if (!event || !event.range) {
+      console.log("Invalid edit event received");
+      return;
     }
 
-    if (typeof value === "string") {
-      const parsed = new Date(value);
-      if (!isNaN(parsed)) {
-        return Utilities.formatDate(parsed, Session.getScriptTimeZone(), "EEE MMM dd yyyy");
+    const range = event.range;
+    const sheet = range.getSheet();
+    const sheetName = sheet.getName();
+    const masterSheetName = getMasterSheetName();
+
+    if (sheetName !== masterSheetName) {
+      return;
+    }
+
+    if (range.getRow() <= ENHANCED_CONFIG.SHEETS.HEADER_ROW) {
+      return;
+    }
+
+    if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) {
+      console.log("Ignoring multi-cell edit to prevent trigger storms");
+      return;
+    }
+
+    publishEvent({
+      type: "sheet_edit",
+      sheet: sheetName,
+      row: range.getRow(),
+      column: range.getColumn(),
+      value: event.value,
+      oldValue: event.oldValue
+    });
+
+    const headerMap = getHeaderMapFromSheet(sheet, ENHANCED_CONFIG.SHEETS.HEADER_ROW);
+
+    const statusColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
+    const prodLinkColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK];
+
+    if (statusColumnIndex != null && range.getColumn() === statusColumnIndex + 1) {
+      processStatusEdit(event, sheet, headerMap);
+    } else if (prodLinkColumnIndex != null && range.getColumn() === prodLinkColumnIndex + 1) {
+      processProdLinkEdit(event, sheet, headerMap);
+    }
+
+    stampStatusTimestamp(event, sheet, headerMap);
+
+  } catch (error) {
+    logError("onEdit", error, {
+      event: event ? {
+        row: event.range?.getRow(),
+        column: event.range?.getColumn(),
+        value: event.value,
+        oldValue: event.oldValue
+      } : null
+    });
+  }
+}
+
+/**
+ * Main form submission trigger
+ */
+function onFormSubmit(event) {
+  try {
+    if (!event || !event.namedValues || !event.range) {
+      console.log("Invalid form submission event received");
+      return;
+    }
+
+    const sheetName = event.range.getSheet().getName();
+
+    publishEvent({
+      type: "form_submit",
+      sheet: sheetName,
+      namedValues: event.namedValues
+    });
+
+    if (sheetName === "Request_Form_Raw") {
+      processRequestFormSubmission(event);
+    } else if (sheetName === getCreatorFormSheetName()) {
+      processCreatorFormSubmission(event);
+    } else {
+      console.log(`Unknown form submission sheet: ${sheetName}`);
+    }
+
+  } catch (error) {
+    logError("onFormSubmit", error, {
+      event: event ? { sheetName: event.range?.getSheet()?.getName() } : null
+    });
+  }
+}
+
+/* =========================
+   STATUS EDIT PROCESSING
+========================= */
+
+/**
+ * Process status edits
+ */
+function processStatusEdit(event, sheet, headerMap) {
+  try {
+    const row = event.range.getRow();
+    const newStatusRaw = String(event.value || "").trim();
+    const newStatus = normalizeStatusCanonical(newStatusRaw);
+
+    if (!newStatus) {
+      console.log("Empty or invalid status, skipping processing");
+      return;
+    }
+
+    const oldStatusRaw = event.oldValue != null ? String(event.oldValue).trim() : "";
+    const oldStatus = normalizeStatusCanonical(oldStatusRaw) || ENHANCED_CONFIG.STATUS.REQUEST_OPEN;
+
+    if (!validateStatusTransition(sheet, headerMap, row, oldStatus, newStatus)) {
+      return;
+    }
+
+    let requestNumber = "";
+    const numberColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.NUMBER];
+    if (numberColumnIndex != null) {
+      requestNumber = sheet.getRange(row, numberColumnIndex + 1).getValue();
+      if (requestNumber) {
+        handleRequestMasterByNumber(requestNumber);
       }
     }
-  } catch (error) {
-    console.warn(`Date formatting failed for value: ${value}`);
-  }
 
-  return String(value);
+    publishEvent({
+      type: "status_changed",
+      row,
+      oldStatus,
+      newStatus,
+      requestNumber
+    });
+
+  } catch (error) {
+    logError("processStatusEdit", error, { event });
+  }
 }
 
 /**
- * Normalize strings safely
+ * Validate status progression
  */
-function normalizeString(input) {
-  if (input == null) return "";
-
-  let result = String(input);
-
+function validateStatusTransition(sheet, headerMap, row, oldStatus, newStatus) {
   try {
-    result = decodeURIComponent(result);
-  } catch (_) {}
+    const readTimestamp = (columnName) => {
+      const columnIndex = headerMap[columnName];
+      if (columnIndex == null) return null;
+      return sheet.getRange(row, columnIndex + 1).getValue();
+    };
 
-  return result
-    .replace(/\u00A0/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    const openTs = readTimestamp(ENHANCED_CONFIG.COLUMNS.STATUS_OPEN_TS);
+    const approvedTs = readTimestamp(ENHANCED_CONFIG.COLUMNS.STATUS_APPROVED_TS);
+    const receivedTs = readTimestamp(ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS);
+
+    const originTypeColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.ORIGIN_TYPE];
+    const originType = originTypeColumnIndex != null
+      ? String(sheet.getRange(row, originTypeColumnIndex + 1).getValue() || "").trim()
+      : "";
+
+    const isCreatorOnly = originType === ENHANCED_CONFIG.ORIGIN_TYPES.CREATOR_ONLY;
+
+    const isInvalid =
+      (newStatus === ENHANCED_CONFIG.STATUS.REQUEST_APPROVED && !openTs) ||
+      (newStatus === ENHANCED_CONFIG.STATUS.IE_RECEIVED && !isCreatorOnly && !approvedTs) ||
+      (newStatus === ENHANCED_CONFIG.STATUS.IE_REVIEWED && !receivedTs);
+
+    if (isInvalid) {
+      const statusColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
+      if (statusColumnIndex != null) {
+        sheet.getRange(row, statusColumnIndex + 1).setValue(
+          oldStatus || ENHANCED_CONFIG.STATUS.REQUEST_OPEN
+        );
+      }
+
+      try {
+        const errorMessage = isCreatorOnly
+          ? "Invalid status order for creator submission. Required: IE Received → IE Reviewed."
+          : "Invalid status order. Required: Open → Approved → IE Received → IE Reviewed.";
+
+        sheet.getParent().toast(errorMessage, "Status update blocked", 5);
+      } catch (toastError) {
+        console.warn("Failed to show toast notification:", toastError.message);
+      }
+
+      console.log(`Status change reverted. Row: ${row}, Old: ${oldStatus}, New: ${newStatus}`);
+
+      publishEvent({
+        type: "status_validation_failed",
+        row,
+        oldStatus,
+        newStatus,
+        reason: "invalid_progression"
+      });
+
+      return false;
+    }
+
+    return true;
+
+  } catch (error) {
+    logError("validateStatusTransition", error);
+    return true;
+  }
+}
+
+/**
+ * Process production link edits and auto-advance IE Received -> IE Reviewed
+ */
+function processProdLinkEdit(event, sheet, headerMap) {
+  try {
+    const row = event.range.getRow();
+    const newProdLink = String(event.value || "").trim();
+
+    console.log(`🔗 Production link edit detected: Row ${row}, Value: "${newProdLink}"`);
+
+    if (!newProdLink) {
+      console.log("⏭️ Ignoring empty production link value");
+      return;
+    }
+
+    const statusColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
+    if (statusColumnIndex != null) {
+      const currentStatusRaw = String(sheet.getRange(row, statusColumnIndex + 1).getValue() || "").trim();
+      const currentStatus = normalizeStatusCanonical(currentStatusRaw);
+
+      if (currentStatus === ENHANCED_CONFIG.STATUS.IE_RECEIVED) {
+        sheet.getRange(row, statusColumnIndex + 1).setValue(ENHANCED_CONFIG.STATUS.IE_REVIEWED);
+
+        const reviewedTsColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS_REVIEWED_TS];
+        if (reviewedTsColumnIndex != null) {
+          const reviewedTsCell = sheet.getRange(row, reviewedTsColumnIndex + 1);
+          if (!reviewedTsCell.getValue()) {
+            reviewedTsCell.setValue(new Date());
+          }
+        }
+
+        console.log(`Auto-advanced status to IE Reviewed for row ${row} after prod link added`);
+
+        publishEvent({
+          type: "status_auto_advanced",
+          row,
+          fromStatus: ENHANCED_CONFIG.STATUS.IE_RECEIVED,
+          toStatus: ENHANCED_CONFIG.STATUS.IE_REVIEWED,
+          trigger: "prod_link_added"
+        });
+      }
+    }
+
+    const numberColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.NUMBER];
+    if (numberColumnIndex != null) {
+      const requestNumber = sheet.getRange(row, numberColumnIndex + 1).getValue();
+      console.log(`🔢 Request number: ${requestNumber}`);
+
+      if (requestNumber) {
+        console.log(`📞 Calling handleRequestMasterByNumber for number: ${requestNumber}`);
+        try {
+          const result = handleRequestMasterByNumber(requestNumber);
+          console.log(`✅ Workflow processing completed:`, result);
+        } catch (error) {
+          console.error(`❌ Workflow processing failed:`, error);
+        }
+      } else {
+        console.log(`❌ No request number found for row ${row}`);
+      }
+    } else {
+      console.log("❌ Number column not found in header map");
+    }
+
+  } catch (error) {
+    logError("processProdLinkEdit", error, { event });
+  }
 }
 
 /* =========================
-   MASTER SHEET ACCESS
+   TIMESTAMP STAMPING
 ========================= */
 
 /**
- * Get master sheet
+ * Stamp timestamp when status changes
  */
-function getMasterSheet() {
+function stampStatusTimestamp(event, sheet, headerMap) {
   try {
-    const sheetId = getConfigProperty("MASTER_SHEET_ID");
-    const spreadsheet = sheetId
-      ? SpreadsheetApp.openById(sheetId)
-      : SpreadsheetApp.getActiveSpreadsheet();
+    const range = event.range;
 
-    const sheetName = getMasterSheetName();
-    const sheet = spreadsheet.getSheetByName(sheetName);
-
-    if (!sheet) {
-      throw new Error(`Master sheet "${sheetName}" not found`);
+    const statusColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
+    if (statusColumnIndex == null || range.getColumn() !== statusColumnIndex + 1) {
+      return;
     }
 
-    return sheet;
+    const newStatusCanonical = normalizeStatusCanonical(event.value || range.getValue() || "");
+    if (!newStatusCanonical) return;
+
+    const statusToTimestamp = getStatusToTimestampMapping();
+    const timestampColumnName = statusToTimestamp[newStatusCanonical];
+    if (!timestampColumnName) return;
+
+    const timestampColumnIndex = headerMap[timestampColumnName];
+    if (timestampColumnIndex == null) return;
+
+    const timestampCell = sheet.getRange(range.getRow(), timestampColumnIndex + 1);
+    if (timestampCell.getValue()) return;
+
+    const now = new Date();
+    timestampCell.setValue(now);
+
+    console.log(`Stamped ${timestampColumnName} for row ${range.getRow()}: ${now}`);
+
+    publishEvent({
+      type: "timestamp_stamped",
+      row: range.getRow(),
+      status: newStatusCanonical,
+      timestamp: now,
+      column: timestampColumnName
+    });
 
   } catch (error) {
-    console.error(`Failed to get master sheet: ${error.message}`);
+    logError("stampStatusTimestamp", error, { event });
+  }
+}
+
+/* =========================
+   FORM SUBMISSION ROUTING
+========================= */
+
+function processRequestFormSubmission(event) {
+  try {
+    if (typeof handleRequestFormNamedValues === "function") {
+      const result = handleRequestFormNamedValues(event.namedValues);
+
+      publishEvent({
+        type: "request_form_processed",
+        result,
+        namedValues: event.namedValues
+      });
+
+      console.log("Request form processed successfully:", result);
+    } else {
+      throw new Error("handleRequestFormNamedValues function not available");
+    }
+
+  } catch (error) {
+    logError("processRequestFormSubmission", error, { event });
+  }
+}
+
+function processCreatorFormSubmission(event) {
+  try {
+    if (typeof onCreatorFormSubmit === "function") {
+      const result = onCreatorFormSubmit(event);
+
+      publishEvent({
+        type: "creator_form_processed",
+        result,
+        namedValues: event.namedValues
+      });
+
+      console.log("Creator form processed successfully:", result);
+    } else {
+      throw new Error("onCreatorFormSubmit function not available");
+    }
+
+  } catch (error) {
+    logError("processCreatorFormSubmission", error, { event });
+  }
+}
+
+/* =========================
+   TRIGGER UTILITIES
+========================= */
+
+/**
+ * Install required project triggers
+ */
+function installTriggers() {
+  try {
+    deleteAllTriggers();
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+    ScriptApp.newTrigger("onEdit")
+      .forSpreadsheet(spreadsheet)
+      .onEdit()
+      .create();
+
+    ScriptApp.newTrigger("onFormSubmit")
+      .forSpreadsheet(spreadsheet)
+      .onFormSubmit()
+      .create();
+
+    if (typeof onEdit_VersionSync === "function") {
+      ScriptApp.newTrigger("onEdit_VersionSync")
+        .forSpreadsheet(spreadsheet)
+        .onEdit()
+        .create();
+    }
+
+    if (typeof onChange_VersionCleanup === "function") {
+      ScriptApp.newTrigger("onChange_VersionCleanup")
+        .forSpreadsheet(spreadsheet)
+        .onChange()
+        .create();
+    }
+
+    console.log("All triggers installed successfully");
+
+    publishEvent({
+      type: "triggers_installed",
+      triggerCount: ScriptApp.getProjectTriggers().length
+    });
+
+  } catch (error) {
+    logError("installTriggers", error);
     throw error;
   }
 }
 
-/* =========================
-   ERROR HANDLING / LOGGING
-========================= */
-
 /**
- * Standard error logger
+ * Delete all project triggers
  */
-function logError(context, error, additionalInfo = {}) {
-  const errorInfo = {
-    context,
-    message: error && error.message ? error.message : String(error),
-    timestamp: new Date().toISOString(),
-    ...additionalInfo
-  };
-
-  console.error(`[${context}] ${JSON.stringify(errorInfo)}`);
-}
-
-/**
- * Safe execute helper
- */
-function safeExecute(functionName, fn, fallback = null) {
+function deleteAllTriggers() {
   try {
-    return fn();
+    const triggers = ScriptApp.getProjectTriggers();
+    for (const trigger of triggers) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+
+    console.log(`Deleted ${triggers.length} existing triggers`);
+
   } catch (error) {
-    logError(functionName, error);
-    return fallback;
+    logError("deleteAllTriggers", error);
+  }
+}
+
+/**
+ * List current triggers
+ */
+function listTriggers() {
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    const triggerInfo = triggers.map(trigger => ({
+      handlerFunction: trigger.getHandlerFunction(),
+      eventType: trigger.getEventType(),
+      triggerSource: trigger.getTriggerSource(),
+      id: trigger.getUniqueId()
+    }));
+
+    console.log("Current triggers:", triggerInfo);
+    return triggerInfo;
+
+  } catch (error) {
+    logError("listTriggers", error);
+    return [];
   }
 }
 
 /* =========================
-   PERFORMANCE UTILITIES
+   PERFORMANCE MONITORING
 ========================= */
 
-function clearHeaderCache() {
-  headerCache.clear();
-  console.log("Header cache cleared");
-}
+function monitorTriggerPerformance() {
+  subscribeToEvent("sheet_edit", (event) => {
+    console.log(`Sheet edit processed: Row ${event.row}, Column ${event.column}`);
+  });
 
-function getHeaderCacheStats() {
-  const now = Date.now();
-  const stats = {
-    totalEntries: headerCache.size,
-    validEntries: 0,
-    expiredEntries: 0
-  };
+  subscribeToEvent("status_changed", (event) => {
+    console.log(`Status changed: Row ${event.row}, ${event.oldStatus} → ${event.newStatus}`);
+  });
 
-  for (const [, value] of headerCache.entries()) {
-    if ((now - value.timestamp) < HEADER_CACHE_TTL) {
-      stats.validEntries++;
-    } else {
-      stats.expiredEntries++;
-    }
-  }
+  subscribeToEvent("status_validation_failed", (event) => {
+    console.warn(
+      `Status validation failed: Row ${event.row}, ${event.oldStatus} → ${event.newStatus}, Reason: ${event.reason}`
+    );
+  });
 
-  return stats;
+  subscribeToEvent("form_submit", (event) => {
+    console.log(`Form submitted to sheet: ${event.sheet}`);
+  });
+
+  console.log("Trigger performance monitoring activated");
 }
 
 /* =========================
    LIMITED COMPATIBILITY
 ========================= */
 
-/**
- * Keep only wrappers that are most likely still referenced
- */
-function getHeaderMap_(sheet) {
-  return getHeaderMapFromSheet(sheet, 1);
+function getStatusToTimestamp_() {
+  return getStatusToTimestampMapping();
 }
 
-function safeGetByName_(row, headerMap, name) {
-  return safeGetByName(row, headerMap, name);
+function stampStatusTimestamp_(event) {
+  if (!event || !event.range) return;
+
+  const sheet = event.range.getSheet();
+  const headerMap = getHeaderMapFromSheet(sheet);
+  return stampStatusTimestamp(event, sheet, headerMap);
 }
 
-function normalizeStatusCanonical_(raw) {
-  return normalizeStatusCanonical(raw);
+function handleRequestMasterEdit_(event) {
+  return onEdit(event);
 }
 
-function formatDate_(value) {
-  return formatDate(value);
+/* =========================
+   INITIALIZATION
+========================= */
+
+function initializeTriggerSystem() {
+  try {
+    monitorTriggerPerformance();
+
+    console.log("Enhanced trigger system initialized");
+
+    publishEvent({
+      type: "trigger_system_initialized",
+      timestamp: new Date()
+    });
+
+  } catch (error) {
+    logError("initializeTriggerSystem", error);
+  }
 }
 
-function rmGetMasterSheet() {
-  return getMasterSheet();
-}
-
-function rmGetMasterSheet_() {
-  return getMasterSheet();
-}
