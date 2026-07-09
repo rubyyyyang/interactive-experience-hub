@@ -336,6 +336,8 @@ function getMasterRowByGlobalId(globalId) {
 }
 
 function upsertMasterRowByGlobalId(globalId, payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
   try {
     if (!globalId) throw new Error("globalId is required");
     if (!payload) throw new Error("payload is required");
@@ -413,6 +415,8 @@ function upsertMasterRowByGlobalId(globalId, payload) {
   } catch (error) {
     logError("upsertMasterRowByGlobalId", error, { globalId, payload });
     throw error;
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -639,6 +643,24 @@ function createRequestOpenThread(context) {
   const deadline = formatDate(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.DEADLINE));
   const tdp = String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.TDP) || "").trim();
   const requestDocUrl = String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.CREATION_BRIEF_DOC_URL) || "").trim();
+
+  const primaryProduct = String(
+    safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.PRIMARY_PRODUCT) || ""
+  ).trim() || "—";
+
+  const primaryAudience = String(
+    safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.PRIMARY_AUDIENCE) || ""
+  ).trim() || "—";
+
+  const eventName = String(
+    safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.EVENT) || ""
+  ).trim() || "—";
+
+  const contextDescription = String(
+    safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.CONTEXT_DESC) || ""
+  ).trim() || "—";
+
+  const globalIdLine = globalId ? `*Global ID*: ${globalId}\n` : "";
 
   const meta = [number ? `#${number}` : null, globalId ? `GID: ${globalId}` : null].filter(Boolean).join("  •  ");
   const metaLine = meta ? `${meta}\n` : "";
