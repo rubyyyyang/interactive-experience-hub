@@ -242,7 +242,12 @@ function getSlackChannelId() {
 }
 
 function getCreatorSlackChannelId() {
-  return getConfigProperty("CREATOR_SLACK_CHANNEL_ID", ENHANCED_CONFIG.SLACK.CREATOR_CHANNEL_ID_DEFAULT);
+  const isTestMode = getConfigProperty("ENVIRONMENT") === "test";
+  const defaultChannel = isTestMode
+    ? ENHANCED_CONFIG.SLACK.CHANNEL_ID_TEST
+    : ENHANCED_CONFIG.SLACK.CREATOR_CHANNEL_ID_DEFAULT;
+
+  return getConfigProperty("CREATOR_SLACK_CHANNEL_ID", defaultChannel);
 }
 
 function getTemplateId() {
