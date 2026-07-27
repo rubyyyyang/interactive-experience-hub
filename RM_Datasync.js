@@ -40,23 +40,23 @@ const VERSION_SYNC_CONFIG = {
   },
 
   WATCH_COLUMNS: [
-    "Number",
-    "Creation Link",
-    "Production Link",
-    "Final Demo Title",
-    "Final Content Type",
-    "Join Key",
-    "Marketing Program",
-    "Sales Tactic",
-    "TDP",
-    "Creator Team",
-    "Creator Name",
-    "Language",
-    "Product",
-    "Metadata",
-    "Event",
-    "Creator Submission Timestamp",
-    "Status Published Timestamp"
+    ENHANCED_CONFIG.COLUMNS.NUMBER,
+    ENHANCED_CONFIG.COLUMNS.CREATION_LINK,
+    ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK,
+    ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE,
+    ENHANCED_CONFIG.COLUMNS.FINAL_CONTENT_TYPE,
+    ENHANCED_CONFIG.COLUMNS.JOIN_KEY,
+    ENHANCED_CONFIG.COLUMNS.MARKETING_PROGRAM,
+    ENHANCED_CONFIG.COLUMNS.SALES_TACTIC,
+    ENHANCED_CONFIG.COLUMNS.TDP,
+    ENHANCED_CONFIG.COLUMNS.CREATOR_TEAM,
+    ENHANCED_CONFIG.COLUMNS.CREATOR_NAME,
+    ENHANCED_CONFIG.COLUMNS.LANGUAGE,
+    ENHANCED_CONFIG.COLUMNS.PRODUCT,
+    ENHANCED_CONFIG.COLUMNS.METADATA,
+    ENHANCED_CONFIG.COLUMNS.EVENT,
+    ENHANCED_CONFIG.COLUMNS.CREATOR_SUBMITTED_TS,
+    ENHANCED_CONFIG.COLUMNS.STATUS_PUBLISHED_TS
   ]
 };
 
@@ -117,7 +117,7 @@ function onEdit_VersionSync(e) {
       return;
     }
 
-    syncRequestMasterRowToVersion(rowNum);
+    syncRequestMasterRowToVersion(rowNum, { skipLock: true });
 
   } catch (err) {
     console.error("[onEdit_VersionSync] " + (err && err.message ? err.message : err));
@@ -167,12 +167,13 @@ function onChange_VersionCleanup(e) {
    MAIN VERSION SYNC FLOW
 ========================= */
 
-function syncRequestMasterRowToVersion(rowNumber) {
+function syncRequestMasterRowToVersion(rowNumber, options) {
+  const skipLock = options && options.skipLock;
   try {
-    const lock = LockService.getScriptLock();
+    const lock = skipLock ? null : LockService.getScriptLock();
 
     try {
-      if (!lock.tryLock(10000)) {
+      if (lock && !lock.tryLock(10000)) {
         throw new Error("Could not acquire sync lock");
       }
 
@@ -187,7 +188,7 @@ function syncRequestMasterRowToVersion(rowNumber) {
       return result;
 
     } finally {
-      if (lock.hasLock()) {
+      if (lock && lock.hasLock()) {
         lock.releaseLock();
       }
     }
@@ -484,15 +485,7 @@ function buildVersionRowFromMasterRow(
 
   const lastUpdatedIdx = versionHeaderMap[VERSION_SYNC_CONFIG.VERSION_COLUMNS.LAST_UPDATED];
   if (lastUpdatedIdx != null) {
-    const existingLastUpdated =
-      existingEntry?.row && existingEntry.row[lastUpdatedIdx]
-        ? existingEntry.row[lastUpdatedIdx]
-        : "";
-
-    out[lastUpdatedIdx] =
-      existingLastUpdated && String(existingLastUpdated).trim() !== ""
-        ? existingLastUpdated
-        : new Date();
+    out[lastUpdatedIdx] = new Date();
   }
 
   setV(
@@ -999,21 +992,30 @@ function syncSheetToDatabricks(sheet, tableName, columnMap) {
     }
 
     const data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-executeDatabricksSQL(`DELETE FROM ${tableName}`, config);
+    const stagingTableName = tableName + "_staging";
 
-let totalRowsSynced = 0;
+    dropTable(stagingTableName, config);
+    createStagingTable(stagingTableName, tableName, config);
 
-for (let i = 0; i < data.length; i += DATABRICKS_CONFIG.BATCH_SIZE) {
-  const batch = data.slice(i, i + DATABRICKS_CONFIG.BATCH_SIZE);
-  const rowsSynced = insertBatchToDatabricks(batch, headers, tableName, columnMap, config);
-  totalRowsSynced += rowsSynced;
-}
+    let totalRowsSynced = 0;
+    try {
+      for (let i = 0; i < data.length; i += DATABRICKS_CONFIG.BATCH_SIZE) {
+        const batch = data.slice(i, i + DATABRICKS_CONFIG.BATCH_SIZE);
+        const rowsSynced = insertBatchToDatabricks(batch, headers, stagingTableName, columnMap, config);
+        totalRowsSynced += rowsSynced;
+      }
 
-if (totalRowsSynced <= 0) {
-  throw new Error(`No rows inserted into ${tableName}. Aborting sync.`);
-}
+      if (totalRowsSynced <= 0) {
+        throw new Error(`No rows inserted into ${stagingTableName}. Aborting sync.`);
+      }
 
-    console.log(`Successfully synced ${totalRowsSynced} rows to ${tableName}`);
+      swapTables(tableName, stagingTableName, config);
+    } catch (batchError) {
+      try { dropTable(stagingTableName, config); } catch (_) {}
+      throw batchError;
+    }
+
+    console.log(`Successfully synced ${totalRowsSynced} rows to ${tableName} via staging swap`);
 
     return { success: true, rowsSynced: totalRowsSynced, tableName };
 
@@ -1229,7 +1231,7 @@ function insertBatchToDatabricks(batch, headers, tableName, columnMap, config) {
       return value ? "true" : "false";
     }
 
-    const escaped = String(value).replace(/'/g, "''");
+    const escaped = String(value).replace(/\\/g, "\\\\").replace(/'/g, "''").replace(/\n/g, "\\n").replace(/\r/g, "\\r");
     return `'${escaped}'`;
   };
 

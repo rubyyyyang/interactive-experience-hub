@@ -288,7 +288,11 @@ function handleCreatorWithExistingGlobalId(formData) {
       return handleCreatorWithoutGlobalId(formData);
     }
 
-    const creatorPayload = buildCreatorPayload(formData);
+    const currentStatusIndex = existingRequest.headers.indexOf(ENHANCED_CONFIG.COLUMNS.STATUS);
+    const currentStatus = currentStatusIndex !== -1
+      ? normalizeStatusCanonical(String(existingRequest.row[currentStatusIndex] || "").trim())
+      : "";
+    const creatorPayload = buildCreatorPayload(formData, currentStatus);
     const upsertResult = upsertMasterRowByGlobalId(formData.globalId, creatorPayload);
 
     if (upsertResult.rowIndex && typeof syncRequestMasterRowToVersion === "function") {
@@ -326,10 +330,10 @@ function handleCreatorWithExistingGlobalId(formData) {
     throw error;
   }
 }
-function buildCreatorPayload(formData) {
+function buildCreatorPayload(formData, currentStatus) {
   const now = new Date();
 
-  return {
+  const payload = {
     [ENHANCED_CONFIG.COLUMNS.CREATOR_NAME]: formData.creatorName,
     [ENHANCED_CONFIG.COLUMNS.CREATOR_EMAIL]: formData.creatorEmail,
     [ENHANCED_CONFIG.COLUMNS.CREATOR_TEAM]: formData.creatorTeam,
@@ -357,10 +361,18 @@ function buildCreatorPayload(formData) {
     [ENHANCED_CONFIG.COLUMNS.TDP]: formData.tdp,
     [ENHANCED_CONFIG.COLUMNS.SALES_TACTIC]: formData.salesTactic,
     [ENHANCED_CONFIG.COLUMNS.MARKETING_PROGRAM]: formData.marketingProgram,
-
-    [ENHANCED_CONFIG.COLUMNS.STATUS]: ENHANCED_CONFIG.STATUS.IE_RECEIVED,
-    [ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS]: now
   };
+
+  const order = ENHANCED_CONFIG.STATUS_LIFECYCLE_ORDER;
+  const currentIdx = currentStatus ? order.indexOf(currentStatus) : -1;
+  const receivedIdx = order.indexOf(ENHANCED_CONFIG.STATUS.IE_RECEIVED);
+
+  if (currentIdx <= receivedIdx) {
+    payload[ENHANCED_CONFIG.COLUMNS.STATUS] = ENHANCED_CONFIG.STATUS.IE_RECEIVED;
+    payload[ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS] = now;
+  }
+
+  return payload;
 }
 function updateRequestDocumentWithCreatorInfo(existingRequest, formData) {
   try {
@@ -510,7 +522,6 @@ function prepareCreatorOnlyDocumentData(formData) {
     [ENHANCED_CONFIG.COLUMNS.ORIGIN_TYPE]: ENHANCED_CONFIG.ORIGIN_TYPES.CREATOR_ONLY,
     [ENHANCED_CONFIG.COLUMNS.GLOBAL_ID]: formData.globalId,
     [ENHANCED_CONFIG.COLUMNS.CREATION_BRIEF_DOC_URL]: docUrl,
-    [ENHANCED_CONFIG.COLUMNS.REQUEST_SUBMITTED_TS]: formData.timestamp || now,
 
     // Do NOT write Final Demo Title into Suggested Demo Title anymore
     [ENHANCED_CONFIG.COLUMNS.CREATOR_NAME]: formData.creatorName,

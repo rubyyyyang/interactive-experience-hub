@@ -28,7 +28,7 @@ const ENHANCED_CONFIG = {
      SLACK
   ========================= */
   SLACK: {
-    CHANNEL_ID_DEFAULT: "C08S15BN5PG", // proj-ie-request C0A3VFAJFD2
+    CHANNEL_ID_DEFAULT: "C0A3VFAJFD2", // proj-ie-request C0A3VFAJFD2
     CHANNEL_ID_TEST: "C08S15BN5PG", // proj-ie-test C08S15BN5PG
     CREATOR_CHANNEL_ID_DEFAULT: "C0AT27JRPB7", //test  C0AG5ATLT0U
     USER_IDS: {
@@ -72,6 +72,11 @@ const ENHANCED_CONFIG = {
     IE_RETIRED: "IE Retired",
     CLOSED: "Closed"
   },
+
+  STATUS_LIFECYCLE_ORDER: [
+    "Request Open", "Request Approved", "IE Received",
+    "IE Reviewed", "IE Published", "IE Retired", "Closed"
+  ],
 
   /* =========================
      ORIGIN TYPES

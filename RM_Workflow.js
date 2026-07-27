@@ -370,6 +370,12 @@ function upsertMasterRowByGlobalId(globalId, payload) {
       }
     }
 
+    const formulaColumns = new Map();
+    if (rowIndex !== -1) {
+      const formulaRow = sheet.getRange(rowIndex, 1, 1, headers.length).getFormulas()[0];
+      formulaRow.forEach((f, i) => { if (f) formulaColumns.set(i, f); });
+    }
+
     const existingRow = rowIndex !== -1
       ? sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0]
       : new Array(headers.length).fill("");
@@ -380,6 +386,8 @@ function upsertMasterRowByGlobalId(globalId, payload) {
     }
 
     const newRow = headers.map((header, index) => {
+      if (formulaColumns.has(index)) return existingRow[index];
+
       const currentValue = existingRow[index];
       let incomingValue = payload[header];
 
@@ -401,6 +409,20 @@ function upsertMasterRowByGlobalId(globalId, payload) {
       sheet.getRange(rowIndex, 1, 1, newRow.length).setValues([newRow]);
     }
 
+    if (formulaColumns.size > 0) {
+      formulaColumns.forEach((formula, colIndex) => {
+        sheet.getRange(rowIndex, colIndex + 1).setFormula(formula);
+      });
+    } else if (rowIndex > 2) {
+      const templateFormulas = sheet.getRange(2, 1, 1, headers.length).getFormulas()[0];
+      templateFormulas.forEach((formula, colIndex) => {
+        if (formula) {
+          const adjusted = formula.replace(/\$?([A-Z]+)\$?2\b/g, "$$$1" + rowIndex);
+          sheet.getRange(rowIndex, colIndex + 1).setFormula(adjusted);
+        }
+      });
+    }
+
     const number = numberIndex !== -1 ? newRow[numberIndex] : "";
 
     logWorkflowEvent("master_row_upserted", {
@@ -420,6 +442,17 @@ function upsertMasterRowByGlobalId(globalId, payload) {
   }
 }
 
+function columnIndexToLetter_(zeroBasedIndex) {
+  if (zeroBasedIndex < 0) return null;
+  let result = "";
+  let n = zeroBasedIndex;
+  while (n >= 0) {
+    result = String.fromCharCode(65 + (n % 26)) + result;
+    n = Math.floor(n / 26) - 1;
+  }
+  return result;
+}
+
 function calculateNextNumber(sheet, numberColumnIndex) {
   try {
     if (sheet.getLastRow() <= 1) return 1;
@@ -430,7 +463,7 @@ function calculateNextNumber(sheet, numberColumnIndex) {
       .map(v => Number(v))
       .filter(n => !isNaN(n) && n > 0);
 
-    return numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+    return numbers.length > 0 ? numbers.reduce((max, n) => n > max ? n : max, 0) + 1 : 1;
 
   } catch (error) {
     logError("calculateNextNumber", error);

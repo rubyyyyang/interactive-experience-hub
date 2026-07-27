@@ -700,6 +700,7 @@ function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkCont
   const description = get("Demo Description") || get("Context Description");
   const personas = get("Personas");
   const language = get("Language");
+  const duration = get("Duration");
   const creatorName = get("Creator Name");
   const creatorTeam = get("Creator Team");
   const creatorEmail = get("Creator Email");
@@ -820,6 +821,7 @@ function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkCont
     latestProdLink,
     creationLink,
     verticals,
+    duration,
     searchText,
     searchBlob,
     searchCompact,
@@ -897,7 +899,7 @@ function getDiscoveryIndexBundle_() {
   const data = range.getDisplayValues();
   const linkOverridesByRow = getDiscoveryLinkOverridesForRange_(range, headerMap);
 
-  var statusColIdx = headerMap["status"];
+  var statusColIdx = headerMap["Status"];
   var validRowSet = null;
   if (statusColIdx !== undefined && statusColIdx !== null) {
     validRowSet = new Set();
