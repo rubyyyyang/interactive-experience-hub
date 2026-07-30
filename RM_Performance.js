@@ -325,6 +325,12 @@ function computePerformanceStatus_(metrics, flags, referenceDate) {
 
     if (l90Ppm >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) return 'Performing';
 
+    var l90Cr = metrics.l90Players > 0 ? metrics.l90Completions / metrics.l90Players : 0;
+    if (l90Cr >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE && (metrics.l90Completions || 0) >= 5) return 'Performing';
+
+    if ((metrics.l90MtOpp || 0) >= PERF_THRESHOLDS.BASELINE_MT_OPP / 4 ||
+        (metrics.l90MtWon || 0) >= PERF_THRESHOLDS.BASELINE_MT_WON / 4) return 'Performing';
+
     return 'Low activity';
   }
 
@@ -1267,6 +1273,18 @@ function testPerformanceRules() {
 
   var m10 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.35, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
   assert('Status: Low activity (CR below baseline, no rescue)', computePerformanceStatus_(m10, computePerformanceFlags_(m10, null), referenceDate), 'Low activity');
+
+  var m11 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 30, l90Completions: 15 };
+  assert('Status: Performing (L90 CR fallback)', computePerformanceStatus_(m11, computePerformanceFlags_(m11, null), referenceDate), 'Performing');
+
+  var m12 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 0, l90Completions: 0, l90MtOpp: 15000, l90MtWon: 0 };
+  assert('Status: Performing (L90 MT opp fallback)', computePerformanceStatus_(m12, computePerformanceFlags_(m12, null), referenceDate), 'Performing');
+
+  var m13 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 3000 };
+  assert('Status: Performing (L90 MT won fallback)', computePerformanceStatus_(m13, computePerformanceFlags_(m13, null), referenceDate), 'Performing');
+
+  var m14 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 20, l90Completions: 3 };
+  assert('Status: Low activity (L90 CR below baseline, no fallback)', computePerformanceStatus_(m14, computePerformanceFlags_(m14, null), referenceDate), 'Low activity');
 
   // --- Performance Flags ---
 
