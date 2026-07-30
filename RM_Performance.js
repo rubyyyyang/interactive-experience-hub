@@ -1539,8 +1539,8 @@ function testPerformanceRules() {
     computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, null), 'Low');
 
   // --- computeFinalStatus_ ---
-  assert('FinalStatus: Performing + stable → Strong', computeFinalStatus_('Performing', 'stable'), 'Stable');
-  assert('FinalStatus: Performing + unknown → Strong', computeFinalStatus_('Performing', 'unknown'), 'Stable');
+  assert('FinalStatus: Performing + stable → Stable', computeFinalStatus_('Performing', 'stable'), 'Stable');
+  assert('FinalStatus: Performing + unknown → Stable', computeFinalStatus_('Performing', 'unknown'), 'Stable');
   assert('FinalStatus: Performing + declining → Declining', computeFinalStatus_('Performing', 'declining'), 'Declining');
   assert('FinalStatus: Performing + stale → Stale', computeFinalStatus_('Performing', 'stale'), 'Stale');
   assert('FinalStatus: No activity passthrough', computeFinalStatus_('No activity', 'stable'), 'No activity');
@@ -1556,15 +1556,15 @@ function testPerformanceRules() {
   assert('StatusReason: New content has active months', srNew.indexOf('2 active months') !== -1, true);
 
   var srMetrics3 = { activeMonths: 6, totalPlayers: 108, playersPerMonth: 18, completions: 30, completionRate: 0.35, mtOpp: 72000, mtWon: 15000, firstActivityMonth: oldDate, l90Players: 45 };
-  var srStrong = buildStatusReason_('Stable', srMetrics3, 'stable');
-  assert('StatusReason: Strong shows signal count', srStrong.indexOf('2/3') !== -1, true);
-  assert('StatusReason: Strong shows baseline ppm', srStrong.indexOf('baseline (15)') !== -1 || srStrong.indexOf('baseline (' + PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH + ')') !== -1, true);
-  assert('StatusReason: Strong shows actual ppm', srStrong.indexOf('18 ppm') !== -1, true);
-  assert('StatusReason: Strong shows L90', srStrong.indexOf('L90 stable') !== -1, true);
-  assert('StatusReason: Strong shows age (no contentAge)', srStrong.indexOf('Age: 6 active mo.') !== -1, true);
+  var srStable = buildStatusReason_('Stable', srMetrics3, 'stable');
+  assert('StatusReason: Stable shows signal count', srStable.indexOf('2/3') !== -1, true);
+  assert('StatusReason: Stable shows baseline ppm', srStable.indexOf('baseline (15)') !== -1 || srStable.indexOf('baseline (' + PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH + ')') !== -1, true);
+  assert('StatusReason: Stable shows actual ppm', srStable.indexOf('18 ppm') !== -1, true);
+  assert('StatusReason: Stable shows L90', srStable.indexOf('L90 stable') !== -1, true);
+  assert('StatusReason: Stable shows age (no contentAge)', srStable.indexOf('Age: 6 active mo.') !== -1, true);
 
-  var srStrongWithAge = buildStatusReason_('Stable', srMetrics3, 'stable', { months: 23, available: true });
-  assert('StatusReason: Strong shows calendar age + active', srStrongWithAge.indexOf('Age: 23 mo. (6 active)') !== -1, true);
+  var srStableWithAge = buildStatusReason_('Stable', srMetrics3, 'stable', { months: 23, available: true });
+  assert('StatusReason: Stable shows calendar age + active', srStableWithAge.indexOf('Age: 23 mo. (6 active)') !== -1, true);
 
   var srMetrics4 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, firstActivityMonth: oldDate, l90Players: 0 };
   var srLow = buildStatusReason_('Low activity', srMetrics4, 'unknown');
@@ -1572,8 +1572,8 @@ function testPerformanceRules() {
 
   var srMetrics5 = { activeMonths: 6, totalPlayers: 108, playersPerMonth: 18, completions: 30, completionRate: 0.35, mtOpp: 72000, mtWon: 15000, firstActivityMonth: oldDate, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0 };
   var srNoL90 = buildStatusReason_('Stable', srMetrics5, 'stable');
-  assert('StatusReason: Strong with no L90 data shows "no L90 activity"', srNoL90.indexOf('no L90 activity') !== -1, true);
-  assert('StatusReason: Strong with no L90 data does NOT show "L90 stable 0%"', srNoL90.indexOf('L90 stable 0%') === -1, true);
+  assert('StatusReason: Stable with no L90 data shows "no L90 activity"', srNoL90.indexOf('no L90 activity') !== -1, true);
+  assert('StatusReason: Stable with no L90 data does NOT show "L90 stable 0%"', srNoL90.indexOf('L90 stable 0%') === -1, true);
 
   // --- computePerformanceScore_ tests ---
   Logger.log('--- computePerformanceScore_ ---');
@@ -2176,6 +2176,62 @@ function testProcessingAudit() {
   assert('Audit: classifyRow_ throws on error', errorCaught, true);
   computePerformanceFlags_ = _origFlags;
   assert('Audit: row after error → Processed', classifyRow_(makeFullDataRow({}), hm, {}, referenceDate).result, 'Processed');
+
+  // --- Status × Tier coherence ---
+  Logger.log('');
+  Logger.log('--- Coherence ---');
+
+  var coherenceMetrics = [
+    { desc: 'Low activity, minimal', overrides: { } },
+    { desc: 'Stable with signals', overrides: { } },
+  ];
+
+  // No activity must always be Inactive tier
+  assert('Coherence: No activity → Inactive tier', rNoActScore.tier, 'Inactive');
+  assert('Coherence: No activity → score 0', rNoActScore.score, 0);
+
+  // Low activity must never be Top tier
+  var lowActCoherence = makeFullDataRow({});
+  lowActCoherence[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '500';
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 5;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 30;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.COMPLETIONS]] = 5;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.15;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 1000;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 500;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.L90_PLAYERS]] = 0;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.L90_COMPLETIONS]] = 0;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.L90_MT_OPP_VALUE]] = 0;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.L90_MT_WON_VALUE]] = 0;
+  lowActCoherence[hm[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH]] = oldDate;
+  var rLowActCo = classifyRow_(lowActCoherence, hm, {}, referenceDate);
+  assert('Coherence: Low activity → never Top tier', rLowActCo.tier !== 'Top', true);
+  assert('Coherence: Low activity → never Mid tier', rLowActCo.tier !== 'Mid', true);
+  assert('Coherence: Low activity → score < 40', rLowActCo.score < 40, true);
+
+  // High engagement flag should never coexist with Low activity status
+  var highEngRow = makeFullDataRow({});
+  highEngRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '501';
+  highEngRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 10;
+  highEngRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 60;
+  highEngRow[hm[PERF_METRIC_COLUMNS.COMPLETIONS]] = 40;
+  highEngRow[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.55;
+  highEngRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 5000;
+  highEngRow[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 1000;
+  highEngRow[hm[PERF_METRIC_COLUMNS.L90_PLAYERS]] = 20;
+  highEngRow[hm[PERF_METRIC_COLUMNS.L90_COMPLETIONS]] = 12;
+  highEngRow[hm[PERF_METRIC_COLUMNS.LAST_ACTIVITY_MONTH]] = referenceDate;
+  highEngRow[hm[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH]] = oldDate;
+  var rHighEng = classifyRow_(highEngRow, hm, {}, referenceDate);
+  assert('Coherence: High engagement → not Low activity', rHighEng.status !== 'Low activity', true);
+  assert('Coherence: High engagement demo → Performing-family status', ['Stable', 'Declining', 'Stale'].indexOf(rHighEng.status) !== -1, true);
+
+  // Retire action should never appear with Mid or Top tier
+  assert('Coherence: Low activity demo with Retire → Low or Inactive tier',
+    rLowActCo.action === 'Retire' ? (rLowActCo.tier === 'Low' || rLowActCo.tier === 'Inactive') : true, true);
+
+  // Keep action always means Low priority
+  assert('Coherence: Keep → Low priority (existing check)', pResult.action === 'Keep' ? pResult.priority === 'Low' : true, true);
 
   Logger.log('---');
   Logger.log('Results: ' + passed + ' passed, ' + failed + ' failed out of ' + (passed + failed) + ' tests.');
