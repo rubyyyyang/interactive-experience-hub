@@ -1584,24 +1584,24 @@ function testPerformanceRules() {
   );
   assert('Score: No activity = 0', scoreNoActivity, 0);
 
-  var scoreStrong3High = computePerformanceScore_(
+  var scoreStable3High = computePerformanceScore_(
     { playersPerMonth: 30, totalPlayers: 360, completionRate: 0.55, completions: 198, mtOpp: 150000, mtWon: 30000, l90Players: 90, l90Completions: 50, l90MtOpp: 40000, l90MtWon: 8000, activeMonths: 12 },
     ['High usage', 'High engagement', 'High business impact'], 'stable', 'Stable'
   );
-  assert('Score: Strong 3/3 + all high + mature >= 90', scoreStrong3High >= 90, true);
+  assert('Score: Stable 3/3 + all high + mature >= 90', scoreStable3High >= 90, true);
 
-  var scoreStrong1Signal = computePerformanceScore_(
+  var scoreStable1Signal = computePerformanceScore_(
     { playersPerMonth: 18, totalPlayers: 108, completionRate: 0.30, completions: 20, mtOpp: 30000, mtWon: 5000, l90Players: 15, l90Completions: 5, l90MtOpp: 8000, l90MtWon: 1000, activeMonths: 6 },
     [], 'stable', 'Stable'
   );
-  assert('Score: Strong 1/3 signal, moderate L90 >= 10', scoreStrong1Signal >= 10, true);
-  assert('Score: Strong 1/3 signal, moderate L90 <= 50', scoreStrong1Signal <= 50, true);
+  assert('Score: Stable 1/3 signal, moderate L90 >= 10', scoreStable1Signal >= 10, true);
+  assert('Score: Stable 1/3 signal, moderate L90 <= 50', scoreStable1Signal <= 50, true);
 
   var scoreDeclining = computePerformanceScore_(
     { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 10, l90Completions: 3, l90MtOpp: 5000, l90MtWon: 1000, activeMonths: 12 },
     ['High usage', 'High engagement', 'High business impact'], 'declining', 'Declining'
   );
-  assert('Score: Declining with high baseline < Strong equivalent', scoreDeclining < scoreStrong3High, true);
+  assert('Score: Declining with high baseline < Stable equivalent', scoreDeclining < scoreStable3High, true);
 
   var scoreDeadDemo = computePerformanceScore_(
     { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 12 },
