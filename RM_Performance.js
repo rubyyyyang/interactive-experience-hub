@@ -937,11 +937,11 @@ function hasMinimumRequiredMetrics_(row, headerMap) {
 }
 
 function makeSkipResult_(reason) {
-  return { outcome: 'skipped', status: '', signals: '', flags: '', action: '', reason: '', priority: '', score: '', tier: '', trend: '', result: 'Skipped — ' + reason };
+  return { outcome: 'skipped', signals: '', flags: '', action: '', reason: '', priority: '', score: '', tier: '', trend: '', result: 'Skipped — ' + reason };
 }
 
 function makeReviewResult_(reason) {
-  return { outcome: 'needs_review', status: '', signals: '', flags: '', action: 'Needs human review', reason: reason, priority: '', score: '', tier: '', trend: '', result: 'Needs human review — ' + reason };
+  return { outcome: 'needs_review', signals: '', flags: '', action: 'Needs human review', reason: reason, priority: '', score: '', tier: '', trend: '', result: 'Needs human review — ' + reason };
 }
 
 function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
