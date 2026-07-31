@@ -2026,7 +2026,7 @@ function testProcessingAudit() {
   // --- Low opp value end-to-end ---
   var lowOppRow = makeFullDataRow({});
   lowOppRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '95';
-  lowOppRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 10000;
+  lowOppRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 9000;
   lowOppRow[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 2000;
   lowOppRow[hm[PERF_METRIC_COLUMNS.COMPLETIONS]] = 10;
   lowOppRow[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.20;
