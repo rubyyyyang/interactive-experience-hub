@@ -26,6 +26,7 @@ var PERF_LABEL_COLUMNS = {
   PRIORITY: 'Performance Priority',
   PERF_SCORE: 'Performance Score',
   PERF_TIER: 'Performance Tier',
+  PERF_TREND: 'Performance Trend',
   AGE: 'Age',
   PROCESSING_RESULT: 'Processing Result'
 };
@@ -59,7 +60,8 @@ var PERF_THRESHOLDS = {
   HIGH_PLAYERS_PER_MONTH: 25,
   HIGH_COMPLETION_RATE: 0.50,
   HIGH_MT_OPP: 100000,
-  HIGH_MT_WON: 25000
+  HIGH_MT_WON: 25000,
+  GROWING_RATIO: 1.2
 };
 
 var GENERIC_LISTING_PATTERNS = [
@@ -79,6 +81,7 @@ function ensurePerformanceColumns_(sheet) {
     PERF_LABEL_COLUMNS.PRIORITY,
     PERF_LABEL_COLUMNS.PERF_SCORE,
     PERF_LABEL_COLUMNS.PERF_TIER,
+    PERF_LABEL_COLUMNS.PERF_TREND,
     PERF_LABEL_COLUMNS.AGE,
     PERF_LABEL_COLUMNS.PROCESSING_RESULT
   ];
@@ -102,6 +105,7 @@ function ensurePerformanceColumns_(sheet) {
     priorityCol: headers.indexOf(PERF_LABEL_COLUMNS.PRIORITY) + 1,
     scoreCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_SCORE) + 1,
     tierCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_TIER) + 1,
+    trendCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_TREND) + 1,
     ageCol: headers.indexOf(PERF_LABEL_COLUMNS.AGE) + 1,
     resultCol: headers.indexOf(PERF_LABEL_COLUMNS.PROCESSING_RESULT) + 1
   };
@@ -246,7 +250,7 @@ function parseMetrics_(row, headerMap) {
    PERFORMANCE FLAGS
 ========================= */
 
-function computePerformanceFlags_(metrics, perfStatus) {
+function computePerformanceFlags_(metrics) {
   var flags = [];
 
   if (metrics.playersPerMonth >= PERF_THRESHOLDS.HIGH_PLAYERS_PER_MONTH &&
@@ -279,8 +283,7 @@ function computePerformanceFlags_(metrics, perfStatus) {
       metrics.mtMappingValid &&
       metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH &&
       (flags.indexOf('High usage') !== -1 || flags.indexOf('High engagement') !== -1) &&
-      metrics.mtOpp < PERF_THRESHOLDS.BASELINE_MT_OPP &&
-      perfStatus !== 'New content') {
+      metrics.mtOpp < PERF_THRESHOLDS.BASELINE_MT_OPP) {
     flags.push('Low opportunity value');
   }
 
@@ -288,10 +291,160 @@ function computePerformanceFlags_(metrics, perfStatus) {
 }
 
 /* =========================
+   PERFORMANCE SIGNALS
+========================= */
+
+function computePerformanceSignals_(metrics, referenceDate) {
+  var hasAnyActivity = !(metrics.activeMonths === 0 && metrics.totalPlayers === 0);
+
+  // Usage level
+  var usageLevel, usageThreshold;
+  if (metrics.playersPerMonth >= PERF_THRESHOLDS.HIGH_PLAYERS_PER_MONTH) {
+    usageLevel = 'HIGH'; usageThreshold = PERF_THRESHOLDS.HIGH_PLAYERS_PER_MONTH;
+  } else if (metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) {
+    usageLevel = 'BASE'; usageThreshold = PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH;
+  } else {
+    usageLevel = 'BELOW'; usageThreshold = PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH;
+  }
+
+  // CR level
+  var crLevel, crThreshold;
+  var crPercent = Math.round(metrics.completionRate * 100);
+  if (metrics.completionRate >= PERF_THRESHOLDS.HIGH_COMPLETION_RATE &&
+      metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) {
+    crLevel = 'HIGH'; crThreshold = Math.round(PERF_THRESHOLDS.HIGH_COMPLETION_RATE * 100);
+  } else if (metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
+             metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) {
+    crLevel = 'BASE'; crThreshold = Math.round(PERF_THRESHOLDS.BASELINE_COMPLETION_RATE * 100);
+  } else if (metrics.completionRate < 0.20) {
+    crLevel = 'LOW'; crThreshold = 20;
+  } else {
+    crLevel = 'BELOW'; crThreshold = Math.round(PERF_THRESHOLDS.BASELINE_COMPLETION_RATE * 100);
+  }
+
+  // MT level
+  var mtLevel, mtThreshold, mtSource, mtValue;
+  if (metrics.mtOpp >= PERF_THRESHOLDS.HIGH_MT_OPP) {
+    mtLevel = 'HIGH'; mtValue = metrics.mtOpp; mtSource = 'opp'; mtThreshold = PERF_THRESHOLDS.HIGH_MT_OPP;
+  } else if (metrics.mtWon >= PERF_THRESHOLDS.HIGH_MT_WON) {
+    mtLevel = 'HIGH'; mtValue = metrics.mtWon; mtSource = 'won'; mtThreshold = PERF_THRESHOLDS.HIGH_MT_WON;
+  } else if (metrics.mtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP) {
+    mtLevel = 'BASE'; mtValue = metrics.mtOpp; mtSource = 'opp'; mtThreshold = PERF_THRESHOLDS.BASELINE_MT_OPP;
+  } else if (metrics.mtWon >= PERF_THRESHOLDS.BASELINE_MT_WON) {
+    mtLevel = 'BASE'; mtValue = metrics.mtWon; mtSource = 'won'; mtThreshold = PERF_THRESHOLDS.BASELINE_MT_WON;
+  } else if (metrics.mtOpp === 0 && metrics.mtWon === 0) {
+    mtLevel = 'NONE'; mtValue = 0; mtSource = 'none'; mtThreshold = PERF_THRESHOLDS.BASELINE_MT_OPP;
+  } else {
+    mtLevel = 'BELOW'; mtValue = metrics.mtOpp; mtSource = 'opp'; mtThreshold = PERF_THRESHOLDS.BASELINE_MT_OPP;
+  }
+
+  // Count baseline and high signals
+  var count = 0;
+  var highCount = 0;
+  if (usageLevel === 'HIGH' || usageLevel === 'BASE') count++;
+  if (usageLevel === 'HIGH') highCount++;
+  if (crLevel === 'HIGH' || crLevel === 'BASE') count++;
+  if (crLevel === 'HIGH') highCount++;
+  if (mtLevel === 'HIGH' || mtLevel === 'BASE') count++;
+  if (mtLevel === 'HIGH') highCount++;
+
+  // Maturity
+  var maturityLevel, maturityThreshold;
+  if (!hasAnyActivity) {
+    maturityLevel = 'INACTIVE'; maturityThreshold = 0;
+  } else if (metrics.activeMonths >= PERF_THRESHOLDS.MIN_ACTIVE_MONTHS) {
+    maturityLevel = 'ESTABLISHED'; maturityThreshold = PERF_THRESHOLDS.MIN_ACTIVE_MONTHS;
+  } else if (metrics.activeMonths >= 1 && metrics.activeMonths <= 3 &&
+             isWithinLatestNMonths_(metrics.firstActivityMonth, 3, referenceDate)) {
+    maturityLevel = 'NEW'; maturityThreshold = 3;
+  } else if (metrics.activeMonths >= 1 && metrics.activeMonths <= 3) {
+    maturityLevel = 'STALLED'; maturityThreshold = PERF_THRESHOLDS.MIN_ACTIVE_MONTHS;
+  } else {
+    maturityLevel = 'INACTIVE'; maturityThreshold = 0;
+  }
+
+  // Recovery (only when count=0 AND maturity=ESTABLISHED)
+  var recoveryActive = false;
+  var recoveryPpm = null;
+  var recoveryCr = null;
+  var recoveryMt = null;
+  if (count === 0 && maturityLevel === 'ESTABLISHED') {
+    var l90Ppm = metrics.l90Players / 3;
+    if (l90Ppm >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) {
+      recoveryActive = true;
+      recoveryPpm = Math.round(l90Ppm);
+    }
+    var l90Cr = metrics.l90Players > 0 ? (metrics.l90Completions || 0) / metrics.l90Players : 0;
+    if (l90Cr >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE && (metrics.l90Completions || 0) >= 5) {
+      recoveryActive = true;
+      recoveryCr = Math.round(l90Cr * 100);
+    }
+    if ((metrics.l90MtOpp || 0) >= PERF_THRESHOLDS.BASELINE_MT_OPP / 4 ||
+        (metrics.l90MtWon || 0) >= PERF_THRESHOLDS.BASELINE_MT_WON / 4) {
+      recoveryActive = true;
+      recoveryMt = Math.max(metrics.l90MtOpp || 0, metrics.l90MtWon || 0);
+    }
+  }
+
+  return {
+    usage: { level: usageLevel, value: metrics.playersPerMonth, threshold: usageThreshold },
+    cr: { level: crLevel, value: crPercent, completions: metrics.completions, threshold: crThreshold, completionsThreshold: PERF_THRESHOLDS.BASELINE_COMPLETIONS },
+    mt: { level: mtLevel, value: mtValue, source: mtSource, threshold: mtThreshold },
+    hasPage: metrics.hasContentSpecificPage,
+    hasMapping: metrics.mtMappingValid,
+    maturity: { level: maturityLevel, months: metrics.activeMonths, threshold: maturityThreshold },
+    recovery: { active: recoveryActive, ppm: recoveryPpm, cr: recoveryCr, mt: recoveryMt },
+    hasAnyActivity: hasAnyActivity,
+    count: count,
+    highCount: highCount
+  };
+}
+
+function buildSignalsString_(signals) {
+  var parts = [];
+
+  // For BELOW level, display threshold as "baseline X"
+  var usageLevelDisplay = signals.usage.level === 'BELOW' ? 'baseline' : signals.usage.level.toLowerCase();
+  parts.push('Usage: ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm (' + usageLevelDisplay + ' ' + signals.usage.threshold + ')');
+
+  var crLevelDisplay = signals.cr.level === 'BELOW' ? 'baseline' : signals.cr.level.toLowerCase();
+  parts.push('CR: ' + signals.cr.level + ' ' + signals.cr.value + '% (' + crLevelDisplay + ' ' + signals.cr.threshold + '%)');
+
+  var mtDisplay = signals.mt.source === 'none' ? '$0' : formatCompact_(signals.mt.value) + ' ' + signals.mt.source;
+  var mtLevelDisplay = signals.mt.level === 'BELOW' ? 'baseline' : signals.mt.level.toLowerCase();
+  parts.push('MT: ' + signals.mt.level + ' ' + mtDisplay + ' (' + mtLevelDisplay + ' ' + formatCompact_(signals.mt.threshold) + ')');
+
+  parts.push(signals.hasPage ? 'has page' : 'no page');
+  parts.push(signals.hasMapping ? 'has mapping' : 'no mapping');
+
+  if (signals.recovery.active) {
+    var recParts = [];
+    var recBaselines = [];
+    if (signals.recovery.ppm !== null) {
+      recParts.push('ppm ' + signals.recovery.ppm);
+      recBaselines.push(PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH + ' ppm');
+    }
+    if (signals.recovery.cr !== null) {
+      recParts.push('CR ' + signals.recovery.cr + '%');
+      recBaselines.push(Math.round(PERF_THRESHOLDS.BASELINE_COMPLETION_RATE * 100) + '% CR');
+    }
+    if (signals.recovery.mt !== null) {
+      recParts.push('MT ' + formatCompact_(signals.recovery.mt));
+      recBaselines.push(formatCompact_(PERF_THRESHOLDS.BASELINE_MT_OPP / 4) + ' MT');
+    }
+    parts.push('Last 90d recovery: YES ' + recParts.join(', ') + ' (baseline ' + recBaselines.join(', ') + ')');
+  }
+
+  parts.push('Maturity: ' + signals.maturity.level + ' ' + signals.maturity.months + ' mo. (' + signals.maturity.level.toLowerCase() + ' ' + signals.maturity.threshold + ')');
+
+  return parts.join(' | ');
+}
+
+/* =========================
    PERFORMANCE STATUS
 ========================= */
 
-function computePerformanceStatus_(metrics, flags, referenceDate) {
+function computePerformanceStatus_(metrics, referenceDate) {
   if (metrics.activeMonths === 0 && metrics.totalPlayers === 0) {
     return 'No activity';
   }
@@ -305,11 +458,15 @@ function computePerformanceStatus_(metrics, flags, referenceDate) {
     var l90Ppm = metrics.l90Players / 3;
     var crSignalMet = metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
                       metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS;
+    var l90Cr = metrics.l90Players > 0 ? metrics.l90Completions / metrics.l90Players : 0;
+    var l90CrMet = l90Cr >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE && (metrics.l90Completions || 0) >= 5;
+    var l90MtMet = (metrics.l90MtOpp || 0) >= PERF_THRESHOLDS.BASELINE_MT_OPP / 4 ||
+                   (metrics.l90MtWon || 0) >= PERF_THRESHOLDS.BASELINE_MT_WON / 4;
     if (metrics.playersPerMonth < PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH &&
         l90Ppm < PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH &&
         metrics.mtOpp < PERF_THRESHOLDS.BASELINE_MT_OPP &&
         metrics.mtWon < PERF_THRESHOLDS.BASELINE_MT_WON &&
-        !crSignalMet) {
+        !crSignalMet && !l90CrMet && !l90MtMet) {
       return 'Low activity';
     }
 
@@ -321,15 +478,9 @@ function computePerformanceStatus_(metrics, flags, referenceDate) {
         metrics.mtWon >= PERF_THRESHOLDS.BASELINE_MT_WON) signals++;
     if (signals >= 1) return 'Performing';
 
-    if (flags.indexOf('High-value niche') !== -1) return 'Performing';
-
     if (l90Ppm >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) return 'Performing';
-
-    var l90Cr = metrics.l90Players > 0 ? metrics.l90Completions / metrics.l90Players : 0;
-    if (l90Cr >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE && (metrics.l90Completions || 0) >= 5) return 'Performing';
-
-    if ((metrics.l90MtOpp || 0) >= PERF_THRESHOLDS.BASELINE_MT_OPP / 4 ||
-        (metrics.l90MtWon || 0) >= PERF_THRESHOLDS.BASELINE_MT_WON / 4) return 'Performing';
+    if (l90CrMet) return 'Performing';
+    if (l90MtMet) return 'Performing';
 
     return 'Low activity';
   }
@@ -352,7 +503,7 @@ function computePerformanceStatus_(metrics, flags, referenceDate) {
    RECOMMENDED ACTION + REASON
 ========================= */
 
-function computePerformanceAction_(status, flags, metrics, contentAge, referenceDate) {
+function computePerformanceAction_(status, flags, metrics, contentAge, referenceDate, trend) {
   var hasHighUsage = flags.indexOf('High usage') !== -1;
   var hasHighEngagement = flags.indexOf('High engagement') !== -1;
   var hasLowEngagement = flags.indexOf('Low engagement') !== -1;
@@ -421,6 +572,22 @@ function computePerformanceAction_(status, flags, metrics, contentAge, reference
       action: 'Need promotion',
       reason: 'Usage remains low, but completion indicates strong engagement among the players who started the demo.' + missingPageMappingNote
     };
+  }
+
+  // D2. Need promotion — 3/3 all-time signals but declining or stale
+  if ((trend === 'declining' || trend === 'stale') && status !== 'Low activity' && status !== 'No activity' && status !== 'New content') {
+    var trendSignalCount = 0;
+    if (metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) trendSignalCount++;
+    if (metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
+        metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) trendSignalCount++;
+    if (metrics.mtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP ||
+        metrics.mtWon >= PERF_THRESHOLDS.BASELINE_MT_WON) trendSignalCount++;
+    if (trendSignalCount === 3) {
+      return {
+        action: 'Need promotion',
+        reason: 'All three baseline performance signals are met, but the L90 trend is ' + trend + ', indicating declining recent activity that may benefit from promotional effort.' + missingPageMappingNote
+      };
+    }
   }
 
   // E. Retire
@@ -501,6 +668,7 @@ function computePerformanceTrend_(metrics, referenceDate) {
 
   if (hasL90Data) {
     if (allTimeRate === 0) return 'unknown';
+    if (l90Rate >= allTimeRate * PERF_THRESHOLDS.GROWING_RATIO) return 'growing';
     if (l90Rate >= allTimeRate * 0.5) return 'stable';
     return 'declining';
   }
@@ -514,7 +682,7 @@ function computePerformanceTrend_(metrics, referenceDate) {
   return 'unknown';
 }
 
-function computePerformancePriority_(status, flags, metrics, action, referenceDate, contentAge) {
+function computePerformancePriority_(status, flags, metrics, action, referenceDate, contentAge, trend) {
   if (status === 'New content') return 'Low';
   if (action === 'Keep') return 'Low';
 
@@ -523,7 +691,6 @@ function computePerformancePriority_(status, flags, metrics, action, referenceDa
   if (flags.indexOf('High engagement') !== -1) highSignals++;
   if (flags.indexOf('High business impact') !== -1) highSignals++;
 
-  var trend = computePerformanceTrend_(metrics, referenceDate);
   var hasMeaningfulAllTime = metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH ||
                              metrics.mtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP;
 
@@ -539,15 +706,8 @@ function computePerformancePriority_(status, flags, metrics, action, referenceDa
 }
 
 /* =========================
-   FINAL STATUS + REASON
+   REASON TEXT
 ========================= */
-
-function computeFinalStatus_(baseStatus, trend) {
-  if (baseStatus !== 'Performing') return baseStatus;
-  if (trend === 'declining') return 'Declining';
-  if (trend === 'stale') return 'Stale';
-  return 'Stable';
-}
 
 function formatCompact_(n) {
   if (n >= 1000000) return '$' + Math.round(n / 1000000) + 'M';
@@ -607,19 +767,36 @@ function buildStatusReason_(finalStatus, metrics, trend, contentAge) {
 
   var hasL90Data = metrics.l90Players > 0 || metrics.l90Completions > 0 ||
                    metrics.l90MtOpp > 0 || metrics.l90MtWon > 0;
-  var trendPart = '';
-  if (finalStatus === 'Stable' || finalStatus === 'Declining' || finalStatus === 'Stale') {
-    if (hasL90Data && (trend === 'stable' || trend === 'declining')) {
+  var trendLine = '';
+  if (finalStatus === 'Performing') {
+    if (hasL90Data && metrics.playersPerMonth > 0) {
       var allTimeRate = metrics.playersPerMonth;
       var l90Rate = metrics.l90Players / 3;
-      var ratio = allTimeRate > 0 ? Math.round((l90Rate / allTimeRate) * 100) : 0;
-      trendPart = ', L90 ' + trend + ' ' + ratio + '%';
+      var ratio = Math.round((l90Rate / allTimeRate) * 100);
+      if (trend === 'growing') {
+        trendLine = ' L90 ' + ratio + '% ≥ ' + Math.round(PERF_THRESHOLDS.GROWING_RATIO * 100) + '%';
+      } else if (trend === 'stable') {
+        trendLine = ' L90 ' + ratio + '% ≥ 50%';
+      } else if (trend === 'declining') {
+        trendLine = ' L90 ' + ratio + '% < 50%';
+      }
     } else if (trend === 'stale' || !hasL90Data) {
-      trendPart = ', no L90 activity';
+      trendLine = ' no recent activity';
     }
   }
 
-  return finalStatus + ' (' + signalCount + '/3' + trendPart + ') — ' + signals.join(', ') + '.' + agePart;
+  var rescueNotes = [];
+  if (signalCount === 0 && finalStatus === 'Performing') {
+    var rescueL90Ppm = metrics.l90Players / 3;
+    var rescueL90Cr = metrics.l90Players > 0 ? (metrics.l90Completions || 0) / metrics.l90Players : 0;
+    if (rescueL90Ppm >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) rescueNotes.push('L90 ppm rescue');
+    if (rescueL90Cr >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE && (metrics.l90Completions || 0) >= 5) rescueNotes.push('L90 CR rescue');
+    if ((metrics.l90MtOpp || 0) >= PERF_THRESHOLDS.BASELINE_MT_OPP / 4 ||
+        (metrics.l90MtWon || 0) >= PERF_THRESHOLDS.BASELINE_MT_WON / 4) rescueNotes.push('L90 MT rescue');
+  }
+  var rescuePart = rescueNotes.length > 0 ? ' (' + rescueNotes.join(', ') + ')' : '';
+
+  return finalStatus + ' (' + signalCount + '/3)' + trendLine + rescuePart + ' — ' + signals.join(', ') + '.' + agePart;
 }
 
 function computePerformanceScore_(metrics, flags, trend, finalStatus) {
@@ -700,6 +877,7 @@ function isRowBlank_(row, headerMap) {
     PERF_LABEL_COLUMNS.PRIORITY,
     PERF_LABEL_COLUMNS.PERF_SCORE,
     PERF_LABEL_COLUMNS.PERF_TIER,
+    PERF_LABEL_COLUMNS.PERF_TREND,
     PERF_LABEL_COLUMNS.AGE,
     PERF_LABEL_COLUMNS.PROCESSING_RESULT
   ];
@@ -759,11 +937,11 @@ function hasMinimumRequiredMetrics_(row, headerMap) {
 }
 
 function makeSkipResult_(reason) {
-  return { outcome: 'skipped', status: '', flags: '', action: '', reason: '', priority: '', score: '', tier: '', result: 'Skipped — ' + reason };
+  return { outcome: 'skipped', status: '', flags: '', action: '', reason: '', priority: '', score: '', tier: '', trend: '', result: 'Skipped — ' + reason };
 }
 
 function makeReviewResult_(reason) {
-  return { outcome: 'needs_review', status: '', flags: '', action: 'Needs human review', reason: reason, priority: '', score: '', tier: '', result: 'Needs human review — ' + reason };
+  return { outcome: 'needs_review', status: '', flags: '', action: 'Needs human review', reason: reason, priority: '', score: '', tier: '', trend: '', result: 'Needs human review — ' + reason };
 }
 
 function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
@@ -814,45 +992,34 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
 
   var metrics = parseMetrics_(row, headerMap);
 
-  var tempFlags = computePerformanceFlags_(metrics, null);
-  var perfStatus = computePerformanceStatus_(metrics, tempFlags, referenceDate);
-  var flags = computePerformanceFlags_(metrics, perfStatus);
-  perfStatus = computePerformanceStatus_(metrics, flags, referenceDate);
+  var perfStatus = computePerformanceStatus_(metrics, referenceDate);
+  var flags = computePerformanceFlags_(metrics);
 
   var contentAge = computeContentAge_(row, headerMap, referenceDate);
-  var actionResult = computePerformanceAction_(perfStatus, flags, metrics, contentAge, referenceDate);
   var trend = computePerformanceTrend_(metrics, referenceDate);
-  var priority = computePerformancePriority_(perfStatus, flags, metrics, actionResult.action, referenceDate, contentAge);
-
-  var finalStatus = computeFinalStatus_(perfStatus, trend);
-
-  var hasL90Data = metrics.l90Players > 0 || metrics.l90Completions > 0 ||
-                   metrics.l90MtOpp > 0 || metrics.l90MtWon > 0;
-  if (hasL90Data && (trend === 'stable' || trend === 'declining')) {
-    flags.push('L90 ' + trend);
-  } else if (trend === 'stale') {
-    flags.push('L90 stale');
-  }
+  var actionResult = computePerformanceAction_(perfStatus, flags, metrics, contentAge, referenceDate, trend);
+  var priority = computePerformancePriority_(perfStatus, flags, metrics, actionResult.action, referenceDate, contentAge, trend);
 
   if (contentAge && contentAge.available && contentAge.months >= 6 &&
       metrics.activeMonths > 0 && metrics.activeMonths / contentAge.months < 0.5) {
     flags.push('Sporadic activity');
   }
 
-  var statusReason = buildStatusReason_(finalStatus, metrics, trend, contentAge);
+  var statusReason = buildStatusReason_(perfStatus, metrics, trend, contentAge);
   var combinedReason = statusReason + ' ' + actionResult.reason;
-  var score = computePerformanceScore_(metrics, flags, trend, finalStatus);
+  var score = computePerformanceScore_(metrics, flags, trend, perfStatus);
   var tier = computePerformanceTier_(score);
 
   return {
     outcome: 'processed',
-    status: finalStatus,
+    status: perfStatus,
     flags: flags.join(', '),
     action: actionResult.action,
     reason: combinedReason,
     priority: priority,
     score: score,
     tier: tier,
+    trend: trend,
     result: 'Processed'
   };
 }
@@ -887,6 +1054,7 @@ function runPerformanceLabels() {
   var actionCounts = {};
   var priorityCounts = {};
   var tierCounts = {};
+  var trendCounts = {};
   var missingReasonCount = 0;
   var needsReviewDetails = [];
 
@@ -897,6 +1065,7 @@ function runPerformanceLabels() {
   var outPriority = [];
   var outScore = [];
   var outTier = [];
+  var outTrend = [];
   var outAge = [];
   var outResult = [];
 
@@ -928,6 +1097,7 @@ function runPerformanceLabels() {
       outPriority.push([c.priority || '']);
       outScore.push([c.score !== '' ? c.score : '']);
       outTier.push([c.tier || '']);
+      outTrend.push([c.trend || '']);
       outAge.push([contentAge.available ? contentAge.months : '']);
       outResult.push([c.result]);
 
@@ -950,6 +1120,9 @@ function runPerformanceLabels() {
         }
         if (c.tier) {
           tierCounts[c.tier] = (tierCounts[c.tier] || 0) + 1;
+        }
+        if (c.trend) {
+          trendCounts[c.trend] = (trendCounts[c.trend] || 0) + 1;
         }
         if (c.action && !c.reason) {
           missingReasonCount++;
@@ -980,6 +1153,7 @@ function runPerformanceLabels() {
       outPriority.push(['']);
       outScore.push(['']);
       outTier.push(['']);
+      outTrend.push(['']);
       outAge.push(['']);
       outResult.push(['Error — ' + String(e.message || e).substring(0, 100)]);
       Logger.log('ERROR: ' + rowLabel + ' — ' + (e.message || e));
@@ -996,6 +1170,7 @@ function runPerformanceLabels() {
   scoreRange.setNumberFormat('0');
   scoreRange.setValues(outScore);
   sheet.getRange(startRow, cols.tierCol, dataRows, 1).setValues(outTier);
+  sheet.getRange(startRow, cols.trendCol, dataRows, 1).setValues(outTrend);
   var ageRange = sheet.getRange(startRow, cols.ageCol, dataRows, 1);
   ageRange.setNumberFormat('0');
   ageRange.setValues(outAge);
@@ -1052,6 +1227,13 @@ function runPerformanceLabels() {
   }
 
   Logger.log('');
+  Logger.log('Trend counts:');
+  var sortedTrends = Object.keys(trendCounts).sort();
+  for (var tr = 0; tr < sortedTrends.length; tr++) {
+    Logger.log('  - ' + sortedTrends[tr] + ': ' + trendCounts[sortedTrends[tr]]);
+  }
+
+  Logger.log('');
   Logger.log('Rows missing Recommended action reason: ' + missingReasonCount);
 
   Logger.log('');
@@ -1082,6 +1264,7 @@ function runPerformanceLabels() {
     var vPriority = outPriority[j][0];
     var vScore = outScore[j][0];
     var vTier = outTier[j][0];
+    var vTrend = outTrend[j][0];
 
     if (isRowBlank_(allData[j], headerMap)) continue;
 
@@ -1116,8 +1299,12 @@ function runPerformanceLabels() {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Processed but missing Performance Tier');
         validationErrors++;
       }
+      if (!vTrend) {
+        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Processed but missing Performance Trend');
+        validationErrors++;
+      }
     } else if (vResult.indexOf('Skipped') === 0) {
-      if (vStatus || vFlags || vAction || vReason || vPriority || vScore !== '' || vTier) {
+      if (vStatus || vFlags || vAction || vReason || vPriority || vScore !== '' || vTier || vTrend) {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Skipped but has stale labels');
         validationErrors++;
       }
@@ -1130,12 +1317,12 @@ function runPerformanceLabels() {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs human review but missing reason');
         validationErrors++;
       }
-      if (vStatus || vFlags || vScore !== '' || vTier) {
+      if (vStatus || vFlags || vScore !== '' || vTier || vTrend) {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs human review but has stale labels');
         validationErrors++;
       }
     } else if (vResult.indexOf('Error') === 0) {
-      if (vStatus || vFlags || vAction || vReason || vScore !== '' || vTier) {
+      if (vStatus || vFlags || vAction || vReason || vScore !== '' || vTier || vTrend) {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Error but has stale labels');
         validationErrors++;
       }
@@ -1164,9 +1351,10 @@ function clearPerformanceLabels() {
   sheet.getRange(startRow, cols.priorityCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.scoreCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.tierCol, dataRows, 1).clearContent();
+  sheet.getRange(startRow, cols.trendCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.ageCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.resultCol, dataRows, 1).clearContent();
-  Logger.log('Cleared: Performance Status, Performance Flags, Recommended action, Recommended action reason, Performance Priority, Performance Score, Performance Tier, Age, Processing Result.');
+  Logger.log('Cleared: Performance Status, Performance Flags, Recommended action, Recommended action reason, Performance Priority, Performance Score, Performance Tier, Performance Trend, Age, Processing Result.');
 }
 
 /* =========================
@@ -1239,143 +1427,212 @@ function testPerformanceRules() {
   // --- Performance Status ---
 
   var m0 = { activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, mtMappingValid: true };
-  assert('Status: No activity', computePerformanceStatus_(m0, computePerformanceFlags_(m0, null), referenceDate), 'No activity');
+  assert('Status: No activity', computePerformanceStatus_(m0, referenceDate), 'No activity');
 
   var m1 = { activeMonths: 2, totalPlayers: 50, playersPerMonth: 25, completions: 100, completionRate: 0.60, mtOpp: 200000, mtWon: 50000, hasContentSpecificPage: true, firstActivityMonth: recentDate, mtMappingValid: true };
-  assert('Status: New content (recent, 1-3 months)', computePerformanceStatus_(m1, computePerformanceFlags_(m1, null), referenceDate), 'New content');
+  assert('Status: New content (recent, 1-3 months)', computePerformanceStatus_(m1, referenceDate), 'New content');
 
   var m1b = { activeMonths: 2, totalPlayers: 10, playersPerMonth: 5, completions: 2, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Low activity (stale new content)', computePerformanceStatus_(m1b, computePerformanceFlags_(m1b, null), referenceDate), 'Low activity');
+  assert('Status: Low activity (stale new content)', computePerformanceStatus_(m1b, referenceDate), 'Low activity');
 
   var m2 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Low activity', computePerformanceStatus_(m2, computePerformanceFlags_(m2, null), referenceDate), 'Low activity');
+  assert('Status: Low activity', computePerformanceStatus_(m2, referenceDate), 'Low activity');
 
   var m3 = { activeMonths: 6, totalPlayers: 150, playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (Path A, 3/3)', computePerformanceStatus_(m3, computePerformanceFlags_(m3, null), referenceDate), 'Performing');
+  assert('Status: Performing (Path A, 3/3)', computePerformanceStatus_(m3, referenceDate), 'Performing');
 
   var m4 = { activeMonths: 6, totalPlayers: 132, playersPerMonth: 22, completions: 30, completionRate: 0.42, mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (Path A, 2/3)', computePerformanceStatus_(m4, computePerformanceFlags_(m4, null), referenceDate), 'Performing');
+  assert('Status: Performing (Path A, 2/3)', computePerformanceStatus_(m4, referenceDate), 'Performing');
 
   var m5 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 2000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (Path B, niche)', computePerformanceStatus_(m5, computePerformanceFlags_(m5, null), referenceDate), 'Performing');
+  assert('Status: Performing (Path B, niche)', computePerformanceStatus_(m5, referenceDate), 'Performing');
 
   var m6 = { activeMonths: 6, totalPlayers: 150, playersPerMonth: 25, completions: 10, completionRate: 0.30, mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (1 signal)', computePerformanceStatus_(m6, computePerformanceFlags_(m6, null), referenceDate), 'Performing');
+  assert('Status: Performing (1 signal)', computePerformanceStatus_(m6, referenceDate), 'Performing');
 
   var m7 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 88 };
-  assert('Status: Performing (0/3 signals but L90 ppm above baseline)', computePerformanceStatus_(m7, computePerformanceFlags_(m7, null), referenceDate), 'Performing');
+  assert('Status: Performing (0/3 signals but L90 ppm above baseline)', computePerformanceStatus_(m7, referenceDate), 'Performing');
 
   var m8 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 50, completionRate: 0.55, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (CR signal rescues from Low activity)', computePerformanceStatus_(m8, computePerformanceFlags_(m8, null), referenceDate), 'Performing');
+  assert('Status: Performing (CR signal rescues from Low activity)', computePerformanceStatus_(m8, referenceDate), 'Performing');
 
   var m9 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 50, completionRate: 0.55, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 0 };
-  assert('Status: Performing (CR signal, even with no L90 ppm)', computePerformanceStatus_(m9, computePerformanceFlags_(m9, null), referenceDate), 'Performing');
+  assert('Status: Performing (CR signal, even with no L90 ppm)', computePerformanceStatus_(m9, referenceDate), 'Performing');
 
   var m10 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.35, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Low activity (CR below baseline, no rescue)', computePerformanceStatus_(m10, computePerformanceFlags_(m10, null), referenceDate), 'Low activity');
+  assert('Status: Low activity (CR below baseline, no rescue)', computePerformanceStatus_(m10, referenceDate), 'Low activity');
 
   var m11 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 30, l90Completions: 15 };
-  assert('Status: Performing (L90 CR fallback)', computePerformanceStatus_(m11, computePerformanceFlags_(m11, null), referenceDate), 'Performing');
+  assert('Status: Performing (L90 CR fallback)', computePerformanceStatus_(m11, referenceDate), 'Performing');
 
   var m12 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 0, l90Completions: 0, l90MtOpp: 15000, l90MtWon: 0 };
-  assert('Status: Performing (L90 MT opp fallback)', computePerformanceStatus_(m12, computePerformanceFlags_(m12, null), referenceDate), 'Performing');
+  assert('Status: Performing (L90 MT opp fallback)', computePerformanceStatus_(m12, referenceDate), 'Performing');
 
   var m13 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 3000 };
-  assert('Status: Performing (L90 MT won fallback)', computePerformanceStatus_(m13, computePerformanceFlags_(m13, null), referenceDate), 'Performing');
+  assert('Status: Performing (L90 MT won fallback)', computePerformanceStatus_(m13, referenceDate), 'Performing');
 
   var m14 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 20, l90Completions: 3 };
-  assert('Status: Low activity (L90 CR below baseline, no fallback)', computePerformanceStatus_(m14, computePerformanceFlags_(m14, null), referenceDate), 'Low activity');
+  assert('Status: Low activity (L90 CR below baseline, no fallback)', computePerformanceStatus_(m14, referenceDate), 'Low activity');
 
   // --- Performance Flags ---
 
   assertFlags('Flag: High usage (no page, low MT → no Low opp value)',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
     ['High usage', 'Low engagement']);
 
   assertFlags('Flag: High engagement (new content → no Low opp value)',
-    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 40, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }, 'New content'),
+    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 40, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
     ['High engagement']);
 
   assertFlags('Flag: Low engagement',
-    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 30, playersPerMonth: 10, completions: 5, completionRate: 0.15, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }, 'New content'),
+    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 30, playersPerMonth: 10, completions: 5, completionRate: 0.15, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
     ['Low engagement']);
 
   assertFlags('Flag: High biz impact (opp, valid mapping)',
-    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }, 'New content'),
+    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
     ['High business impact']);
 
   assertFlags('Flag: High biz impact (won, valid mapping)',
-    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 1000, mtWon: 30000, hasContentSpecificPage: false, mtMappingValid: true }, 'New content'),
+    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 1000, mtWon: 30000, hasContentSpecificPage: false, mtMappingValid: true }),
     ['High business impact']);
 
   assertFlags('Flag: High biz impact ignores mapping status',
-    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: false }, 'New content'),
+    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: false }),
     ['High business impact']);
 
   assertFlags('Flag: High-value niche ignores mapping status',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 50, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: false }, 'Low activity'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 50, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: false }),
     ['High-value niche', 'Low engagement']);
 
   assertFlags('Flag: Missing page mapping blocks Low opportunity value',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: false }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: false }),
     ['High usage', 'Low engagement']);
 
   assertFlags('Flag: High-value niche',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 50, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 50, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
     ['High-value niche', 'Low engagement']);
 
   assertFlags('Flag: None (low players)',
-    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 10, playersPerMonth: 5, completions: 3, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }, 'New content'),
+    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 10, playersPerMonth: 5, completions: 3, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
     []);
 
   // --- Low opportunity value flag ---
 
   assertFlags('Flag: Low opp value (mature + High usage + page + valid mapping)',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
     ['High usage', 'Low engagement', 'Low opportunity value']);
 
   assertFlags('Flag: No Low opp value (no page)',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
     ['High usage', 'Low engagement']);
 
   assertFlags('Flag: No Low opp value (High engagement + below baseline usage)',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 30, playersPerMonth: 6, completions: 40, completionRate: 0.55, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 30, playersPerMonth: 6, completions: 40, completionRate: 0.55, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
     ['High engagement']);
 
   assertFlags('Flag: Low opp value (High engagement + baseline usage + page)',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 100, playersPerMonth: 20, completions: 40, completionRate: 0.55, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 100, playersPerMonth: 20, completions: 40, completionRate: 0.55, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
     ['High engagement', 'Low opportunity value']);
 
   assertFlags('Flag: No Low opp value (New content)',
-    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 150, playersPerMonth: 75, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }, 'New content'),
+    computePerformanceFlags_({ activeMonths: 2, totalPlayers: 150, playersPerMonth: 75, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
     ['High usage', 'Low engagement']);
 
   assertFlags('Flag: No Low opp value (no High usage/engagement)',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 20, playersPerMonth: 4, completions: 2, completionRate: 0.10, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }, 'Low activity'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 20, playersPerMonth: 4, completions: 2, completionRate: 0.10, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
     []);
 
   assertFlags('Flag: No Low opp value (MT opp = $50K)',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 50000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 50000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
     ['High usage', 'Low engagement']);
 
   assertFlags('Flag: Low opp value coexists with High business impact (MT won >= $25K)',
-    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 30000, hasContentSpecificPage: true, mtMappingValid: true }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 30000, hasContentSpecificPage: true, mtMappingValid: true }),
     ['High usage', 'Low engagement', 'High business impact', 'Low opportunity value']);
 
   assertFlags('Flag: Low opp value requires Active Months >= 4',
-    computePerformanceFlags_({ activeMonths: 3, totalPlayers: 150, playersPerMonth: 50, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }, 'Performing'),
+    computePerformanceFlags_({ activeMonths: 3, totalPlayers: 150, playersPerMonth: 50, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
     ['High usage', 'Low engagement']);
 
   // --- Threshold tests ---
 
   assert('Threshold: 20-24.99 does NOT get High usage',
-    computePerformanceFlags_({ activeMonths: 6, totalPlayers: 130, playersPerMonth: 21.7, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }, 'Performing').indexOf('High usage') === -1, true);
+    computePerformanceFlags_({ activeMonths: 6, totalPlayers: 130, playersPerMonth: 21.7, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }).indexOf('High usage') === -1, true);
 
   assert('Threshold: 24.99 does NOT get High usage',
-    computePerformanceFlags_({ activeMonths: 6, totalPlayers: 150, playersPerMonth: 24.99, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }, 'Performing').indexOf('High usage') === -1, true);
+    computePerformanceFlags_({ activeMonths: 6, totalPlayers: 150, playersPerMonth: 24.99, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }).indexOf('High usage') === -1, true);
 
   assert('Threshold: exactly 25 gets High usage',
-    computePerformanceFlags_({ activeMonths: 6, totalPlayers: 150, playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }, 'Performing').indexOf('High usage') !== -1, true);
+    computePerformanceFlags_({ activeMonths: 6, totalPlayers: 150, playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }).indexOf('High usage') !== -1, true);
+
+  // --- Signals tests ---
+  Logger.log('');
+  Logger.log('--- Signals ---');
+
+  var sigMetrics1 = { activeMonths: 12, totalPlayers: 360, playersPerMonth: 30, completions: 198, completionRate: 0.55, mtOpp: 150000, mtWon: 30000, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, l90Players: 90, l90Completions: 50, l90MtOpp: 40000, l90MtWon: 8000, mtMappingValid: true };
+  var sig1 = computePerformanceSignals_(sigMetrics1, referenceDate);
+  assert('Signals: usage HIGH when ppm >= 25', sig1.usage.level, 'HIGH');
+  assert('Signals: usage value is ppm', sig1.usage.value, 30);
+  assert('Signals: usage threshold is high threshold', sig1.usage.threshold, PERF_THRESHOLDS.HIGH_PLAYERS_PER_MONTH);
+  assert('Signals: cr HIGH when rate >= 50% + completions >= 25', sig1.cr.level, 'HIGH');
+  assert('Signals: mt HIGH when opp >= $100K', sig1.mt.level, 'HIGH');
+  assert('Signals: mt source is opp', sig1.mt.source, 'opp');
+  assert('Signals: hasPage true', sig1.hasPage, true);
+  assert('Signals: hasMapping true', sig1.hasMapping, true);
+  assert('Signals: maturity ESTABLISHED when >= 4 months', sig1.maturity.level, 'ESTABLISHED');
+  assert('Signals: maturity months', sig1.maturity.months, 12);
+  assert('Signals: count 3', sig1.count, 3);
+  assert('Signals: highCount 3', sig1.highCount, 3);
+  assert('Signals: hasAnyActivity true', sig1.hasAnyActivity, true);
+  assert('Signals: recovery not active when count > 0', sig1.recovery.active, false);
+
+  var sigMetrics2 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, l90Players: 88, l90Completions: 5, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
+  var sig2 = computePerformanceSignals_(sigMetrics2, referenceDate);
+  assert('Signals: usage BELOW when ppm < 15', sig2.usage.level, 'BELOW');
+  assert('Signals: cr BELOW when rate 20-39%', sig2.cr.level, 'BELOW');
+  assert('Signals: mt BELOW when opp/won > 0 but below baseline', sig2.mt.level, 'BELOW');
+  assert('Signals: count 0', sig2.count, 0);
+  assert('Signals: recovery active (L90 ppm rescue)', sig2.recovery.active, true);
+  assert('Signals: recovery ppm value', sig2.recovery.ppm >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH, true);
+
+  var sigMetrics3 = { activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
+  var sig3 = computePerformanceSignals_(sigMetrics3, referenceDate);
+  assert('Signals: maturity INACTIVE when 0 months + 0 players', sig3.maturity.level, 'INACTIVE');
+  assert('Signals: hasAnyActivity false', sig3.hasAnyActivity, false);
+
+  var sigMetrics4 = { activeMonths: 2, totalPlayers: 50, playersPerMonth: 25, completions: 40, completionRate: 0.50, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, firstActivityMonth: recentDate, lastActivityMonth: referenceDate, l90Players: 50, l90Completions: 20, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
+  var sig4 = computePerformanceSignals_(sigMetrics4, referenceDate);
+  assert('Signals: maturity NEW when 1-3 months + recent', sig4.maturity.level, 'NEW');
+
+  var sigMetrics5 = { activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: oldDate, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
+  var sig5 = computePerformanceSignals_(sigMetrics5, referenceDate);
+  assert('Signals: maturity STALLED when 1-3 months + not recent', sig5.maturity.level, 'STALLED');
+
+  var sigMetrics6 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.15, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
+  var sig6 = computePerformanceSignals_(sigMetrics6, referenceDate);
+  assert('Signals: mt NONE when both $0', sig6.mt.level, 'NONE');
+  assert('Signals: cr LOW when rate < 20%', sig6.cr.level, 'LOW');
+  assert('Signals: recovery not active when no L90 data', sig6.recovery.active, false);
+
+  Logger.log('--- Signals String ---');
+
+  var sigStr1 = buildSignalsString_(sig1);
+  assert('SignalsStr: contains Usage HIGH', sigStr1.indexOf('Usage: HIGH') !== -1, true);
+  assert('SignalsStr: contains 30ppm', sigStr1.indexOf('30ppm') !== -1, true);
+  assert('SignalsStr: contains high 25', sigStr1.indexOf('high 25') !== -1, true);
+  assert('SignalsStr: contains CR HIGH', sigStr1.indexOf('CR: HIGH') !== -1, true);
+  assert('SignalsStr: contains MT HIGH', sigStr1.indexOf('MT: HIGH') !== -1, true);
+  assert('SignalsStr: contains has page', sigStr1.indexOf('has page') !== -1, true);
+  assert('SignalsStr: contains has mapping', sigStr1.indexOf('has mapping') !== -1, true);
+  assert('SignalsStr: contains Maturity ESTABLISHED', sigStr1.indexOf('Maturity: ESTABLISHED') !== -1, true);
+  assert('SignalsStr: no recovery line when count > 0', sigStr1.indexOf('recovery') === -1 && sigStr1.indexOf('Recovery') === -1, true);
+
+  var sigStr2 = buildSignalsString_(sig2);
+  assert('SignalsStr: contains Last 90d recovery YES', sigStr2.indexOf('Last 90d recovery: YES') !== -1, true);
+  assert('SignalsStr: contains no page', sigStr2.indexOf('no page') !== -1, true);
+
+  var sigStr6 = buildSignalsString_(sig6);
+  assert('SignalsStr: no recovery line when no L90 rescue', sigStr6.indexOf('recovery') === -1 && sigStr6.indexOf('Recovery') === -1, true);
 
   // --- Recommended action tests ---
 
@@ -1384,104 +1641,125 @@ function testPerformanceRules() {
   var noActCAUnavail = { months: null, available: false };
 
   // A. Verify data mapping / Improve low MT value
-  var arResult1 = computePerformanceAction_('No activity', [], { mtOpp: 50000, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true }, noActCA, referenceDate);
+  var arResult1 = computePerformanceAction_('No activity', [], { mtOpp: 50000, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true }, noActCA, referenceDate, 'unknown');
   assert('Action: Verify data mapping (no activity + MT)', arResult1.action, 'Verify data mapping');
   assertHasReason('Reason: Verify data mapping (no activity + MT)', arResult1);
 
-  var arResult2 = computePerformanceAction_('Performing', ['High usage', 'Low opportunity value'], { mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, noActCA, referenceDate);
+  var arResult2 = computePerformanceAction_('Performing', ['High usage', 'Low opportunity value'], { mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, noActCA, referenceDate, 'stable');
   assert('Action: Improve low MT value (Low opp value + low MT won)', arResult2.action, 'Improve low MT value');
 
-  var arResult3 = computePerformanceAction_('Performing', ['High usage'], { mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate);
+  var arResult3 = computePerformanceAction_('Performing', ['High usage'], { mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
   assert('Action: No Improve low MT value (no Low opp value flag)', arResult3.action, 'Keep');
 
-  var arResult4 = computePerformanceAction_('Performing', ['High usage', 'Low opportunity value'], { mtOpp: 10000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate);
+  var arResult4 = computePerformanceAction_('Performing', ['High usage', 'Low opportunity value'], { mtOpp: 10000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
   assert('Action: No Improve low MT value (MT won >= $10K)', arResult4.action !== 'Improve low MT value', true);
 
   // B. Improve completion rate
-  var rcResult1 = computePerformanceAction_('Performing', ['High usage', 'Low engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate);
+  var rcResult1 = computePerformanceAction_('Performing', ['High usage', 'Low engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
   assert('Action: Improve completion rate (High usage + Low engagement)', rcResult1.action, 'Improve completion rate');
   assertHasReason('Reason: Improve completion rate', rcResult1);
 
-  var rcResult2 = computePerformanceAction_('Performing', ['Low engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, activeMonths: 6, playersPerMonth: 22 }, null, referenceDate);
+  var rcResult2 = computePerformanceAction_('Performing', ['Low engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, activeMonths: 6, playersPerMonth: 22 }, null, referenceDate, 'stable');
   assert('Action: Improve completion rate (20-24.99 + page + Low engagement)', rcResult2.action, 'Improve completion rate');
 
-  var rcResult3 = computePerformanceAction_('New content', ['High usage', 'Low engagement'], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 30 }, null, referenceDate);
+  var rcResult3 = computePerformanceAction_('New content', ['High usage', 'Low engagement'], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 30 }, null, referenceDate, 'stable');
   assert('Action: New content skips Improve CR despite High usage + Low engagement', rcResult3.action, 'Keep');
 
   // C. Create redhat.com page
-  var cpResult1 = computePerformanceAction_('Performing', ['High usage'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate);
+  var cpResult1 = computePerformanceAction_('Performing', ['High usage'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
   assert('Action: Create redhat.com page (High usage, no page)', cpResult1.action, 'Create redhat.com page');
   assertHasReason('Reason: Create redhat.com page', cpResult1);
 
-  var cpResult2 = computePerformanceAction_('Performing', ['High engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate);
+  var cpResult2 = computePerformanceAction_('Performing', ['High engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
   assert('Action: Create redhat.com page (High engagement, no page)', cpResult2.action, 'Create redhat.com page');
 
-  var cpResult3 = computePerformanceAction_('Performing', ['High business impact'], { mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate);
+  var cpResult3 = computePerformanceAction_('Performing', ['High business impact'], { mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
   assert('Action: Create redhat.com page (High biz impact, no page)', cpResult3.action, 'Create redhat.com page');
 
-  var cpResult4 = computePerformanceAction_('Performing', ['High-value niche'], { mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate);
+  var cpResult4 = computePerformanceAction_('Performing', ['High-value niche'], { mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
   assert('Action: Create redhat.com page (High-value niche, no page)', cpResult4.action, 'Create redhat.com page');
 
-  var cpResult5 = computePerformanceAction_('Performing', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 22 }, null, referenceDate);
+  var cpResult5 = computePerformanceAction_('Performing', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 22 }, null, referenceDate, 'stable');
   assert('Action: 20-24.99 + no page → Keep (not Create page)', cpResult5.action, 'Keep');
 
   // D. Need promotion
-  var npResult1 = computePerformanceAction_('Performing', ['High-value niche'], { mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate);
+  var npResult1 = computePerformanceAction_('Performing', ['High-value niche'], { mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
   assert('Action: Need promotion (niche, has page)', npResult1.action, 'Need promotion');
   assertHasReason('Reason: Need promotion', npResult1);
 
-  var npResult2 = computePerformanceAction_('Low activity', ['High engagement'], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 10, completionRate: 0.55, completions: 30 }, null, referenceDate);
+  var npResult2 = computePerformanceAction_('Low activity', ['High engagement'], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 10, completionRate: 0.55, completions: 30 }, null, referenceDate, 'stable');
   assert('Action: Need promotion (Low activity + High engagement)', npResult2.action, 'Need promotion');
 
-  var npResult3 = computePerformanceAction_('Low activity', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 5, completionRate: 0.45, completions: 30 }, null, referenceDate);
+  var npResult3 = computePerformanceAction_('Low activity', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 5, completionRate: 0.45, completions: 30 }, null, referenceDate, 'stable');
   assert('Action: Need promotion (Low activity + baseline engagement 40-49%)', npResult3.action, 'Need promotion');
 
+  // D2. Need promotion — 3/3 all-time signals + declining/stale
+  var d2Metrics = { playersPerMonth: 25, completionRate: 0.45, completions: 50, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true };
+  var d2Declining = computePerformanceAction_('Performing', [], d2Metrics, null, referenceDate, 'declining');
+  assert('Action: 3/3 + declining → Need promotion', d2Declining.action, 'Need promotion');
+
+  var d2Stale = computePerformanceAction_('Performing', [], d2Metrics, null, referenceDate, 'stale');
+  assert('Action: 3/3 + stale → Need promotion', d2Stale.action, 'Need promotion');
+
+  var d2Stable = computePerformanceAction_('Performing', [], d2Metrics, null, referenceDate, 'stable');
+  assert('Action: 3/3 + stable → Keep (not Need promotion)', d2Stable.action, 'Keep');
+
+  var d2Growing = computePerformanceAction_('Performing', [], d2Metrics, null, referenceDate, 'growing');
+  assert('Action: 3/3 + growing → Keep (not Need promotion)', d2Growing.action, 'Keep');
+
+  var d2Only2 = { playersPerMonth: 25, completionRate: 0.35, completions: 10, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true };
+  var d2Only2Result = computePerformanceAction_('Performing', [], d2Only2, null, referenceDate, 'declining');
+  assert('Action: 2/3 + declining → NOT Need promotion', d2Only2Result.action !== 'Need promotion', true);
+
+  var d2FixableWins = computePerformanceAction_('Performing', ['High usage', 'Low engagement'], d2Metrics, null, referenceDate, 'declining');
+  assert('Action: 3/3 + declining + fixable issue → fixable action wins', d2FixableWins.action, 'Improve completion rate');
+
   // E. Retire
-  var retResult1 = computePerformanceAction_('Low activity', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate);
+  var retResult1 = computePerformanceAction_('Low activity', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
   assert('Action: Retire (Low activity, no positive signals)', retResult1.action, 'Retire');
   assertHasReason('Reason: Retire', retResult1);
 
-  var retResult2 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 0 }, noActCA, referenceDate);
+  var retResult2 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 0 }, noActCA, referenceDate, 'unknown');
   assert('Action: Retire (No activity + age >3 + page + MT=0)', retResult2.action, 'Retire');
 
-  var retResult3 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 0 }, noActCA, referenceDate);
+  var retResult3 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 0 }, noActCA, referenceDate, 'unknown');
   assert('Action: Retire (No activity + age >3 + no page + MT=0)', retResult3.action, 'Retire');
 
   // F. Needs human review
-  var nhrResult2 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 0 }, noActCAUnavail, referenceDate);
+  var nhrResult2 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 0 }, noActCAUnavail, referenceDate, 'unknown');
   assert('Action: Needs human review (age unavailable)', nhrResult2.action, 'Needs human review');
   assert('Reason: age unavailable mentions timestamps', nhrResult2.reason.indexOf('timestamps') !== -1, true);
 
   // G. Keep
-  var keepResult1 = computePerformanceAction_('Performing', [], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate);
+  var keepResult1 = computePerformanceAction_('Performing', [], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
   assert('Action: Keep (Performing)', keepResult1.action, 'Keep');
   assertHasReason('Reason: Keep', keepResult1);
 
-  var keepResult2 = computePerformanceAction_('New content', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate);
+  var keepResult2 = computePerformanceAction_('New content', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
   assert('Action: Keep (New content)', keepResult2.action, 'Keep');
 
-  var keepResult3 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 0 }, noActCAShort, referenceDate);
+  var keepResult3 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 0 }, noActCAShort, referenceDate, 'unknown');
   assert('Action: Keep (No activity + age <=3 + MT=0)', keepResult3.action, 'Keep');
   assert('Reason: Keep mentions first 3 months', keepResult3.reason.indexOf('first 3 completed months') !== -1, true);
 
-  var keepResult4 = computePerformanceAction_('Performing', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 22 }, null, referenceDate);
+  var keepResult4 = computePerformanceAction_('Performing', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 22 }, null, referenceDate, 'stable');
   assert('Action: Keep (20-24.99 + no page)', keepResult4.action, 'Keep');
   assert('Reason: Keep mentions baseline', keepResult4.reason.indexOf('baseline') !== -1, true);
 
   // --- Missing page mapping appends explanation ---
-  var missingMapResult = computePerformanceAction_('Performing', ['High usage', 'Low engagement'], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: false, playersPerMonth: 25 }, null, referenceDate);
+  var missingMapResult = computePerformanceAction_('Performing', ['High usage', 'Low engagement'], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: false, playersPerMonth: 25 }, null, referenceDate, 'stable');
   assert('Reason: Missing page mapping appends explanation', missingMapResult.reason.indexOf('missing from the metrics mapping') !== -1, true);
 
   // --- Every action has a reason ---
   var allActions = [
-    computePerformanceAction_('No activity', [], { mtOpp: 50000, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true }, noActCA, referenceDate),
-    computePerformanceAction_('Performing', ['High usage', 'Low engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate),
-    computePerformanceAction_('Performing', ['High usage'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate),
-    computePerformanceAction_('Performing', ['High-value niche'], { mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate),
-    computePerformanceAction_('Low activity', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate),
-    computePerformanceAction_('Performing', [], { mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate),
-    computePerformanceAction_('Performing', [], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate),
-    computePerformanceAction_('New content', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate)
+    computePerformanceAction_('No activity', [], { mtOpp: 50000, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true }, noActCA, referenceDate, 'unknown'),
+    computePerformanceAction_('Performing', ['High usage', 'Low engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable'),
+    computePerformanceAction_('Performing', ['High usage'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable'),
+    computePerformanceAction_('Performing', ['High-value niche'], { mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable'),
+    computePerformanceAction_('Low activity', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable'),
+    computePerformanceAction_('Performing', [], { mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable'),
+    computePerformanceAction_('Performing', [], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable'),
+    computePerformanceAction_('New content', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable')
   ];
   var allHaveReasons = true;
   for (var ai = 0; ai < allActions.length; ai++) {
@@ -1517,35 +1795,34 @@ function testPerformanceRules() {
   assert('Trend: stale via lastActivity fallback (8mo)',
     computePerformanceTrend_({ playersPerMonth: 10, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: lastAct8mo }, referenceDate), 'stale');
 
-  assert('Priority: High (2+ high flags)',
-    computePerformancePriority_('Performing', ['High usage', 'High business impact'], stableL90, 'Improve completion rate', referenceDate), 'High');
-  assert('Priority: High (declining + meaningful all-time)',
-    computePerformancePriority_('Performing', [], { playersPerMonth: 25, mtOpp: 60000, l90Players: 5, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Improve completion rate', referenceDate), 'High');
-  assert('Priority: Medium (1 high flag, stable)',
-    computePerformancePriority_('Performing', ['High usage'], stableL90, 'Improve completion rate', referenceDate), 'Medium');
-  assert('Priority: Medium (declining + below baseline)',
-    computePerformancePriority_('Low activity', [], { playersPerMonth: 10, mtOpp: 5000, l90Players: 2, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate), 'Medium');
-  assert('Priority: Low (0 high flags, stable)',
-    computePerformancePriority_('Performing', [], { playersPerMonth: 22, mtOpp: 1000, l90Players: 36, l90Completions: 5, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Need promotion', referenceDate), 'Low');
-  assert('Priority: Low (New content always)',
-    computePerformancePriority_('New content', ['High usage'], stableL90, 'Keep', referenceDate), 'Low');
-  assert('Priority: Low (Keep action always)',
-    computePerformancePriority_('Performing', ['High usage', 'High business impact'], stableL90, 'Keep', referenceDate), 'Low');
-  assert('Priority: Medium (age bump, contentAge > 12, no signals)',
-    computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, { months: 18, available: true }), 'Medium');
-  assert('Priority: Low (no age bump, contentAge <= 12)',
-    computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, { months: 10, available: true }), 'Low');
-  assert('Priority: Low (no age bump, contentAge unavailable)',
-    computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, null), 'Low');
+  var growingL90 = { playersPerMonth: 30, l90Players: 150, l90Completions: 20, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate };
+  assert('Trend: growing when L90 ratio >= GROWING_RATIO',
+    computePerformanceTrend_(growingL90, referenceDate), 'growing');
 
-  // --- computeFinalStatus_ ---
-  assert('FinalStatus: Performing + stable → Stable', computeFinalStatus_('Performing', 'stable'), 'Stable');
-  assert('FinalStatus: Performing + unknown → Stable', computeFinalStatus_('Performing', 'unknown'), 'Stable');
-  assert('FinalStatus: Performing + declining → Declining', computeFinalStatus_('Performing', 'declining'), 'Declining');
-  assert('FinalStatus: Performing + stale → Stale', computeFinalStatus_('Performing', 'stale'), 'Stale');
-  assert('FinalStatus: No activity passthrough', computeFinalStatus_('No activity', 'stable'), 'No activity');
-  assert('FinalStatus: New content passthrough', computeFinalStatus_('New content', 'declining'), 'New content');
-  assert('FinalStatus: Low activity passthrough', computeFinalStatus_('Low activity', 'stale'), 'Low activity');
+  var justBelowGrowing = { playersPerMonth: 30, l90Players: 105, l90Completions: 10, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate };
+  assert('Trend: stable when L90 ratio below growing threshold',
+    computePerformanceTrend_(justBelowGrowing, referenceDate), 'stable');
+
+  assert('Priority: High (2+ high flags)',
+    computePerformancePriority_('Performing', ['High usage', 'High business impact'], stableL90, 'Improve completion rate', referenceDate, null, 'stable'), 'High');
+  assert('Priority: High (declining + meaningful all-time)',
+    computePerformancePriority_('Performing', [], { playersPerMonth: 25, mtOpp: 60000, l90Players: 5, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Improve completion rate', referenceDate, null, 'declining'), 'High');
+  assert('Priority: Medium (1 high flag, stable)',
+    computePerformancePriority_('Performing', ['High usage'], stableL90, 'Improve completion rate', referenceDate, null, 'stable'), 'Medium');
+  assert('Priority: Medium (declining + below baseline)',
+    computePerformancePriority_('Low activity', [], { playersPerMonth: 10, mtOpp: 5000, l90Players: 2, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, null, 'declining'), 'Medium');
+  assert('Priority: Low (0 high flags, stable)',
+    computePerformancePriority_('Performing', [], { playersPerMonth: 22, mtOpp: 1000, l90Players: 36, l90Completions: 5, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Need promotion', referenceDate, null, 'stable'), 'Low');
+  assert('Priority: Low (New content always)',
+    computePerformancePriority_('New content', ['High usage'], stableL90, 'Keep', referenceDate, null, 'stable'), 'Low');
+  assert('Priority: Low (Keep action always)',
+    computePerformancePriority_('Performing', ['High usage', 'High business impact'], stableL90, 'Keep', referenceDate, null, 'stable'), 'Low');
+  assert('Priority: Medium (age bump, contentAge > 12, no signals)',
+    computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, { months: 18, available: true }, 'stable'), 'Medium');
+  assert('Priority: Low (no age bump, contentAge <= 12)',
+    computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, { months: 10, available: true }, 'stable'), 'Low');
+  assert('Priority: Low (no age bump, contentAge unavailable)',
+    computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, null, 'stable'), 'Low');
 
   // --- buildStatusReason_ ---
   var srMetrics1 = { activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, firstActivityMonth: null, l90Players: 0 };
@@ -1556,24 +1833,33 @@ function testPerformanceRules() {
   assert('StatusReason: New content has active months', srNew.indexOf('2 active months') !== -1, true);
 
   var srMetrics3 = { activeMonths: 6, totalPlayers: 108, playersPerMonth: 18, completions: 30, completionRate: 0.35, mtOpp: 72000, mtWon: 15000, firstActivityMonth: oldDate, l90Players: 45 };
-  var srStable = buildStatusReason_('Stable', srMetrics3, 'stable');
-  assert('StatusReason: Stable shows signal count', srStable.indexOf('2/3') !== -1, true);
-  assert('StatusReason: Stable shows baseline ppm', srStable.indexOf('baseline (15)') !== -1 || srStable.indexOf('baseline (' + PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH + ')') !== -1, true);
-  assert('StatusReason: Stable shows actual ppm', srStable.indexOf('18 ppm') !== -1, true);
-  assert('StatusReason: Stable shows L90', srStable.indexOf('L90 stable') !== -1, true);
-  assert('StatusReason: Stable shows age (no contentAge)', srStable.indexOf('Age: 6 active mo.') !== -1, true);
+  var srPerf = buildStatusReason_('Performing', srMetrics3, 'stable');
+  assert('StatusReason: Performing shows signal count', srPerf.indexOf('2/3') !== -1, true);
+  assert('StatusReason: Performing shows baseline ppm', srPerf.indexOf('baseline (15)') !== -1 || srPerf.indexOf('baseline (' + PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH + ')') !== -1, true);
+  assert('StatusReason: Performing shows actual ppm', srPerf.indexOf('18 ppm') !== -1, true);
+  assert('StatusReason: Performing shows L90 ratio', srPerf.indexOf('L90') !== -1, true);
+  assert('StatusReason: Performing L90 outside parens', srPerf.indexOf(') L90') !== -1, true);
+  assert('StatusReason: Performing shows age (no contentAge)', srPerf.indexOf('Age: 6 active mo.') !== -1, true);
 
-  var srStableWithAge = buildStatusReason_('Stable', srMetrics3, 'stable', { months: 23, available: true });
-  assert('StatusReason: Stable shows calendar age + active', srStableWithAge.indexOf('Age: 23 mo. (6 active)') !== -1, true);
+  var srPerfWithAge = buildStatusReason_('Performing', srMetrics3, 'stable', { months: 23, available: true });
+  assert('StatusReason: Performing shows calendar age + active', srPerfWithAge.indexOf('Age: 23 mo. (6 active)') !== -1, true);
+
+  var srGrowingMetrics = { activeMonths: 6, totalPlayers: 108, playersPerMonth: 18, completions: 30, completionRate: 0.35, mtOpp: 72000, mtWon: 15000, firstActivityMonth: oldDate, l90Players: 150, l90Completions: 20, l90MtOpp: 0, l90MtWon: 0 };
+  var srGrowing = buildStatusReason_('Performing', srGrowingMetrics, 'growing');
+  assert('StatusReason: growing shows growing threshold', srGrowing.indexOf(Math.round(PERF_THRESHOLDS.GROWING_RATIO * 100) + '%') !== -1, true);
 
   var srMetrics4 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, firstActivityMonth: oldDate, l90Players: 0 };
   var srLow = buildStatusReason_('Low activity', srMetrics4, 'unknown');
   assert('StatusReason: Low activity shows 0/3', srLow.indexOf('0/3') !== -1, true);
 
+  var srRescueMetrics = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, firstActivityMonth: oldDate, l90Players: 88, l90Completions: 5, l90MtOpp: 0, l90MtWon: 0 };
+  var srRescueText = buildStatusReason_('Performing', srRescueMetrics, 'stable');
+  assert('StatusReason: 0/3 with L90 rescue shows rescue note', srRescueText.indexOf('L90 ppm rescue') !== -1, true);
+  assert('StatusReason: rescue still shows 0/3', srRescueText.indexOf('0/3') !== -1, true);
+
   var srMetrics5 = { activeMonths: 6, totalPlayers: 108, playersPerMonth: 18, completions: 30, completionRate: 0.35, mtOpp: 72000, mtWon: 15000, firstActivityMonth: oldDate, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0 };
-  var srNoL90 = buildStatusReason_('Stable', srMetrics5, 'stable');
-  assert('StatusReason: Stable with no L90 data shows "no L90 activity"', srNoL90.indexOf('no L90 activity') !== -1, true);
-  assert('StatusReason: Stable with no L90 data does NOT show "L90 stable 0%"', srNoL90.indexOf('L90 stable 0%') === -1, true);
+  var srNoL90 = buildStatusReason_('Performing', srMetrics5, 'stable');
+  assert('StatusReason: Performing with no L90 shows no recent activity', srNoL90.indexOf('no recent activity') !== -1, true);
 
   // --- computePerformanceScore_ tests ---
   Logger.log('--- computePerformanceScore_ ---');
@@ -1586,26 +1872,26 @@ function testPerformanceRules() {
 
   var scoreStable3High = computePerformanceScore_(
     { playersPerMonth: 30, totalPlayers: 360, completionRate: 0.55, completions: 198, mtOpp: 150000, mtWon: 30000, l90Players: 90, l90Completions: 50, l90MtOpp: 40000, l90MtWon: 8000, activeMonths: 12 },
-    ['High usage', 'High engagement', 'High business impact'], 'stable', 'Stable'
+    ['High usage', 'High engagement', 'High business impact'], 'stable', 'Performing'
   );
-  assert('Score: Stable 3/3 + all high + mature >= 90', scoreStable3High >= 90, true);
+  assert('Score: Performing 3/3 + all high + mature >= 90', scoreStable3High >= 90, true);
 
   var scoreStable1Signal = computePerformanceScore_(
     { playersPerMonth: 18, totalPlayers: 108, completionRate: 0.30, completions: 20, mtOpp: 30000, mtWon: 5000, l90Players: 15, l90Completions: 5, l90MtOpp: 8000, l90MtWon: 1000, activeMonths: 6 },
-    [], 'stable', 'Stable'
+    [], 'stable', 'Performing'
   );
-  assert('Score: Stable 1/3 signal, moderate L90 >= 10', scoreStable1Signal >= 10, true);
-  assert('Score: Stable 1/3 signal, moderate L90 <= 50', scoreStable1Signal <= 50, true);
+  assert('Score: Performing 1/3 signal, moderate L90 >= 10', scoreStable1Signal >= 10, true);
+  assert('Score: Performing 1/3 signal, moderate L90 <= 50', scoreStable1Signal <= 50, true);
 
   var scoreDeclining = computePerformanceScore_(
     { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 10, l90Completions: 3, l90MtOpp: 5000, l90MtWon: 1000, activeMonths: 12 },
-    ['High usage', 'High engagement', 'High business impact'], 'declining', 'Declining'
+    ['High usage', 'High engagement', 'High business impact'], 'declining', 'Performing'
   );
-  assert('Score: Declining with high baseline < Stable equivalent', scoreDeclining < scoreStable3High, true);
+  assert('Score: Declining trend with high baseline < stable equivalent', scoreDeclining < scoreStable3High, true);
 
   var scoreDeadDemo = computePerformanceScore_(
     { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 12 },
-    ['High usage', 'High engagement', 'High business impact'], 'stale', 'Stale'
+    ['High usage', 'High engagement', 'High business impact'], 'stale', 'Performing'
   );
   assert('Score: Dead demo with great history <= 30 (Low tier)', scoreDeadDemo <= 30, true);
 
@@ -1688,6 +1974,7 @@ function testProcessingAudit() {
   hm[PERF_LABEL_COLUMNS.PRIORITY] = idx++;
   hm[PERF_LABEL_COLUMNS.PERF_SCORE] = idx++;
   hm[PERF_LABEL_COLUMNS.PERF_TIER] = idx++;
+  hm[PERF_LABEL_COLUMNS.PERF_TREND] = idx++;
   hm[PERF_LABEL_COLUMNS.PROCESSING_RESULT] = idx++;
   var COL_COUNT = idx;
 
@@ -2114,18 +2401,20 @@ function testProcessingAudit() {
   var pResult = classifyRow_(priorityRow, hm, {}, referenceDate);
   assert('Audit: Processed row has priority', pResult.priority !== '', true);
   assert('Audit: Priority is valid tier', ['High', 'Medium', 'Low'].indexOf(pResult.priority) !== -1, true);
-  assert('Audit: Status is final value', ['Stable', 'Declining', 'Stale', 'Low activity', 'New content', 'No activity'].indexOf(pResult.status) !== -1, true);
-  assert('Audit: Flags contain L90 flag', pResult.flags.indexOf('L90 ') !== -1, true);
+  assert('Audit: Status is base value', ['Performing', 'Low activity', 'New content', 'No activity'].indexOf(pResult.status) !== -1, true);
   assert('Audit: Reason starts with status', pResult.reason.indexOf(pResult.status) === 0, true);
   assert('Audit: Processed row has score', typeof pResult.score === 'number', true);
   assert('Audit: Processed row score > 0', pResult.score > 0, true);
   assert('Audit: Processed row score <= 100', pResult.score <= 100, true);
   assert('Audit: Processed row has tier', ['Top', 'Mid', 'Low', 'Inactive'].indexOf(pResult.tier) !== -1, true);
+  assert('Audit: Processed row has trend', pResult.trend !== '', true);
+  assert('Audit: Trend is valid value', ['growing', 'stable', 'declining', 'stale', 'unknown'].indexOf(pResult.trend) !== -1, true);
 
   var skipResult = classifyRow_(makeRow({}), hm, {}, referenceDate);
   assert('Audit: Skipped row has empty priority', skipResult.priority, '');
   assert('Audit: Skipped row has empty score', skipResult.score, '');
   assert('Audit: Skipped row has empty tier', skipResult.tier, '');
+  assert('Audit: Skipped row has empty trend', skipResult.trend, '');
 
   var reviewRow = makeRow({});
   reviewRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '999';
@@ -2181,11 +2470,6 @@ function testProcessingAudit() {
   Logger.log('');
   Logger.log('--- Coherence ---');
 
-  var coherenceMetrics = [
-    { desc: 'Low activity, minimal', overrides: { } },
-    { desc: 'Stable with signals', overrides: { } },
-  ];
-
   // No activity must always be Inactive tier
   assert('Coherence: No activity → Inactive tier', rNoActScore.tier, 'Inactive');
   assert('Coherence: No activity → score 0', rNoActScore.score, 0);
@@ -2224,7 +2508,7 @@ function testProcessingAudit() {
   highEngRow[hm[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH]] = oldDate;
   var rHighEng = classifyRow_(highEngRow, hm, {}, referenceDate);
   assert('Coherence: High engagement → not Low activity', rHighEng.status !== 'Low activity', true);
-  assert('Coherence: High engagement demo → Performing-family status', ['Stable', 'Declining', 'Stale'].indexOf(rHighEng.status) !== -1, true);
+  assert('Coherence: High engagement demo → Performing status', rHighEng.status, 'Performing');
 
   // Retire action should never appear with Mid or Top tier
   assert('Coherence: Low activity demo with Retire → Low or Inactive tier',
@@ -2235,4 +2519,62 @@ function testProcessingAudit() {
 
   Logger.log('---');
   Logger.log('Results: ' + passed + ' passed, ' + failed + ' failed out of ' + (passed + failed) + ' tests.');
+}
+
+function dumpL90Ratios() {
+  var sheet = getMasterSheet();
+  var headerMap = getHeaderMapFromSheet(sheet, ENHANCED_CONFIG.SHEETS.HEADER_ROW);
+  var lastRow = sheet.getLastRow();
+  var startRow = ENHANCED_CONFIG.SHEETS.HEADER_ROW + 1;
+  var allData = sheet.getRange(startRow, 1, lastRow - ENHANCED_CONFIG.SHEETS.HEADER_ROW, sheet.getLastColumn()).getValues();
+  var referenceDate = getLatestCompletedMonth_(allData, headerMap);
+  var seenNumbers = {};
+  var ratios = [];
+
+  for (var i = 0; i < allData.length; i++) {
+    var row = allData[i];
+    var number = String(safeGetByName(row, headerMap, ENHANCED_CONFIG.COLUMNS.NUMBER) || '').trim();
+    var title = String(safeGetByName(row, headerMap, ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE) || '').trim();
+    if (!number || seenNumbers[number]) continue;
+    seenNumbers[number] = true;
+
+    var metrics = parseMetrics_(row, headerMap);
+    var hasL90Data = metrics.l90Players > 0 || metrics.l90Completions > 0 ||
+                     metrics.l90MtOpp > 0 || metrics.l90MtWon > 0;
+    if (!hasL90Data || metrics.playersPerMonth <= 0) continue;
+
+    var l90Rate = metrics.l90Players / 3;
+    var ratio = Math.round((l90Rate / metrics.playersPerMonth) * 100);
+    ratios.push({ number: number, title: title, ratio: ratio, ppm: Math.round(metrics.playersPerMonth), l90Ppm: Math.round(l90Rate) });
+  }
+
+  ratios.sort(function(a, b) { return b.ratio - a.ratio; });
+
+  Logger.log('=== L90 Ratio Distribution (' + ratios.length + ' demos with L90 data) ===');
+  Logger.log('');
+
+  var buckets = { '200+': 0, '150-199': 0, '120-149': 0, '100-119': 0, '80-99': 0, '50-79': 0, 'under 50': 0 };
+  for (var j = 0; j < ratios.length; j++) {
+    var r = ratios[j];
+    if (r.ratio >= 200) buckets['200+']++;
+    else if (r.ratio >= 150) buckets['150-199']++;
+    else if (r.ratio >= 120) buckets['120-149']++;
+    else if (r.ratio >= 100) buckets['100-119']++;
+    else if (r.ratio >= 80) buckets['80-99']++;
+    else if (r.ratio >= 50) buckets['50-79']++;
+    else buckets['under 50']++;
+  }
+
+  Logger.log('Buckets:');
+  var bucketKeys = ['200+', '150-199', '120-149', '100-119', '80-99', '50-79', 'under 50'];
+  for (var k = 0; k < bucketKeys.length; k++) {
+    Logger.log('  ' + bucketKeys[k] + '%: ' + buckets[bucketKeys[k]] + ' demos');
+  }
+
+  Logger.log('');
+  Logger.log('All ratios (sorted high to low):');
+  for (var m = 0; m < ratios.length; m++) {
+    var d = ratios[m];
+    Logger.log('  #' + d.number + ' ' + d.ratio + '% (ppm=' + d.ppm + ', L90 ppm=' + d.l90Ppm + ') ' + d.title);
+  }
 }
