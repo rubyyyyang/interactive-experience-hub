@@ -19,7 +19,7 @@
  ************************************************************/
 
 var PERF_LABEL_COLUMNS = {
-  PERF_STATUS: 'Performance Status',
+  PERF_SIGNALS: 'Performance Signals',
   PERF_FLAGS: 'Performance Flags',
   PERF_ACTION: 'Recommended action',
   PERF_ACTION_REASON: 'Recommended action reason',
