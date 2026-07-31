@@ -1009,10 +1009,12 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
   var combinedReason = statusReason + ' ' + actionResult.reason;
   var score = computePerformanceScore_(metrics, flags, trend, perfStatus);
   var tier = computePerformanceTier_(score);
+  var signals = computePerformanceSignals_(metrics, referenceDate);
 
   return {
     outcome: 'processed',
     status: perfStatus,
+    signals: buildSignalsString_(signals),
     flags: flags.join(', '),
     action: actionResult.action,
     reason: combinedReason,
@@ -1049,7 +1051,6 @@ function runPerformanceLabels() {
   var skipReasons = {};
   var reviewReasons = {};
   var seenNumbers = {};
-  var statusCounts = {};
   var flagCounts = {};
   var actionCounts = {};
   var priorityCounts = {};
@@ -1058,7 +1059,7 @@ function runPerformanceLabels() {
   var missingReasonCount = 0;
   var needsReviewDetails = [];
 
-  var outStatus = [];
+  var outSignals = [];
   var outFlags = [];
   var outAction = [];
   var outReason = [];
@@ -1090,7 +1091,7 @@ function runPerformanceLabels() {
 
       var contentAge = computeContentAge_(row, headerMap, referenceDate);
 
-      outStatus.push([c.status]);
+      outSignals.push([c.signals]);
       outFlags.push([c.flags]);
       outAction.push([c.action]);
       outReason.push([c.reason || '']);
@@ -1103,9 +1104,6 @@ function runPerformanceLabels() {
 
       if (c.outcome === 'processed') {
         counts.processed++;
-        if (c.status) {
-          statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
-        }
         if (c.flags) {
           var flagList = c.flags.split(', ');
           for (var fi = 0; fi < flagList.length; fi++) {
@@ -1146,7 +1144,7 @@ function runPerformanceLabels() {
       }
 
     } catch (e) {
-      outStatus.push(['']);
+      outSignals.push(['']);
       outFlags.push(['']);
       outAction.push(['']);
       outReason.push(['']);
@@ -1161,7 +1159,7 @@ function runPerformanceLabels() {
     }
   }
 
-  sheet.getRange(startRow, cols.statusCol, dataRows, 1).setValues(outStatus);
+  sheet.getRange(startRow, cols.signalsCol, dataRows, 1).setValues(outSignals);
   sheet.getRange(startRow, cols.flagsCol, dataRows, 1).setValues(outFlags);
   sheet.getRange(startRow, cols.actionCol, dataRows, 1).setValues(outAction);
   sheet.getRange(startRow, cols.reasonCol, dataRows, 1).setValues(outReason);
@@ -1189,13 +1187,6 @@ function runPerformanceLabels() {
   var sortedSkips = Object.keys(skipReasons).sort();
   for (var s = 0; s < sortedSkips.length; s++) {
     Logger.log('  - ' + sortedSkips[s] + ': ' + skipReasons[sortedSkips[s]]);
-  }
-
-  Logger.log('');
-  Logger.log('Performance Status counts:');
-  var sortedStatuses = Object.keys(statusCounts).sort();
-  for (var st = 0; st < sortedStatuses.length; st++) {
-    Logger.log('  - ' + sortedStatuses[st] + ': ' + statusCounts[sortedStatuses[st]]);
   }
 
   Logger.log('');
@@ -1257,7 +1248,7 @@ function runPerformanceLabels() {
   for (var j = 0; j < allData.length; j++) {
     var vRowIndex = startRow + j;
     var vResult = outResult[j][0];
-    var vStatus = outStatus[j][0];
+    var vSignals = outSignals[j][0];
     var vAction = outAction[j][0];
     var vReason = outReason[j][0];
     var vFlags = outFlags[j][0];
@@ -1275,8 +1266,8 @@ function runPerformanceLabels() {
     }
 
     if (vResult === 'Processed') {
-      if (!vStatus) {
-        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Processed but missing Performance Status');
+      if (!vSignals) {
+        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Processed but missing Performance Signals');
         validationErrors++;
       }
       if (!vAction) {
@@ -1304,7 +1295,7 @@ function runPerformanceLabels() {
         validationErrors++;
       }
     } else if (vResult.indexOf('Skipped') === 0) {
-      if (vStatus || vFlags || vAction || vReason || vPriority || vScore !== '' || vTier || vTrend) {
+      if (vSignals || vFlags || vAction || vReason || vPriority || vScore !== '' || vTier || vTrend) {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Skipped but has stale labels');
         validationErrors++;
       }
@@ -1317,12 +1308,12 @@ function runPerformanceLabels() {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs human review but missing reason');
         validationErrors++;
       }
-      if (vStatus || vFlags || vScore !== '' || vTier || vTrend) {
+      if (vSignals || vFlags || vScore !== '' || vTier || vTrend) {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs human review but has stale labels');
         validationErrors++;
       }
     } else if (vResult.indexOf('Error') === 0) {
-      if (vStatus || vFlags || vAction || vReason || vScore !== '' || vTier || vTrend) {
+      if (vSignals || vFlags || vAction || vReason || vScore !== '' || vTier || vTrend) {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Error but has stale labels');
         validationErrors++;
       }
@@ -1344,7 +1335,7 @@ function clearPerformanceLabels() {
   var dataRows = lastRow - ENHANCED_CONFIG.SHEETS.HEADER_ROW;
   var startRow = ENHANCED_CONFIG.SHEETS.HEADER_ROW + 1;
 
-  sheet.getRange(startRow, cols.statusCol, dataRows, 1).clearContent();
+  sheet.getRange(startRow, cols.signalsCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.flagsCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.actionCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.reasonCol, dataRows, 1).clearContent();
@@ -1354,7 +1345,7 @@ function clearPerformanceLabels() {
   sheet.getRange(startRow, cols.trendCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.ageCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.resultCol, dataRows, 1).clearContent();
-  Logger.log('Cleared: Performance Status, Performance Flags, Recommended action, Recommended action reason, Performance Priority, Performance Score, Performance Tier, Performance Trend, Age, Processing Result.');
+  Logger.log('Cleared: Performance Signals, Performance Flags, Recommended action, Recommended action reason, Performance Priority, Performance Score, Performance Tier, Performance Trend, Age, Processing Result.');
 }
 
 /* =========================
@@ -2014,7 +2005,7 @@ function testProcessingAudit() {
   assert('isRowBlank: row with Number', isRowBlank_(rowWithNumber, hm), false);
 
   var blankWithOldLabels = makeRow({});
-  blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PERF_SIGNALS]] = 'Performing';
+  blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PERF_SIGNALS]] = 'Usage: HIGH 30ppm (high 25)';
   blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PERF_ACTION]] = 'Keep';
   blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PROCESSING_RESULT]] = 'Processed';
   assert('isRowBlank: output columns → still blank', isRowBlank_(blankWithOldLabels, hm), true);
@@ -2080,7 +2071,7 @@ function testProcessingAudit() {
   retiredRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Retired';
   var rRetired = classifyRow_(retiredRow, hm, {}, referenceDate);
   assert('Audit: IE Retired → Skipped', rRetired.result, 'Skipped — Status = IE Retired');
-  assert('Audit: IE Retired clears Status', rRetired.status, '');
+  assert('Audit: IE Retired clears Signals', rRetired.signals, '');
   assert('Audit: IE Retired clears Action', rRetired.action, '');
 
   // --- Closed → Skipped ---
@@ -2096,6 +2087,7 @@ function testProcessingAudit() {
   deleteRow[hm[ENHANCED_CONFIG.COLUMNS.NOTE]] = 'Delete row';
   var rDelete = classifyRow_(deleteRow, hm, {}, referenceDate);
   assert('Audit: Note = Delete row → Skipped', rDelete.result, 'Skipped — Note = Delete row');
+  assert('Audit: Delete row clears Signals', rDelete.signals, '');
   assert('Audit: Delete row clears Action', rDelete.action, '');
 
   // --- Empty row → Skipped ---
@@ -2265,7 +2257,7 @@ function testProcessingAudit() {
   staleRow[hm[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH]] = oldDate;
   var rStale = classifyRow_(staleRow, hm, {}, referenceDate);
   assert('Audit: Stale activity → Retire', rStale.action, 'Retire');
-  assert('Audit: Stale activity → Status = Low activity', rStale.status, 'Low activity');
+  assert('Audit: Stale activity → has signals', rStale.signals !== '', true);
   assert('Audit: Stale activity → reason has status derivation', rStale.reason.indexOf('Low activity (0/3)') !== -1, true);
 
   // --- Low opp value end-to-end ---
@@ -2401,8 +2393,8 @@ function testProcessingAudit() {
   var pResult = classifyRow_(priorityRow, hm, {}, referenceDate);
   assert('Audit: Processed row has priority', pResult.priority !== '', true);
   assert('Audit: Priority is valid tier', ['High', 'Medium', 'Low'].indexOf(pResult.priority) !== -1, true);
-  assert('Audit: Status is base value', ['Performing', 'Low activity', 'New content', 'No activity'].indexOf(pResult.status) !== -1, true);
-  assert('Audit: Reason starts with status', pResult.reason.indexOf(pResult.status) === 0, true);
+  assert('Audit: Signals is non-empty', pResult.signals !== '', true);
+  assert('Audit: Signals contains Usage', pResult.signals.indexOf('Usage:') !== -1, true);
   assert('Audit: Processed row has score', typeof pResult.score === 'number', true);
   assert('Audit: Processed row score > 0', pResult.score > 0, true);
   assert('Audit: Processed row score <= 100', pResult.score <= 100, true);
@@ -2415,6 +2407,7 @@ function testProcessingAudit() {
   assert('Audit: Skipped row has empty score', skipResult.score, '');
   assert('Audit: Skipped row has empty tier', skipResult.tier, '');
   assert('Audit: Skipped row has empty trend', skipResult.trend, '');
+  assert('Audit: Skipped row has empty signals', skipResult.signals, '');
 
   var reviewRow = makeRow({});
   reviewRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '999';
@@ -2424,6 +2417,7 @@ function testProcessingAudit() {
   assert('Audit: Needs-review row has empty priority', reviewResult.priority, '');
   assert('Audit: Needs-review row has empty score', reviewResult.score, '');
   assert('Audit: Needs-review row has empty tier', reviewResult.tier, '');
+  assert('Audit: Needs-review row has empty signals', reviewResult.signals, '');
 
   // --- Sporadic activity flag ---
   var sporadicRow = makeFullDataRow({});
@@ -2507,7 +2501,7 @@ function testProcessingAudit() {
   highEngRow[hm[PERF_METRIC_COLUMNS.LAST_ACTIVITY_MONTH]] = referenceDate;
   highEngRow[hm[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH]] = oldDate;
   var rHighEng = classifyRow_(highEngRow, hm, {}, referenceDate);
-  assert('Coherence: High engagement → not Low activity', rHighEng.status !== 'Low activity', true);
+  assert('Coherence: High engagement → has signals', rHighEng.signals !== '', true);
   assert('Coherence: High engagement demo → Performing status', rHighEng.status, 'Performing');
 
   // Retire action should never appear with Mid or Top tier
