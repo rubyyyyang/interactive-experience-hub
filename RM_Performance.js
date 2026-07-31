@@ -503,122 +503,118 @@ function computePerformanceStatus_(metrics, referenceDate) {
    RECOMMENDED ACTION + REASON
 ========================= */
 
-function computePerformanceAction_(status, flags, metrics, contentAge, referenceDate, trend) {
-  var hasHighUsage = flags.indexOf('High usage') !== -1;
-  var hasHighEngagement = flags.indexOf('High engagement') !== -1;
-  var hasLowEngagement = flags.indexOf('Low engagement') !== -1;
-  var hasHighBizImpact = flags.indexOf('High business impact') !== -1;
-  var hasHighValueNiche = flags.indexOf('High-value niche') !== -1;
-  var hasLowOppValue = flags.indexOf('Low opportunity value') !== -1;
+function computePerformanceAction_(signals, contentAge, trend) {
   var missingPageMappingNote = '';
-  if (!metrics.mtMappingValid) {
+  if (!signals.hasMapping) {
     missingPageMappingNote = ' The redhat.com page is also missing from the metrics mapping, so MT attribution may be incomplete.';
   }
 
+  var isNoActivity = !signals.hasAnyActivity;
+  var isLowActivity = signals.count === 0 && !signals.recovery.active && signals.maturity.level === 'ESTABLISHED';
+  var isNewContent = signals.maturity.level === 'NEW';
+  var isStalled = signals.maturity.level === 'STALLED';
+
+  var hasHighUsage = signals.usage.level === 'HIGH';
+  var hasHighCR = signals.cr.level === 'HIGH';
+  var hasLowCR = signals.cr.level === 'LOW' || signals.cr.level === 'BELOW';
+  var hasHighMT = signals.mt.level === 'HIGH';
+  var isNiche = signals.maturity.level === 'ESTABLISHED' && signals.usage.level === 'BELOW' && (signals.mt.level === 'HIGH' || signals.mt.level === 'BASE');
+  var isLowOpp = signals.hasPage && signals.hasMapping && signals.maturity.level === 'ESTABLISHED' && (hasHighUsage || hasHighCR) && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_OPP;
+
   // A. Verify data mapping / Improve low MT value
-  if (status === 'No activity' && (metrics.mtOpp > 0 || metrics.mtWon > 0)) {
+  if (isNoActivity && signals.mt.level !== 'NONE') {
     return {
       action: 'Verify data mapping',
-      reason: 'No player activity was recorded, but MT opportunity or won value is greater than $0, indicating a possible attribution or mapping inconsistency.' + missingPageMappingNote
+      reason: 'No player activity but MT value present (MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + '), possible mapping inconsistency' + missingPageMappingNote
     };
   }
-  if (hasLowOppValue && metrics.mtWon < PERF_THRESHOLDS.BASELINE_MT_WON) {
+  if (isLowOpp && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_WON) {
     return {
       action: 'Improve low MT value',
-      reason: 'The mature demo has a content-specific page and strong usage or engagement, but measured MT opportunity and won values remain below the baseline thresholds.' + missingPageMappingNote
+      reason: 'Strong signals but low MT value (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
     };
   }
 
   // B. Improve completion rate
-  if (hasHighUsage && hasLowEngagement && status !== 'New content') {
+  if (hasHighUsage && hasLowCR && !isNewContent) {
     return {
       action: 'Improve completion rate',
-      reason: 'Usage meets the high threshold, but the completion rate is below 40%.' + missingPageMappingNote
+      reason: 'High traffic but low conversion (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%)' + missingPageMappingNote
     };
   }
-  if (metrics.activeMonths >= PERF_THRESHOLDS.MIN_ACTIVE_MONTHS &&
-      metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH &&
-      metrics.playersPerMonth < PERF_THRESHOLDS.HIGH_PLAYERS_PER_MONTH &&
-      metrics.hasContentSpecificPage &&
-      hasLowEngagement) {
+  if (signals.maturity.level === 'ESTABLISHED' &&
+      signals.usage.level === 'BASE' &&
+      signals.hasPage &&
+      hasLowCR) {
     return {
       action: 'Improve completion rate',
-      reason: 'Usage meets the baseline threshold, but the completion rate is below 40%.' + missingPageMappingNote
+      reason: 'Baseline traffic but low conversion (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%)' + missingPageMappingNote
     };
   }
 
   // C. Create redhat.com page
-  if (!metrics.hasContentSpecificPage) {
-    if (hasHighUsage || hasHighBizImpact || hasHighValueNiche ||
-        (hasHighEngagement && status !== 'Low activity')) {
+  if (!signals.hasPage) {
+    if (hasHighUsage || hasHighMT || isNiche ||
+        (hasHighCR && !isLowActivity)) {
       return {
         action: 'Create redhat.com page',
-        reason: 'The demo meets a high performance threshold but does not have a content-specific redhat.com page.' + missingPageMappingNote
+        reason: 'Strong signal but no redhat.com page (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
       };
     }
   }
 
   // D. Need promotion
-  if (hasHighValueNiche) {
+  if (isNiche && signals.hasPage) {
     return {
       action: 'Need promotion',
-      reason: 'The demo has meaningful measured business value despite usage being below the baseline threshold.' + missingPageMappingNote
+      reason: 'Low traffic but meaningful MT value (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
     };
   }
-  if (status === 'Low activity' &&
-      metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
-      metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) {
+  if (!isNoActivity && !isNewContent && signals.usage.level === 'BELOW' &&
+      (signals.cr.level === 'HIGH' || signals.cr.level === 'BASE')) {
     return {
       action: 'Need promotion',
-      reason: 'Usage remains low, but completion indicates strong engagement among the players who started the demo.' + missingPageMappingNote
+      reason: 'Low traffic but strong completion (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%)' + missingPageMappingNote
     };
   }
 
   // D2. Need promotion — 3/3 all-time signals but declining or stale
-  if ((trend === 'declining' || trend === 'stale') && status !== 'Low activity' && status !== 'No activity' && status !== 'New content') {
-    var trendSignalCount = 0;
-    if (metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) trendSignalCount++;
-    if (metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
-        metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) trendSignalCount++;
-    if (metrics.mtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP ||
-        metrics.mtWon >= PERF_THRESHOLDS.BASELINE_MT_WON) trendSignalCount++;
-    if (trendSignalCount === 3) {
+  if ((trend === 'declining' || trend === 'stale') && !isLowActivity && !isNoActivity && !isNewContent) {
+    if (signals.count === 3) {
       return {
         action: 'Need promotion',
-        reason: 'All three baseline performance signals are met, but the L90 trend is ' + trend + ', indicating declining recent activity that may benefit from promotional effort.' + missingPageMappingNote
+        reason: 'All signals above baseline but trend ' + trend + ' (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
       };
     }
   }
 
   // E. Retire
-  if (status === 'Low activity' && !hasHighEngagement && !hasHighBizImpact && !hasHighValueNiche) {
+  if (isLowActivity && !hasHighCR && !hasHighMT && !isNiche) {
     return {
       action: 'Retire',
-      reason: 'The mature demo remains below the baseline usage and business-impact thresholds without a positive engagement or value signal.' + missingPageMappingNote
+      reason: 'No signals above baseline, no recent recovery (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
     };
   }
 
-  if (status === 'No activity' && contentAge && contentAge.available && contentAge.months > 3 &&
-      metrics.mtOpp === 0 && metrics.mtWon === 0) {
+  if (isNoActivity && contentAge && contentAge.available && contentAge.months > 3 &&
+      signals.mt.level === 'NONE') {
     return {
       action: 'Retire',
-      reason: 'No player activity or measured MT value was recorded after more than 3 completed months.' + missingPageMappingNote
+      reason: 'No activity after ' + contentAge.months + ' months, no MT value (Maturity ' + signals.maturity.level + ', MT NONE)' + missingPageMappingNote
     };
   }
 
-  if (metrics.activeMonths >= 1 && metrics.activeMonths <= 3 &&
-      !isWithinLatestNMonths_(metrics.firstActivityMonth, 3, referenceDate) &&
-      metrics.playersPerMonth < PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH &&
-      metrics.mtOpp < PERF_THRESHOLDS.BASELINE_MT_OPP &&
-      metrics.mtWon < PERF_THRESHOLDS.BASELINE_MT_WON) {
+  if (isStalled &&
+      signals.usage.level === 'BELOW' &&
+      signals.mt.level !== 'HIGH' && signals.mt.level !== 'BASE') {
     return {
       action: 'Retire',
-      reason: 'The demo is no longer new but has recorded only limited, sporadic activity and no meaningful measured business value.' + missingPageMappingNote
+      reason: 'Stalled content with limited activity (Maturity ' + signals.maturity.level + ' ' + signals.maturity.months + ' mo., Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
     };
   }
 
   // F. Needs human review
-  if (status === 'No activity' && contentAge && !contentAge.available) {
+  if (isNoActivity && contentAge && !contentAge.available) {
     return {
       action: 'Needs human review',
       reason: 'Content age cannot be calculated because both the received and published timestamps are missing.' + missingPageMappingNote
@@ -626,33 +622,24 @@ function computePerformanceAction_(status, flags, metrics, contentAge, reference
   }
 
   // G. Keep
-  if (status === 'No activity' && contentAge && contentAge.available && contentAge.months <= 3 &&
-      metrics.mtOpp === 0 && metrics.mtWon === 0) {
+  if (isNoActivity && contentAge && contentAge.available && contentAge.months <= 3 &&
+      signals.mt.level === 'NONE') {
     return {
       action: 'Keep',
-      reason: 'The content is within its first 3 completed months and needs more time to accumulate activity.' + missingPageMappingNote
+      reason: 'New content, too early to evaluate (Maturity ' + signals.maturity.level + ', ' + contentAge.months + ' months, trend ' + trend + ')' + missingPageMappingNote
     };
   }
 
-  if (metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH &&
-      metrics.playersPerMonth < PERF_THRESHOLDS.HIGH_PLAYERS_PER_MONTH &&
-      !metrics.hasContentSpecificPage) {
+  if (signals.usage.level === 'BASE' && !signals.hasPage) {
     return {
       action: 'Keep',
-      reason: 'Usage meets the baseline threshold but not the High usage threshold, so publishing investment is not currently recommended.' + missingPageMappingNote
-    };
-  }
-
-  if (status === 'Performing' || status === 'New content') {
-    return {
-      action: 'Keep',
-      reason: 'The current performance signals do not indicate an immediate lifecycle change.' + missingPageMappingNote
+      reason: 'Baseline traffic but no page yet (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm)' + missingPageMappingNote
     };
   }
 
   return {
     action: 'Keep',
-    reason: 'The current performance signals do not indicate an immediate lifecycle change.' + missingPageMappingNote
+    reason: 'Current signals do not indicate a lifecycle change (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
   };
 }
 
@@ -994,10 +981,11 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
 
   var perfStatus = computePerformanceStatus_(metrics, referenceDate);
   var flags = computePerformanceFlags_(metrics);
+  var signals = computePerformanceSignals_(metrics, referenceDate);
 
   var contentAge = computeContentAge_(row, headerMap, referenceDate);
   var trend = computePerformanceTrend_(metrics, referenceDate);
-  var actionResult = computePerformanceAction_(perfStatus, flags, metrics, contentAge, referenceDate, trend);
+  var actionResult = computePerformanceAction_(signals, contentAge, trend);
   var priority = computePerformancePriority_(perfStatus, flags, metrics, actionResult.action, referenceDate, contentAge, trend);
 
   if (contentAge && contentAge.available && contentAge.months >= 6 &&
@@ -1009,7 +997,6 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
   var combinedReason = statusReason + ' ' + actionResult.reason;
   var score = computePerformanceScore_(metrics, flags, trend, perfStatus);
   var tier = computePerformanceTier_(score);
-  var signals = computePerformanceSignals_(metrics, referenceDate);
 
   return {
     outcome: 'processed',
@@ -1627,130 +1614,155 @@ function testPerformanceRules() {
 
   // --- Recommended action tests ---
 
+  function testSignals_(overrides) {
+    var base = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
+    for (var k in overrides) base[k] = overrides[k];
+    return computePerformanceSignals_(base, referenceDate);
+  }
+
   var noActCA = { months: 5, available: true };
   var noActCAShort = { months: 2, available: true };
   var noActCAUnavail = { months: null, available: false };
 
   // A. Verify data mapping / Improve low MT value
-  var arResult1 = computePerformanceAction_('No activity', [], { mtOpp: 50000, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true }, noActCA, referenceDate, 'unknown');
+  var arSig1 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 50000, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null });
+  var arResult1 = computePerformanceAction_(arSig1, noActCA, 'unknown');
   assert('Action: Verify data mapping (no activity + MT)', arResult1.action, 'Verify data mapping');
   assertHasReason('Reason: Verify data mapping (no activity + MT)', arResult1);
 
-  var arResult2 = computePerformanceAction_('Performing', ['High usage', 'Low opportunity value'], { mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, noActCA, referenceDate, 'stable');
-  assert('Action: Improve low MT value (Low opp value + low MT won)', arResult2.action, 'Improve low MT value');
+  var arSig2 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 9000, mtWon: 2000, hasContentSpecificPage: true });
+  var arResult2 = computePerformanceAction_(arSig2, noActCA, 'stable');
+  assert('Action: Improve low MT value (High usage + page + low MT)', arResult2.action, 'Improve low MT value');
 
-  var arResult3 = computePerformanceAction_('Performing', ['High usage'], { mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
-  assert('Action: No Improve low MT value (no Low opp value flag)', arResult3.action, 'Keep');
+  var arSig3 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: false });
+  var arResult3 = computePerformanceAction_(arSig3, null, 'stable');
+  assert('Action: No Improve low MT value (no mapping)', arResult3.action !== 'Improve low MT value', true);
 
-  var arResult4 = computePerformanceAction_('Performing', ['High usage', 'Low opportunity value'], { mtOpp: 10000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
+  var arSig4 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 15000, hasContentSpecificPage: true });
+  var arResult4 = computePerformanceAction_(arSig4, null, 'stable');
   assert('Action: No Improve low MT value (MT won >= $10K)', arResult4.action !== 'Improve low MT value', true);
 
   // B. Improve completion rate
-  var rcResult1 = computePerformanceAction_('Performing', ['High usage', 'Low engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
-  assert('Action: Improve completion rate (High usage + Low engagement)', rcResult1.action, 'Improve completion rate');
+  var rcSig1 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
+  var rcResult1 = computePerformanceAction_(rcSig1, null, 'stable');
+  assert('Action: Improve completion rate (High usage + Low CR)', rcResult1.action, 'Improve completion rate');
   assertHasReason('Reason: Improve completion rate', rcResult1);
 
-  var rcResult2 = computePerformanceAction_('Performing', ['Low engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, activeMonths: 6, playersPerMonth: 22 }, null, referenceDate, 'stable');
-  assert('Action: Improve completion rate (20-24.99 + page + Low engagement)', rcResult2.action, 'Improve completion rate');
+  var rcSig2 = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true });
+  var rcResult2 = computePerformanceAction_(rcSig2, null, 'stable');
+  assert('Action: Improve completion rate (BASE usage + page + Low CR)', rcResult2.action, 'Improve completion rate');
 
-  var rcResult3 = computePerformanceAction_('New content', ['High usage', 'Low engagement'], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 30 }, null, referenceDate, 'stable');
-  assert('Action: New content skips Improve CR despite High usage + Low engagement', rcResult3.action, 'Keep');
+  var rcSig3 = testSignals_({ activeMonths: 2, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, firstActivityMonth: recentDate });
+  var rcResult3 = computePerformanceAction_(rcSig3, null, 'stable');
+  assert('Action: New content skips Improve CR despite High usage + Low CR', rcResult3.action, 'Keep');
 
   // C. Create redhat.com page
-  var cpResult1 = computePerformanceAction_('Performing', ['High usage'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
+  var cpSig1 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
+  var cpResult1 = computePerformanceAction_(cpSig1, null, 'stable');
   assert('Action: Create redhat.com page (High usage, no page)', cpResult1.action, 'Create redhat.com page');
   assertHasReason('Reason: Create redhat.com page', cpResult1);
 
-  var cpResult2 = computePerformanceAction_('Performing', ['High engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
-  assert('Action: Create redhat.com page (High engagement, no page)', cpResult2.action, 'Create redhat.com page');
+  var cpSig2 = testSignals_({ playersPerMonth: 10, completions: 40, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
+  var cpResult2 = computePerformanceAction_(cpSig2, null, 'stable');
+  assert('Action: Create redhat.com page (High CR, no page)', cpResult2.action, 'Create redhat.com page');
 
-  var cpResult3 = computePerformanceAction_('Performing', ['High business impact'], { mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
-  assert('Action: Create redhat.com page (High biz impact, no page)', cpResult3.action, 'Create redhat.com page');
+  var cpSig3 = testSignals_({ playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false });
+  var cpResult3 = computePerformanceAction_(cpSig3, null, 'stable');
+  assert('Action: Create redhat.com page (High MT, no page)', cpResult3.action, 'Create redhat.com page');
 
-  var cpResult4 = computePerformanceAction_('Performing', ['High-value niche'], { mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
-  assert('Action: Create redhat.com page (High-value niche, no page)', cpResult4.action, 'Create redhat.com page');
+  var cpSig4 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false });
+  var cpResult4 = computePerformanceAction_(cpSig4, null, 'stable');
+  assert('Action: Create redhat.com page (Niche, no page)', cpResult4.action, 'Create redhat.com page');
 
-  var cpResult5 = computePerformanceAction_('Performing', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 22 }, null, referenceDate, 'stable');
-  assert('Action: 20-24.99 + no page → Keep (not Create page)', cpResult5.action, 'Keep');
+  var cpSig5 = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
+  var cpResult5 = computePerformanceAction_(cpSig5, null, 'stable');
+  assert('Action: BASE usage + no page → Keep (not Create page)', cpResult5.action, 'Keep');
 
   // D. Need promotion
-  var npResult1 = computePerformanceAction_('Performing', ['High-value niche'], { mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
+  var npSig1 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true });
+  var npResult1 = computePerformanceAction_(npSig1, null, 'stable');
   assert('Action: Need promotion (niche, has page)', npResult1.action, 'Need promotion');
   assertHasReason('Reason: Need promotion', npResult1);
 
-  var npResult2 = computePerformanceAction_('Low activity', ['High engagement'], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 10, completionRate: 0.55, completions: 30 }, null, referenceDate, 'stable');
-  assert('Action: Need promotion (Low activity + High engagement)', npResult2.action, 'Need promotion');
-
-  var npResult3 = computePerformanceAction_('Low activity', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 5, completionRate: 0.45, completions: 30 }, null, referenceDate, 'stable');
-  assert('Action: Need promotion (Low activity + baseline engagement 40-49%)', npResult3.action, 'Need promotion');
+  var npSig2 = testSignals_({ playersPerMonth: 10, completions: 30, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
+  var npResult2 = computePerformanceAction_(npSig2, null, 'stable');
+  assert('Action: Need promotion (Low activity + baseline CR)', npResult2.action, 'Need promotion');
 
   // D2. Need promotion — 3/3 all-time signals + declining/stale
-  var d2Metrics = { playersPerMonth: 25, completionRate: 0.45, completions: 50, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true };
-  var d2Declining = computePerformanceAction_('Performing', [], d2Metrics, null, referenceDate, 'declining');
+  var d2Sig = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true });
+  var d2Declining = computePerformanceAction_(d2Sig, null, 'declining');
   assert('Action: 3/3 + declining → Need promotion', d2Declining.action, 'Need promotion');
 
-  var d2Stale = computePerformanceAction_('Performing', [], d2Metrics, null, referenceDate, 'stale');
+  var d2Stale = computePerformanceAction_(d2Sig, null, 'stale');
   assert('Action: 3/3 + stale → Need promotion', d2Stale.action, 'Need promotion');
 
-  var d2Stable = computePerformanceAction_('Performing', [], d2Metrics, null, referenceDate, 'stable');
+  var d2Stable = computePerformanceAction_(d2Sig, null, 'stable');
   assert('Action: 3/3 + stable → Keep (not Need promotion)', d2Stable.action, 'Keep');
 
-  var d2Growing = computePerformanceAction_('Performing', [], d2Metrics, null, referenceDate, 'growing');
+  var d2Growing = computePerformanceAction_(d2Sig, null, 'growing');
   assert('Action: 3/3 + growing → Keep (not Need promotion)', d2Growing.action, 'Keep');
 
-  var d2Only2 = { playersPerMonth: 25, completionRate: 0.35, completions: 10, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true };
-  var d2Only2Result = computePerformanceAction_('Performing', [], d2Only2, null, referenceDate, 'declining');
+  var d2Sig2 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.35, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true });
+  var d2Only2Result = computePerformanceAction_(d2Sig2, null, 'declining');
   assert('Action: 2/3 + declining → NOT Need promotion', d2Only2Result.action !== 'Need promotion', true);
 
-  var d2FixableWins = computePerformanceAction_('Performing', ['High usage', 'Low engagement'], d2Metrics, null, referenceDate, 'declining');
-  assert('Action: 3/3 + declining + fixable issue → fixable action wins', d2FixableWins.action, 'Improve completion rate');
+  var d2SigFixable = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.15, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: false });
+  var d2FixableWins = computePerformanceAction_(d2SigFixable, null, 'declining');
+  assert('Action: 3/3 + declining + High usage + Low CR → Improve CR wins', d2FixableWins.action, 'Improve completion rate');
 
   // E. Retire
-  var retResult1 = computePerformanceAction_('Low activity', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
+  var retSig1 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
+  var retResult1 = computePerformanceAction_(retSig1, null, 'stable');
   assert('Action: Retire (Low activity, no positive signals)', retResult1.action, 'Retire');
   assertHasReason('Reason: Retire', retResult1);
 
-  var retResult2 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 0 }, noActCA, referenceDate, 'unknown');
-  assert('Action: Retire (No activity + age >3 + page + MT=0)', retResult2.action, 'Retire');
+  var retSig2 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, firstActivityMonth: null, lastActivityMonth: null });
+  var retResult2 = computePerformanceAction_(retSig2, noActCA, 'unknown');
+  assert('Action: Retire (No activity + age >3 + MT=0)', retResult2.action, 'Retire');
 
-  var retResult3 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 0 }, noActCA, referenceDate, 'unknown');
+  var retSig3 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null });
+  var retResult3 = computePerformanceAction_(retSig3, noActCA, 'unknown');
   assert('Action: Retire (No activity + age >3 + no page + MT=0)', retResult3.action, 'Retire');
 
   // F. Needs human review
-  var nhrResult2 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 0 }, noActCAUnavail, referenceDate, 'unknown');
+  var nhrSig = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null });
+  var nhrResult2 = computePerformanceAction_(nhrSig, noActCAUnavail, 'unknown');
   assert('Action: Needs human review (age unavailable)', nhrResult2.action, 'Needs human review');
   assert('Reason: age unavailable mentions timestamps', nhrResult2.reason.indexOf('timestamps') !== -1, true);
 
   // G. Keep
-  var keepResult1 = computePerformanceAction_('Performing', [], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable');
-  assert('Action: Keep (Performing)', keepResult1.action, 'Keep');
+  var keepSig1 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true });
+  var keepResult1 = computePerformanceAction_(keepSig1, null, 'stable');
+  assert('Action: Keep (strong signals)', keepResult1.action, 'Keep');
   assertHasReason('Reason: Keep', keepResult1);
 
-  var keepResult2 = computePerformanceAction_('New content', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable');
+  var keepSig2 = testSignals_({ activeMonths: 2, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: recentDate });
+  var keepResult2 = computePerformanceAction_(keepSig2, null, 'stable');
   assert('Action: Keep (New content)', keepResult2.action, 'Keep');
 
-  var keepResult3 = computePerformanceAction_('No activity', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 0 }, noActCAShort, referenceDate, 'unknown');
+  var keepSig3 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null });
+  var keepResult3 = computePerformanceAction_(keepSig3, noActCAShort, 'unknown');
   assert('Action: Keep (No activity + age <=3 + MT=0)', keepResult3.action, 'Keep');
-  assert('Reason: Keep mentions first 3 months', keepResult3.reason.indexOf('first 3 completed months') !== -1, true);
 
-  var keepResult4 = computePerformanceAction_('Performing', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 22 }, null, referenceDate, 'stable');
-  assert('Action: Keep (20-24.99 + no page)', keepResult4.action, 'Keep');
-  assert('Reason: Keep mentions baseline', keepResult4.reason.indexOf('baseline') !== -1, true);
+  var keepSig4 = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
+  var keepResult4 = computePerformanceAction_(keepSig4, null, 'stable');
+  assert('Action: Keep (BASE usage + no page)', keepResult4.action, 'Keep');
 
   // --- Missing page mapping appends explanation ---
-  var missingMapResult = computePerformanceAction_('Performing', ['High usage', 'Low engagement'], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: false, playersPerMonth: 25 }, null, referenceDate, 'stable');
+  var missingMapSig = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: false });
+  var missingMapResult = computePerformanceAction_(missingMapSig, null, 'stable');
   assert('Reason: Missing page mapping appends explanation', missingMapResult.reason.indexOf('missing from the metrics mapping') !== -1, true);
 
   // --- Every action has a reason ---
   var allActions = [
-    computePerformanceAction_('No activity', [], { mtOpp: 50000, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true }, noActCA, referenceDate, 'unknown'),
-    computePerformanceAction_('Performing', ['High usage', 'Low engagement'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable'),
-    computePerformanceAction_('Performing', ['High usage'], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable'),
-    computePerformanceAction_('Performing', ['High-value niche'], { mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable'),
-    computePerformanceAction_('Low activity', [], { mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable'),
-    computePerformanceAction_('Performing', [], { mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable'),
-    computePerformanceAction_('Performing', [], { mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: true, playersPerMonth: 25 }, null, referenceDate, 'stable'),
-    computePerformanceAction_('New content', [], { mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, mtMappingValid: true, playersPerMonth: 10 }, null, referenceDate, 'stable')
+    computePerformanceAction_(testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 50000, mtWon: 0, firstActivityMonth: null, lastActivityMonth: null }), noActCA, 'unknown'),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true }), null, 'stable'),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }), null, 'stable'),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true }), null, 'stable'),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }), null, 'stable'),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 30, completionRate: 0.45, mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true }), null, 'stable'),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true }), null, 'stable'),
+    computePerformanceAction_(testSignals_({ activeMonths: 2, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: recentDate }), null, 'stable')
   ];
   var allHaveReasons = true;
   for (var ai = 0; ai < allActions.length; ai++) {
