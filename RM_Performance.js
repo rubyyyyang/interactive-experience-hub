@@ -1450,7 +1450,7 @@ function testPerformanceRules() {
   assert('Action: New content skips Improve CR despite High usage + Low CR', rcResult3.action, 'Keep');
 
   // C. Create redhat.com page
-  var cpSig1 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
+  var cpSig1 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
   var cpResult1 = computePerformanceAction_(cpSig1, null, 'stable');
   assert('Action: Create redhat.com page (High usage, no page)', cpResult1.action, 'Create redhat.com page');
   assertHasReason('Reason: Create redhat.com page', cpResult1);
