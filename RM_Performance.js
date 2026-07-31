@@ -441,65 +441,6 @@ function buildSignalsString_(signals) {
 }
 
 /* =========================
-   PERFORMANCE STATUS
-========================= */
-
-function computePerformanceStatus_(metrics, referenceDate) {
-  if (metrics.activeMonths === 0 && metrics.totalPlayers === 0) {
-    return 'No activity';
-  }
-
-  if (metrics.activeMonths >= 1 && metrics.activeMonths <= 3 &&
-      isWithinLatestNMonths_(metrics.firstActivityMonth, 3, referenceDate)) {
-    return 'New content';
-  }
-
-  if (metrics.activeMonths >= PERF_THRESHOLDS.MIN_ACTIVE_MONTHS) {
-    var l90Ppm = metrics.l90Players / 3;
-    var crSignalMet = metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
-                      metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS;
-    var l90Cr = metrics.l90Players > 0 ? metrics.l90Completions / metrics.l90Players : 0;
-    var l90CrMet = l90Cr >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE && (metrics.l90Completions || 0) >= 5;
-    var l90MtMet = (metrics.l90MtOpp || 0) >= PERF_THRESHOLDS.BASELINE_MT_OPP / 4 ||
-                   (metrics.l90MtWon || 0) >= PERF_THRESHOLDS.BASELINE_MT_WON / 4;
-    if (metrics.playersPerMonth < PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH &&
-        l90Ppm < PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH &&
-        metrics.mtOpp < PERF_THRESHOLDS.BASELINE_MT_OPP &&
-        metrics.mtWon < PERF_THRESHOLDS.BASELINE_MT_WON &&
-        !crSignalMet && !l90CrMet && !l90MtMet) {
-      return 'Low activity';
-    }
-
-    var signals = 0;
-    if (metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) signals++;
-    if (metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
-        metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) signals++;
-    if (metrics.mtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP ||
-        metrics.mtWon >= PERF_THRESHOLDS.BASELINE_MT_WON) signals++;
-    if (signals >= 1) return 'Performing';
-
-    if (l90Ppm >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) return 'Performing';
-    if (l90CrMet) return 'Performing';
-    if (l90MtMet) return 'Performing';
-
-    return 'Low activity';
-  }
-
-  if (metrics.activeMonths >= 1 && metrics.activeMonths <= 3 &&
-      !isWithinLatestNMonths_(metrics.firstActivityMonth, 3, referenceDate)) {
-    var staleSignals = 0;
-    if (metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) staleSignals++;
-    if (metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
-        metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) staleSignals++;
-    if (metrics.mtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP ||
-        metrics.mtWon >= PERF_THRESHOLDS.BASELINE_MT_WON) staleSignals++;
-    return staleSignals >= 1 ? 'Performing' : 'Low activity';
-  }
-
-  return 'Low activity';
-}
-
-/* =========================
    RECOMMENDED ACTION + REASON
 ========================= */
 
@@ -686,99 +627,12 @@ function computePerformancePriority_(signals, action, contentAge, trend) {
   return 'Low';
 }
 
-/* =========================
-   REASON TEXT
-========================= */
-
 function formatCompact_(n) {
   if (n >= 1000000) return '$' + Math.round(n / 1000000) + 'M';
   if (n >= 1000) return '$' + Math.round(n / 1000) + 'K';
   return '$' + Math.round(n);
 }
 
-function buildStatusReason_(finalStatus, metrics, trend, contentAge) {
-  var agePart = '';
-  if (contentAge && contentAge.available) {
-    agePart = ' Age: ' + contentAge.months + ' mo. (' + metrics.activeMonths + ' active)';
-  } else if (metrics.activeMonths !== undefined) {
-    agePart = ' Age: ' + metrics.activeMonths + ' active mo.';
-  }
-
-  if (finalStatus === 'No activity') {
-    return 'No activity — 0 active months, 0 players.';
-  }
-
-  if (finalStatus === 'New content') {
-    var famStr = metrics.firstActivityMonth
-      ? Utilities.formatDate(metrics.firstActivityMonth, Session.getScriptTimeZone(), 'yyyy-MM')
-      : 'unknown';
-    return 'New content — ' + metrics.activeMonths + ' active months, first activity ' + famStr + '.';
-  }
-
-  var signals = [];
-  var signalCount = 0;
-
-  var ppmMet = metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH;
-  signals.push(Math.round(metrics.playersPerMonth) + ' ppm ' + (ppmMet ? '≥' : '<') + ' baseline (' + PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH + ')');
-  if (ppmMet) signalCount++;
-
-  var crRateMet = metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE;
-  var crCompletionsMet = metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS;
-  var crMet = crRateMet && crCompletionsMet;
-  if (crMet) {
-    signals.push(Math.round(metrics.completionRate * 100) + '% CR ≥ baseline (' + Math.round(PERF_THRESHOLDS.BASELINE_COMPLETION_RATE * 100) + '%)');
-    signalCount++;
-  } else if (crRateMet) {
-    signals.push(Math.round(metrics.completionRate * 100) + '% CR (' + metrics.completions + ' completions < ' + PERF_THRESHOLDS.BASELINE_COMPLETIONS + ' min)');
-  } else {
-    signals.push(Math.round(metrics.completionRate * 100) + '% CR < baseline (' + Math.round(PERF_THRESHOLDS.BASELINE_COMPLETION_RATE * 100) + '%)');
-  }
-
-  var oppMet = metrics.mtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP;
-  var wonMet = metrics.mtWon >= PERF_THRESHOLDS.BASELINE_MT_WON;
-  var bizMet = oppMet || wonMet;
-  if (oppMet) {
-    signals.push(formatCompact_(metrics.mtOpp) + ' opp ≥ baseline (' + formatCompact_(PERF_THRESHOLDS.BASELINE_MT_OPP) + ')');
-  } else if (wonMet) {
-    signals.push(formatCompact_(metrics.mtWon) + ' won ≥ baseline (' + formatCompact_(PERF_THRESHOLDS.BASELINE_MT_WON) + ')');
-  } else {
-    signals.push(formatCompact_(metrics.mtOpp) + ' opp < baseline (' + formatCompact_(PERF_THRESHOLDS.BASELINE_MT_OPP) + ')');
-  }
-  if (bizMet) signalCount++;
-
-  var hasL90Data = metrics.l90Players > 0 || metrics.l90Completions > 0 ||
-                   metrics.l90MtOpp > 0 || metrics.l90MtWon > 0;
-  var trendLine = '';
-  if (finalStatus === 'Performing') {
-    if (hasL90Data && metrics.playersPerMonth > 0) {
-      var allTimeRate = metrics.playersPerMonth;
-      var l90Rate = metrics.l90Players / 3;
-      var ratio = Math.round((l90Rate / allTimeRate) * 100);
-      if (trend === 'growing') {
-        trendLine = ' L90 ' + ratio + '% ≥ ' + Math.round(PERF_THRESHOLDS.GROWING_RATIO * 100) + '%';
-      } else if (trend === 'stable') {
-        trendLine = ' L90 ' + ratio + '% ≥ 50%';
-      } else if (trend === 'declining') {
-        trendLine = ' L90 ' + ratio + '% < 50%';
-      }
-    } else if (trend === 'stale' || !hasL90Data) {
-      trendLine = ' no recent activity';
-    }
-  }
-
-  var rescueNotes = [];
-  if (signalCount === 0 && finalStatus === 'Performing') {
-    var rescueL90Ppm = metrics.l90Players / 3;
-    var rescueL90Cr = metrics.l90Players > 0 ? (metrics.l90Completions || 0) / metrics.l90Players : 0;
-    if (rescueL90Ppm >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) rescueNotes.push('L90 ppm rescue');
-    if (rescueL90Cr >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE && (metrics.l90Completions || 0) >= 5) rescueNotes.push('L90 CR rescue');
-    if ((metrics.l90MtOpp || 0) >= PERF_THRESHOLDS.BASELINE_MT_OPP / 4 ||
-        (metrics.l90MtWon || 0) >= PERF_THRESHOLDS.BASELINE_MT_WON / 4) rescueNotes.push('L90 MT rescue');
-  }
-  var rescuePart = rescueNotes.length > 0 ? ' (' + rescueNotes.join(', ') + ')' : '';
-
-  return finalStatus + ' (' + signalCount + '/3)' + trendLine + rescuePart + ' — ' + signals.join(', ') + '.' + agePart;
-}
 
 function computePerformanceScore_(metrics, trend, signals) {
   if (!signals.hasAnyActivity) return 0;
@@ -973,7 +827,6 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
 
   var metrics = parseMetrics_(row, headerMap);
 
-  var perfStatus = computePerformanceStatus_(metrics, referenceDate);
   var flags = computePerformanceFlags_(metrics);
   var signals = computePerformanceSignals_(metrics, referenceDate);
 
@@ -982,23 +835,19 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
   var actionResult = computePerformanceAction_(signals, contentAge, trend);
   var priority = computePerformancePriority_(signals, actionResult.action, contentAge, trend);
   var score = computePerformanceScore_(metrics, trend, signals);
+  var tier = computePerformanceTier_(score);
 
   if (contentAge && contentAge.available && contentAge.months >= 6 &&
       metrics.activeMonths > 0 && metrics.activeMonths / contentAge.months < 0.5) {
     flags.push('Sporadic activity');
   }
 
-  var statusReason = buildStatusReason_(perfStatus, metrics, trend, contentAge);
-  var combinedReason = statusReason + ' ' + actionResult.reason;
-  var tier = computePerformanceTier_(score);
-
   return {
     outcome: 'processed',
-    status: perfStatus,
     signals: buildSignalsString_(signals),
     flags: flags.join(', '),
     action: actionResult.action,
-    reason: combinedReason,
+    reason: actionResult.reason,
     priority: priority,
     score: score,
     tier: tier,
@@ -1396,56 +1245,6 @@ function testPerformanceRules() {
 
   assert('Page: Public Site Link column not used', PERF_METRIC_COLUMNS.DRUPAL_PAGE_URL !== ENHANCED_CONFIG.COLUMNS.PUBLIC_SITE_LINK, true);
 
-  // --- Performance Status ---
-
-  var m0 = { activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, mtMappingValid: true };
-  assert('Status: No activity', computePerformanceStatus_(m0, referenceDate), 'No activity');
-
-  var m1 = { activeMonths: 2, totalPlayers: 50, playersPerMonth: 25, completions: 100, completionRate: 0.60, mtOpp: 200000, mtWon: 50000, hasContentSpecificPage: true, firstActivityMonth: recentDate, mtMappingValid: true };
-  assert('Status: New content (recent, 1-3 months)', computePerformanceStatus_(m1, referenceDate), 'New content');
-
-  var m1b = { activeMonths: 2, totalPlayers: 10, playersPerMonth: 5, completions: 2, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Low activity (stale new content)', computePerformanceStatus_(m1b, referenceDate), 'Low activity');
-
-  var m2 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Low activity', computePerformanceStatus_(m2, referenceDate), 'Low activity');
-
-  var m3 = { activeMonths: 6, totalPlayers: 150, playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (Path A, 3/3)', computePerformanceStatus_(m3, referenceDate), 'Performing');
-
-  var m4 = { activeMonths: 6, totalPlayers: 132, playersPerMonth: 22, completions: 30, completionRate: 0.42, mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (Path A, 2/3)', computePerformanceStatus_(m4, referenceDate), 'Performing');
-
-  var m5 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 2000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (Path B, niche)', computePerformanceStatus_(m5, referenceDate), 'Performing');
-
-  var m6 = { activeMonths: 6, totalPlayers: 150, playersPerMonth: 25, completions: 10, completionRate: 0.30, mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (1 signal)', computePerformanceStatus_(m6, referenceDate), 'Performing');
-
-  var m7 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 88 };
-  assert('Status: Performing (0/3 signals but L90 ppm above baseline)', computePerformanceStatus_(m7, referenceDate), 'Performing');
-
-  var m8 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 50, completionRate: 0.55, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Performing (CR signal rescues from Low activity)', computePerformanceStatus_(m8, referenceDate), 'Performing');
-
-  var m9 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 50, completionRate: 0.55, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 0 };
-  assert('Status: Performing (CR signal, even with no L90 ppm)', computePerformanceStatus_(m9, referenceDate), 'Performing');
-
-  var m10 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.35, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true };
-  assert('Status: Low activity (CR below baseline, no rescue)', computePerformanceStatus_(m10, referenceDate), 'Low activity');
-
-  var m11 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 30, l90Completions: 15 };
-  assert('Status: Performing (L90 CR fallback)', computePerformanceStatus_(m11, referenceDate), 'Performing');
-
-  var m12 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 0, l90Completions: 0, l90MtOpp: 15000, l90MtWon: 0 };
-  assert('Status: Performing (L90 MT opp fallback)', computePerformanceStatus_(m12, referenceDate), 'Performing');
-
-  var m13 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 3000 };
-  assert('Status: Performing (L90 MT won fallback)', computePerformanceStatus_(m13, referenceDate), 'Performing');
-
-  var m14 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, mtMappingValid: true, l90Players: 20, l90Completions: 3 };
-  assert('Status: Low activity (L90 CR below baseline, no fallback)', computePerformanceStatus_(m14, referenceDate), 'Low activity');
-
   // --- Performance Flags ---
 
   assertFlags('Flag: High usage (no page, low MT → no Low opp value)',
@@ -1827,43 +1626,6 @@ function testPerformanceRules() {
     computePerformancePriority_(priSigAge, 'Retire', { months: 10, available: true }, 'stable'), 'Low');
   assert('Priority: Low (no age bump, contentAge unavailable)',
     computePerformancePriority_(priSigAge, 'Retire', null, 'stable'), 'Low');
-
-  // --- buildStatusReason_ ---
-  var srMetrics1 = { activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, firstActivityMonth: null, l90Players: 0 };
-  assert('StatusReason: No activity', buildStatusReason_('No activity', srMetrics1, 'unknown').indexOf('0 active months') !== -1, true);
-
-  var srMetrics2 = { activeMonths: 2, totalPlayers: 50, playersPerMonth: 25, completions: 40, completionRate: 0.50, mtOpp: 60000, mtWon: 15000, firstActivityMonth: recentDate, l90Players: 60 };
-  var srNew = buildStatusReason_('New content', srMetrics2, 'unknown');
-  assert('StatusReason: New content has active months', srNew.indexOf('2 active months') !== -1, true);
-
-  var srMetrics3 = { activeMonths: 6, totalPlayers: 108, playersPerMonth: 18, completions: 30, completionRate: 0.35, mtOpp: 72000, mtWon: 15000, firstActivityMonth: oldDate, l90Players: 45 };
-  var srPerf = buildStatusReason_('Performing', srMetrics3, 'stable');
-  assert('StatusReason: Performing shows signal count', srPerf.indexOf('2/3') !== -1, true);
-  assert('StatusReason: Performing shows baseline ppm', srPerf.indexOf('baseline (15)') !== -1 || srPerf.indexOf('baseline (' + PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH + ')') !== -1, true);
-  assert('StatusReason: Performing shows actual ppm', srPerf.indexOf('18 ppm') !== -1, true);
-  assert('StatusReason: Performing shows L90 ratio', srPerf.indexOf('L90') !== -1, true);
-  assert('StatusReason: Performing L90 outside parens', srPerf.indexOf(') L90') !== -1, true);
-  assert('StatusReason: Performing shows age (no contentAge)', srPerf.indexOf('Age: 6 active mo.') !== -1, true);
-
-  var srPerfWithAge = buildStatusReason_('Performing', srMetrics3, 'stable', { months: 23, available: true });
-  assert('StatusReason: Performing shows calendar age + active', srPerfWithAge.indexOf('Age: 23 mo. (6 active)') !== -1, true);
-
-  var srGrowingMetrics = { activeMonths: 6, totalPlayers: 108, playersPerMonth: 18, completions: 30, completionRate: 0.35, mtOpp: 72000, mtWon: 15000, firstActivityMonth: oldDate, l90Players: 150, l90Completions: 20, l90MtOpp: 0, l90MtWon: 0 };
-  var srGrowing = buildStatusReason_('Performing', srGrowingMetrics, 'growing');
-  assert('StatusReason: growing shows growing threshold', srGrowing.indexOf(Math.round(PERF_THRESHOLDS.GROWING_RATIO * 100) + '%') !== -1, true);
-
-  var srMetrics4 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, firstActivityMonth: oldDate, l90Players: 0 };
-  var srLow = buildStatusReason_('Low activity', srMetrics4, 'unknown');
-  assert('StatusReason: Low activity shows 0/3', srLow.indexOf('0/3') !== -1, true);
-
-  var srRescueMetrics = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, firstActivityMonth: oldDate, l90Players: 88, l90Completions: 5, l90MtOpp: 0, l90MtWon: 0 };
-  var srRescueText = buildStatusReason_('Performing', srRescueMetrics, 'stable');
-  assert('StatusReason: 0/3 with L90 rescue shows rescue note', srRescueText.indexOf('L90 ppm rescue') !== -1, true);
-  assert('StatusReason: rescue still shows 0/3', srRescueText.indexOf('0/3') !== -1, true);
-
-  var srMetrics5 = { activeMonths: 6, totalPlayers: 108, playersPerMonth: 18, completions: 30, completionRate: 0.35, mtOpp: 72000, mtWon: 15000, firstActivityMonth: oldDate, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0 };
-  var srNoL90 = buildStatusReason_('Performing', srMetrics5, 'stable');
-  assert('StatusReason: Performing with no L90 shows no recent activity', srNoL90.indexOf('no recent activity') !== -1, true);
 
   // --- computePerformanceScore_ tests ---
   Logger.log('--- computePerformanceScore_ ---');
@@ -2259,7 +2021,7 @@ function testProcessingAudit() {
   var rStale = classifyRow_(staleRow, hm, {}, referenceDate);
   assert('Audit: Stale activity → Retire', rStale.action, 'Retire');
   assert('Audit: Stale activity → has signals', rStale.signals !== '', true);
-  assert('Audit: Stale activity → reason has status derivation', rStale.reason.indexOf('Low activity (0/3)') !== -1, true);
+  assert('Audit: Stale activity → reason mentions stalled', rStale.reason.indexOf('Stalled content') !== -1, true);
 
   // --- Low opp value end-to-end ---
   var lowOppRow = makeFullDataRow({});
@@ -2503,7 +2265,7 @@ function testProcessingAudit() {
   highEngRow[hm[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH]] = oldDate;
   var rHighEng = classifyRow_(highEngRow, hm, {}, referenceDate);
   assert('Coherence: High engagement → has signals', rHighEng.signals !== '', true);
-  assert('Coherence: High engagement demo → Performing status', rHighEng.status, 'Performing');
+  assert('Coherence: High engagement demo → signals populated', rHighEng.signals.indexOf('CR:') !== -1, true);
 
   // Retire action should never appear with Mid or Top tier
   assert('Coherence: Low activity demo with Retire → Low or Inactive tier',
