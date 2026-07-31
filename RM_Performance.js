@@ -74,7 +74,7 @@ var GENERIC_LISTING_PATTERNS = [
 
 function ensurePerformanceColumns_(sheet) {
   var needed = [
-    PERF_LABEL_COLUMNS.PERF_STATUS,
+    PERF_LABEL_COLUMNS.PERF_SIGNALS,
     PERF_LABEL_COLUMNS.PERF_FLAGS,
     PERF_LABEL_COLUMNS.PERF_ACTION,
     PERF_LABEL_COLUMNS.PERF_ACTION_REASON,
@@ -98,7 +98,7 @@ function ensurePerformanceColumns_(sheet) {
   });
 
   return {
-    statusCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_STATUS) + 1,
+    signalsCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_SIGNALS) + 1,
     flagsCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_FLAGS) + 1,
     actionCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_ACTION) + 1,
     reasonCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_ACTION_REASON) + 1,
@@ -870,7 +870,7 @@ function isBlankCell_(val) {
 
 function isRowBlank_(row, headerMap) {
   var outputColNames = [
-    PERF_LABEL_COLUMNS.PERF_STATUS,
+    PERF_LABEL_COLUMNS.PERF_SIGNALS,
     PERF_LABEL_COLUMNS.PERF_FLAGS,
     PERF_LABEL_COLUMNS.PERF_ACTION,
     PERF_LABEL_COLUMNS.PERF_ACTION_REASON,
@@ -937,11 +937,11 @@ function hasMinimumRequiredMetrics_(row, headerMap) {
 }
 
 function makeSkipResult_(reason) {
-  return { outcome: 'skipped', status: '', flags: '', action: '', reason: '', priority: '', score: '', tier: '', trend: '', result: 'Skipped — ' + reason };
+  return { outcome: 'skipped', status: '', signals: '', flags: '', action: '', reason: '', priority: '', score: '', tier: '', trend: '', result: 'Skipped — ' + reason };
 }
 
 function makeReviewResult_(reason) {
-  return { outcome: 'needs_review', status: '', flags: '', action: 'Needs human review', reason: reason, priority: '', score: '', tier: '', trend: '', result: 'Needs human review — ' + reason };
+  return { outcome: 'needs_review', status: '', signals: '', flags: '', action: 'Needs human review', reason: reason, priority: '', score: '', tier: '', trend: '', result: 'Needs human review — ' + reason };
 }
 
 function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
@@ -1967,7 +1967,7 @@ function testProcessingAudit() {
   hm[ENHANCED_CONFIG.COLUMNS.STATUS_PUBLISHED_TS] = idx++;
   hm['Cleanup note'] = idx++;
   hm['Cleanup status'] = idx++;
-  hm[PERF_LABEL_COLUMNS.PERF_STATUS] = idx++;
+  hm[PERF_LABEL_COLUMNS.PERF_SIGNALS] = idx++;
   hm[PERF_LABEL_COLUMNS.PERF_FLAGS] = idx++;
   hm[PERF_LABEL_COLUMNS.PERF_ACTION] = idx++;
   hm[PERF_LABEL_COLUMNS.PERF_ACTION_REASON] = idx++;
@@ -2014,7 +2014,7 @@ function testProcessingAudit() {
   assert('isRowBlank: row with Number', isRowBlank_(rowWithNumber, hm), false);
 
   var blankWithOldLabels = makeRow({});
-  blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PERF_STATUS]] = 'Performing';
+  blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PERF_SIGNALS]] = 'Performing';
   blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PERF_ACTION]] = 'Keep';
   blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PROCESSING_RESULT]] = 'Processed';
   assert('isRowBlank: output columns → still blank', isRowBlank_(blankWithOldLabels, hm), true);
@@ -2314,7 +2314,7 @@ function testProcessingAudit() {
 
   // --- Final Action column never touched ---
   assert('Column: PERF_ACTION is Recommended action', PERF_LABEL_COLUMNS.PERF_ACTION, 'Recommended action');
-  var perfColNames = [PERF_LABEL_COLUMNS.PERF_STATUS, PERF_LABEL_COLUMNS.PERF_FLAGS, PERF_LABEL_COLUMNS.PERF_ACTION, PERF_LABEL_COLUMNS.PERF_ACTION_REASON, PERF_LABEL_COLUMNS.PRIORITY, PERF_LABEL_COLUMNS.PROCESSING_RESULT];
+  var perfColNames = [PERF_LABEL_COLUMNS.PERF_SIGNALS, PERF_LABEL_COLUMNS.PERF_FLAGS, PERF_LABEL_COLUMNS.PERF_ACTION, PERF_LABEL_COLUMNS.PERF_ACTION_REASON, PERF_LABEL_COLUMNS.PRIORITY, PERF_LABEL_COLUMNS.PROCESSING_RESULT];
   var touchesAction = false;
   for (var pc = 0; pc < perfColNames.length; pc++) {
     if (perfColNames[pc] === 'Action') touchesAction = true;
