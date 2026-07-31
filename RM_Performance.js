@@ -669,22 +669,16 @@ function computePerformanceTrend_(metrics, referenceDate) {
   return 'unknown';
 }
 
-function computePerformancePriority_(status, flags, metrics, action, referenceDate, contentAge, trend) {
-  if (status === 'New content') return 'Low';
+function computePerformancePriority_(signals, action, contentAge, trend) {
+  if (signals.maturity.level === 'NEW') return 'Low';
   if (action === 'Keep') return 'Low';
 
-  var highSignals = 0;
-  if (flags.indexOf('High usage') !== -1) highSignals++;
-  if (flags.indexOf('High engagement') !== -1) highSignals++;
-  if (flags.indexOf('High business impact') !== -1) highSignals++;
+  var hasMeaningfulAllTime = signals.count >= 1;
 
-  var hasMeaningfulAllTime = metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH ||
-                             metrics.mtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP;
-
-  if (highSignals >= 2) return 'High';
+  if (signals.highCount >= 2) return 'High';
   if ((trend === 'declining' || trend === 'stale') && hasMeaningfulAllTime) return 'High';
 
-  if (highSignals === 1) return 'Medium';
+  if (signals.highCount === 1) return 'Medium';
   if (trend === 'declining' || trend === 'stale') return 'Medium';
 
   if (contentAge && contentAge.available && contentAge.months > 12) return 'Medium';
@@ -786,8 +780,8 @@ function buildStatusReason_(finalStatus, metrics, trend, contentAge) {
   return finalStatus + ' (' + signalCount + '/3)' + trendLine + rescuePart + ' — ' + signals.join(', ') + '.' + agePart;
 }
 
-function computePerformanceScore_(metrics, flags, trend, finalStatus) {
-  if (finalStatus === 'No activity') return 0;
+function computePerformanceScore_(metrics, trend, signals) {
+  if (!signals.hasAnyActivity) return 0;
 
   var score = 0;
 
@@ -986,7 +980,8 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
   var contentAge = computeContentAge_(row, headerMap, referenceDate);
   var trend = computePerformanceTrend_(metrics, referenceDate);
   var actionResult = computePerformanceAction_(signals, contentAge, trend);
-  var priority = computePerformancePriority_(perfStatus, flags, metrics, actionResult.action, referenceDate, contentAge, trend);
+  var priority = computePerformancePriority_(signals, actionResult.action, contentAge, trend);
+  var score = computePerformanceScore_(metrics, trend, signals);
 
   if (contentAge && contentAge.available && contentAge.months >= 6 &&
       metrics.activeMonths > 0 && metrics.activeMonths / contentAge.months < 0.5) {
@@ -995,7 +990,6 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
 
   var statusReason = buildStatusReason_(perfStatus, metrics, trend, contentAge);
   var combinedReason = statusReason + ' ' + actionResult.reason;
-  var score = computePerformanceScore_(metrics, flags, trend, perfStatus);
   var tier = computePerformanceTier_(score);
 
   return {
@@ -1806,26 +1800,33 @@ function testPerformanceRules() {
   assert('Trend: stable when L90 ratio below growing threshold',
     computePerformanceTrend_(justBelowGrowing, referenceDate), 'stable');
 
-  assert('Priority: High (2+ high flags)',
-    computePerformancePriority_('Performing', ['High usage', 'High business impact'], stableL90, 'Improve completion rate', referenceDate, null, 'stable'), 'High');
+  var priSig2High = testSignals_({ playersPerMonth: 30, completions: 50, completionRate: 0.55, mtOpp: 150000, mtWon: 30000, hasContentSpecificPage: true });
+  assert('Priority: High (2+ high signals)',
+    computePerformancePriority_(priSig2High, 'Improve completion rate', null, 'stable'), 'High');
+  var priSigDeclMeaningful = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 60000, mtWon: 0, hasContentSpecificPage: true });
   assert('Priority: High (declining + meaningful all-time)',
-    computePerformancePriority_('Performing', [], { playersPerMonth: 25, mtOpp: 60000, l90Players: 5, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Improve completion rate', referenceDate, null, 'declining'), 'High');
-  assert('Priority: Medium (1 high flag, stable)',
-    computePerformancePriority_('Performing', ['High usage'], stableL90, 'Improve completion rate', referenceDate, null, 'stable'), 'Medium');
+    computePerformancePriority_(priSigDeclMeaningful, 'Improve completion rate', null, 'declining'), 'High');
+  var priSig1High = testSignals_({ playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true });
+  assert('Priority: Medium (1 high signal, stable)',
+    computePerformancePriority_(priSig1High, 'Improve completion rate', null, 'stable'), 'Medium');
+  var priSigDecl = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false });
   assert('Priority: Medium (declining + below baseline)',
-    computePerformancePriority_('Low activity', [], { playersPerMonth: 10, mtOpp: 5000, l90Players: 2, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, null, 'declining'), 'Medium');
-  assert('Priority: Low (0 high flags, stable)',
-    computePerformancePriority_('Performing', [], { playersPerMonth: 22, mtOpp: 1000, l90Players: 36, l90Completions: 5, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Need promotion', referenceDate, null, 'stable'), 'Low');
+    computePerformancePriority_(priSigDecl, 'Retire', null, 'declining'), 'Medium');
+  var priSig0High = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true });
+  assert('Priority: Low (0 high signals, stable)',
+    computePerformancePriority_(priSig0High, 'Need promotion', null, 'stable'), 'Low');
+  var priSigNew = testSignals_({ activeMonths: 2, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, firstActivityMonth: recentDate });
   assert('Priority: Low (New content always)',
-    computePerformancePriority_('New content', ['High usage'], stableL90, 'Keep', referenceDate, null, 'stable'), 'Low');
+    computePerformancePriority_(priSigNew, 'Keep', null, 'stable'), 'Low');
   assert('Priority: Low (Keep action always)',
-    computePerformancePriority_('Performing', ['High usage', 'High business impact'], stableL90, 'Keep', referenceDate, null, 'stable'), 'Low');
+    computePerformancePriority_(priSig2High, 'Keep', null, 'stable'), 'Low');
+  var priSigAge = testSignals_({ playersPerMonth: 5, completions: 2, completionRate: 0.10, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
   assert('Priority: Medium (age bump, contentAge > 12, no signals)',
-    computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, { months: 18, available: true }, 'stable'), 'Medium');
+    computePerformancePriority_(priSigAge, 'Retire', { months: 18, available: true }, 'stable'), 'Medium');
   assert('Priority: Low (no age bump, contentAge <= 12)',
-    computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, { months: 10, available: true }, 'stable'), 'Low');
+    computePerformancePriority_(priSigAge, 'Retire', { months: 10, available: true }, 'stable'), 'Low');
   assert('Priority: Low (no age bump, contentAge unavailable)',
-    computePerformancePriority_('Low activity', [], { playersPerMonth: 5, mtOpp: 1000, l90Players: 10, l90Completions: 1, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate }, 'Retire', referenceDate, null, 'stable'), 'Low');
+    computePerformancePriority_(priSigAge, 'Retire', null, 'stable'), 'Low');
 
   // --- buildStatusReason_ ---
   var srMetrics1 = { activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, firstActivityMonth: null, l90Players: 0 };
@@ -1867,41 +1868,29 @@ function testPerformanceRules() {
   // --- computePerformanceScore_ tests ---
   Logger.log('--- computePerformanceScore_ ---');
 
-  var scoreNoActivity = computePerformanceScore_(
-    { playersPerMonth: 0, totalPlayers: 0, completionRate: 0, completions: 0, mtOpp: 0, mtWon: 0, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 0 },
-    [], 'unknown', 'No activity'
-  );
+  var scoreNoActMetrics = { playersPerMonth: 0, totalPlayers: 0, completionRate: 0, completions: 0, mtOpp: 0, mtWon: 0, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null, mtMappingValid: true };
+  var scoreNoActivity = computePerformanceScore_(scoreNoActMetrics, 'unknown', computePerformanceSignals_(scoreNoActMetrics, referenceDate));
   assert('Score: No activity = 0', scoreNoActivity, 0);
 
-  var scoreStable3High = computePerformanceScore_(
-    { playersPerMonth: 30, totalPlayers: 360, completionRate: 0.55, completions: 198, mtOpp: 150000, mtWon: 30000, l90Players: 90, l90Completions: 50, l90MtOpp: 40000, l90MtWon: 8000, activeMonths: 12 },
-    ['High usage', 'High engagement', 'High business impact'], 'stable', 'Performing'
-  );
+  var score3HMetrics = { playersPerMonth: 30, totalPlayers: 360, completionRate: 0.55, completions: 198, mtOpp: 150000, mtWon: 30000, l90Players: 90, l90Completions: 50, l90MtOpp: 40000, l90MtWon: 8000, activeMonths: 12, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true };
+  var scoreStable3High = computePerformanceScore_(score3HMetrics, 'stable', computePerformanceSignals_(score3HMetrics, referenceDate));
   assert('Score: Performing 3/3 + all high + mature >= 90', scoreStable3High >= 90, true);
 
-  var scoreStable1Signal = computePerformanceScore_(
-    { playersPerMonth: 18, totalPlayers: 108, completionRate: 0.30, completions: 20, mtOpp: 30000, mtWon: 5000, l90Players: 15, l90Completions: 5, l90MtOpp: 8000, l90MtWon: 1000, activeMonths: 6 },
-    [], 'stable', 'Performing'
-  );
+  var score1SMetrics = { playersPerMonth: 18, totalPlayers: 108, completionRate: 0.30, completions: 20, mtOpp: 30000, mtWon: 5000, l90Players: 15, l90Completions: 5, l90MtOpp: 8000, l90MtWon: 1000, activeMonths: 6, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true };
+  var scoreStable1Signal = computePerformanceScore_(score1SMetrics, 'stable', computePerformanceSignals_(score1SMetrics, referenceDate));
   assert('Score: Performing 1/3 signal, moderate L90 >= 10', scoreStable1Signal >= 10, true);
   assert('Score: Performing 1/3 signal, moderate L90 <= 50', scoreStable1Signal <= 50, true);
 
-  var scoreDeclining = computePerformanceScore_(
-    { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 10, l90Completions: 3, l90MtOpp: 5000, l90MtWon: 1000, activeMonths: 12 },
-    ['High usage', 'High engagement', 'High business impact'], 'declining', 'Performing'
-  );
+  var scoreDeclMetrics = { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 10, l90Completions: 3, l90MtOpp: 5000, l90MtWon: 1000, activeMonths: 12, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true };
+  var scoreDeclining = computePerformanceScore_(scoreDeclMetrics, 'declining', computePerformanceSignals_(scoreDeclMetrics, referenceDate));
   assert('Score: Declining trend with high baseline < stable equivalent', scoreDeclining < scoreStable3High, true);
 
-  var scoreDeadDemo = computePerformanceScore_(
-    { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 12 },
-    ['High usage', 'High engagement', 'High business impact'], 'stale', 'Performing'
-  );
+  var scoreDeadMetrics = { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 12, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true };
+  var scoreDeadDemo = computePerformanceScore_(scoreDeadMetrics, 'stale', computePerformanceSignals_(scoreDeadMetrics, referenceDate));
   assert('Score: Dead demo with great history <= 30 (Low tier)', scoreDeadDemo <= 30, true);
 
-  var scoreNewContent = computePerformanceScore_(
-    { playersPerMonth: 5, totalPlayers: 10, completionRate: 0.20, completions: 2, mtOpp: 1000, mtWon: 0, l90Players: 10, l90Completions: 2, l90MtOpp: 1000, l90MtWon: 0, activeMonths: 2 },
-    [], 'unknown', 'New content'
-  );
+  var scoreNewMetrics = { playersPerMonth: 5, totalPlayers: 10, completionRate: 0.20, completions: 2, mtOpp: 1000, mtWon: 0, l90Players: 10, l90Completions: 2, l90MtOpp: 1000, l90MtWon: 0, activeMonths: 2, hasContentSpecificPage: false, firstActivityMonth: recentDate, lastActivityMonth: referenceDate, mtMappingValid: true };
+  var scoreNewContent = computePerformanceScore_(scoreNewMetrics, 'unknown', computePerformanceSignals_(scoreNewMetrics, referenceDate));
   assert('Score: New content with low metrics >= 5', scoreNewContent >= 5, true);
   assert('Score: New content with low metrics <= 30', scoreNewContent <= 30, true);
 
