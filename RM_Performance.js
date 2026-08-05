@@ -2,10 +2,15 @@
  * RM_Performance.gs - Performance Labels Engine
  *
  * Applies the Lifecycle Label Framework rules to Request_Master:
- * - Performance Status (one per demo)
+ * - Performance Signals (usage, CR, MT levels + page/mapping/recovery)
  * - Performance Flags (multiple per demo)
- * - Recommended action (one per demo, derived from status + flags)
- * - Recommended action reason (human-readable explanation)
+ * - Recommended action (one per demo, derived from signals)
+ * - Recommended action reason (human-readable explanation with relevant signals)
+ * - Action Priority (High/Medium/Low based on signals + trend)
+ * - Performance Score (0-100 composite)
+ * - Performance Tier (Top/Mid/Low/Inactive)
+ * - Performance L90 Trend (growing/stable/declining/stale based on 90-day vs all-time rate)
+ * - Content Age (months since first activity)
  * - Processing Result (audit trail for every row)
  *
  * Results are written to auto-created columns on Request_Master.
@@ -23,13 +28,20 @@ var PERF_LABEL_COLUMNS = {
   PERF_FLAGS: 'Performance Flags',
   PERF_ACTION: 'Recommended action',
   PERF_ACTION_REASON: 'Recommended action reason',
-  PRIORITY: 'Performance Priority',
+  PRIORITY: 'Action Priority',
   PERF_SCORE: 'Performance Score',
   PERF_TIER: 'Performance Tier',
-  PERF_TREND: 'Performance Trend',
-  AGE: 'Age',
-  PROCESSING_RESULT: 'Processing Result'
+  PERF_TREND: 'Performance L90 Trend',
+  AGE: 'Content Age',
+  PROCESSING_RESULT: 'Processing Result',
+  ASSIGNED: 'Assigned',
+  ACTION_STATUS: 'Action Status',
+  ACTION_COMPLETED_DATE: 'Action Completed Date',
+  RESPONSE: 'Response'
 };
+
+var CREATOR_ACTIONS_ = ['Improve completion', 'Boost sales impact', 'Consider retirement'];
+var ADMIN_ACTIONS_ = ['Create page', 'Increase visibility', 'Review data linkage', 'Needs review'];
 
 var PERF_METRIC_COLUMNS = {
   ACTIVE_MONTHS: 'Active Months',
@@ -61,7 +73,9 @@ var PERF_THRESHOLDS = {
   HIGH_COMPLETION_RATE: 0.50,
   HIGH_MT_OPP: 100000,
   HIGH_MT_WON: 25000,
-  GROWING_RATIO: 1.2
+  GROWING_RATIO: 1.2,
+  CONTENT_AGE_MATURE: 12,
+  CONTENT_AGE_NEW: 3
 };
 
 var GENERIC_LISTING_PATTERNS = [
@@ -83,7 +97,11 @@ function ensurePerformanceColumns_(sheet) {
     PERF_LABEL_COLUMNS.PERF_TIER,
     PERF_LABEL_COLUMNS.PERF_TREND,
     PERF_LABEL_COLUMNS.AGE,
-    PERF_LABEL_COLUMNS.PROCESSING_RESULT
+    PERF_LABEL_COLUMNS.PROCESSING_RESULT,
+    PERF_LABEL_COLUMNS.ASSIGNED,
+    PERF_LABEL_COLUMNS.ACTION_STATUS,
+    PERF_LABEL_COLUMNS.ACTION_COMPLETED_DATE,
+    PERF_LABEL_COLUMNS.RESPONSE
   ];
   var lastCol = sheet.getLastColumn();
   var headers = lastCol > 0
@@ -107,7 +125,11 @@ function ensurePerformanceColumns_(sheet) {
     tierCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_TIER) + 1,
     trendCol: headers.indexOf(PERF_LABEL_COLUMNS.PERF_TREND) + 1,
     ageCol: headers.indexOf(PERF_LABEL_COLUMNS.AGE) + 1,
-    resultCol: headers.indexOf(PERF_LABEL_COLUMNS.PROCESSING_RESULT) + 1
+    resultCol: headers.indexOf(PERF_LABEL_COLUMNS.PROCESSING_RESULT) + 1,
+    assignedCol: headers.indexOf(PERF_LABEL_COLUMNS.ASSIGNED) + 1,
+    actionStatusCol: headers.indexOf(PERF_LABEL_COLUMNS.ACTION_STATUS) + 1,
+    actionCompletedDateCol: headers.indexOf(PERF_LABEL_COLUMNS.ACTION_COMPLETED_DATE) + 1,
+    responseCol: headers.indexOf(PERF_LABEL_COLUMNS.RESPONSE) + 1
   };
 }
 
@@ -265,7 +287,7 @@ function computePerformanceFlags_(metrics) {
 
   if (metrics.totalPlayers >= PERF_THRESHOLDS.MIN_PLAYERS_FOR_RATE &&
       metrics.completionRate < PERF_THRESHOLDS.BASELINE_COMPLETION_RATE) {
-    flags.push('Low engagement');
+    flags.push('Low completion');
   }
 
   if (metrics.mtOpp >= PERF_THRESHOLDS.HIGH_MT_OPP || metrics.mtWon >= PERF_THRESHOLDS.HIGH_MT_WON) {
@@ -310,11 +332,9 @@ function computePerformanceSignals_(metrics, referenceDate) {
   // CR level
   var crLevel, crThreshold;
   var crPercent = Math.round(metrics.completionRate * 100);
-  if (metrics.completionRate >= PERF_THRESHOLDS.HIGH_COMPLETION_RATE &&
-      metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) {
+  if (metrics.completionRate >= PERF_THRESHOLDS.HIGH_COMPLETION_RATE) {
     crLevel = 'HIGH'; crThreshold = Math.round(PERF_THRESHOLDS.HIGH_COMPLETION_RATE * 100);
-  } else if (metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
-             metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) {
+  } else if (metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE) {
     crLevel = 'BASE'; crThreshold = Math.round(PERF_THRESHOLDS.BASELINE_COMPLETION_RATE * 100);
   } else if (metrics.completionRate < 0.20) {
     crLevel = 'LOW'; crThreshold = 20;
@@ -392,7 +412,7 @@ function computePerformanceSignals_(metrics, referenceDate) {
     mt: { level: mtLevel, value: mtValue, source: mtSource, threshold: mtThreshold },
     hasPage: metrics.hasContentSpecificPage,
     hasMapping: metrics.mtMappingValid,
-    maturity: { level: maturityLevel, months: metrics.activeMonths, threshold: maturityThreshold },
+    activeMonth: { level: maturityLevel, months: metrics.activeMonths, threshold: maturityThreshold },
     recovery: { active: recoveryActive, ppm: recoveryPpm, cr: recoveryCr, mt: recoveryMt },
     hasAnyActivity: hasAnyActivity,
     count: count,
@@ -403,16 +423,15 @@ function computePerformanceSignals_(metrics, referenceDate) {
 function buildSignalsString_(signals) {
   var parts = [];
 
-  // For BELOW level, display threshold as "baseline X"
-  var usageLevelDisplay = signals.usage.level === 'BELOW' ? 'baseline' : signals.usage.level.toLowerCase();
-  parts.push('Usage: ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm (' + usageLevelDisplay + ' ' + signals.usage.threshold + ')');
+  var usageLevelDisplay = signals.usage.level.toLowerCase();
+  parts.push('Usage: ' + Math.round(signals.usage.value) + 'ppm (' + usageLevelDisplay + ' ' + signals.usage.threshold + ')');
 
-  var crLevelDisplay = signals.cr.level === 'BELOW' ? 'baseline' : signals.cr.level.toLowerCase();
-  parts.push('CR: ' + signals.cr.level + ' ' + signals.cr.value + '% (' + crLevelDisplay + ' ' + signals.cr.threshold + '%)');
+  var crLevelDisplay = signals.cr.level.toLowerCase();
+  parts.push('CR: ' + signals.cr.value + '% (' + crLevelDisplay + ' ' + signals.cr.threshold + '%)');
 
   var mtDisplay = signals.mt.source === 'none' ? '$0' : formatCompact_(signals.mt.value) + ' ' + signals.mt.source;
-  var mtLevelDisplay = signals.mt.level === 'BELOW' ? 'baseline' : signals.mt.level.toLowerCase();
-  parts.push('MT: ' + signals.mt.level + ' ' + mtDisplay + ' (' + mtLevelDisplay + ' ' + formatCompact_(signals.mt.threshold) + ')');
+  var mtLevelDisplay = signals.mt.level.toLowerCase();
+  parts.push('MT: ' + mtDisplay + ' (' + mtLevelDisplay + ' ' + formatCompact_(signals.mt.threshold) + ')');
 
   parts.push(signals.hasPage ? 'has page' : 'no page');
   parts.push(signals.hasMapping ? 'has mapping' : 'no mapping');
@@ -435,7 +454,16 @@ function buildSignalsString_(signals) {
     parts.push('Last 90d recovery: YES ' + recParts.join(', ') + ' (baseline ' + recBaselines.join(', ') + ')');
   }
 
-  parts.push('Maturity: ' + signals.maturity.level + ' ' + signals.maturity.months + ' mo. (' + signals.maturity.level.toLowerCase() + ' ' + signals.maturity.threshold + ')');
+  parts.push('ActiveMonth: ' + signals.activeMonth.months + ' mo. (' + signals.activeMonth.level.toLowerCase() + ' ' + signals.activeMonth.threshold + ' mo)');
+
+  if (signals.contentAge) {
+    if (signals.contentAge.available) {
+      var caLevelDisplay = signals.contentAge.level.toLowerCase();
+      parts.push('ContentAge: ' + signals.contentAge.months + ' mo. (' + caLevelDisplay + ' ' + (signals.contentAge.level === 'MATURE' ? PERF_THRESHOLDS.CONTENT_AGE_MATURE : PERF_THRESHOLDS.CONTENT_AGE_NEW) + ')');
+    } else {
+      parts.push('ContentAge: UNKNOWN');
+    }
+  }
 
   return parts.join(' | ');
 }
@@ -444,144 +472,163 @@ function buildSignalsString_(signals) {
    RECOMMENDED ACTION + REASON
 ========================= */
 
-function computePerformanceAction_(signals, contentAge, trend) {
-  var missingPageMappingNote = '';
-  if (!signals.hasMapping) {
-    missingPageMappingNote = ' The redhat.com page is also missing from the metrics mapping, so MT attribution may be incomplete.';
+function formatSignalFields_(signals, fields) {
+  var parts = [];
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields[i];
+    if (f === 'usage') {
+      parts.push('Usage: ' + Math.round(signals.usage.value) + ' players/mo (' + signals.usage.level.toLowerCase() + ')');
+    } else if (f === 'cr') {
+      parts.push('Completion rate: ' + signals.cr.value + '% (' + signals.cr.level.toLowerCase() + ')');
+    } else if (f === 'mt') {
+      var mtDisplay = signals.mt.source === 'none' ? '$0' : formatCompact_(signals.mt.value) + ' ' + signals.mt.source;
+      parts.push('Sales: ' + mtDisplay + ' (' + signals.mt.level.toLowerCase() + ')');
+    } else if (f === 'activeMonth') {
+      parts.push('ActiveMonth: ' + (signals.activeMonth.months != null ? signals.activeMonth.months + ' mo.' : '') + ' (' + signals.activeMonth.level.toLowerCase() + ')');
+    } else if (f === 'page') {
+      parts.push(signals.hasPage ? 'has page' : 'no page');
+    } else if (f === 'mapping') {
+      parts.push(signals.hasMapping ? 'has mapping' : 'no mapping');
+    } else if (f === 'trend') {
+      if (signals.trend && signals.trend !== 'unknown') {
+        parts.push('L90 trend: ' + signals.trend);
+      }
+    } else if (f === 'contentAge') {
+      if (signals.contentAge && signals.contentAge.available) {
+        parts.push('ContentAge: ' + signals.contentAge.months + ' mo. (' + signals.contentAge.level.toLowerCase() + ')');
+      } else {
+        parts.push('ContentAge: unknown');
+      }
+    }
   }
+  return '(' + parts.join(', ') + ')';
+}
 
+function computePerformanceAction_(signals) {
   var isNoActivity = !signals.hasAnyActivity;
-  var isLowActivity = signals.count === 0 && !signals.recovery.active && signals.maturity.level === 'ESTABLISHED';
-  var isNewContent = signals.maturity.level === 'NEW';
-  var isStalled = signals.maturity.level === 'STALLED';
+  var isLowActivity = signals.count === 0 && !signals.recovery.active && signals.activeMonth.level === 'ESTABLISHED';
+  var isNewContent = signals.activeMonth.level === 'NEW';
+  var isStalled = signals.activeMonth.level === 'STALLED';
 
   var hasHighUsage = signals.usage.level === 'HIGH';
   var hasHighCR = signals.cr.level === 'HIGH';
   var hasLowCR = signals.cr.level === 'LOW' || signals.cr.level === 'BELOW';
   var hasHighMT = signals.mt.level === 'HIGH';
-  var isNiche = signals.maturity.level === 'ESTABLISHED' && signals.usage.level === 'BELOW' && (signals.mt.level === 'HIGH' || signals.mt.level === 'BASE');
-  var isLowOpp = signals.hasPage && signals.hasMapping && signals.maturity.level === 'ESTABLISHED' && (hasHighUsage || hasHighCR) && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_OPP;
+  var isNiche = signals.activeMonth.level === 'ESTABLISHED' && signals.usage.level === 'BELOW' && (signals.mt.level === 'HIGH' || signals.mt.level === 'BASE');
+  var isLowOpp = signals.hasPage && signals.hasMapping && signals.activeMonth.level === 'ESTABLISHED' && (hasHighUsage || hasHighCR) && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_OPP;
 
-  // A. Verify data mapping / Improve low MT value
+  // A. Review data linkage / Boost sales impact
   if (isNoActivity && signals.mt.level !== 'NONE') {
     return {
-      action: 'Verify data mapping',
-      reason: 'No player activity but MT value present (MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + '), possible mapping inconsistency' + missingPageMappingNote
-    };
+      action: 'Review data linkage',
+      reason: 'Metrics don\'t add up — check the data linkage. ' + formatSignalFields_(signals, ['usage', 'mt'])    };
   }
   if (isLowOpp && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_WON) {
     return {
-      action: 'Improve low MT value',
-      reason: 'Strong signals but low MT value (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
-    };
+      action: 'Boost sales impact',
+      reason: 'Strong completion but low sales impact — review linking, CTAs, or sales alignment. ' + formatSignalFields_(signals, ['usage', 'cr', 'mt'])    };
   }
 
-  // B. Improve completion rate
+  // B. Improve completion
   if (hasHighUsage && hasLowCR && !isNewContent) {
     return {
-      action: 'Improve completion rate',
-      reason: 'High traffic but low conversion (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%)' + missingPageMappingNote
-    };
+      action: 'Improve completion',
+      reason: 'Players start but don\'t finish — review the flow and content. ' + formatSignalFields_(signals, ['usage', 'cr'])    };
   }
-  if (signals.maturity.level === 'ESTABLISHED' &&
+  if (signals.activeMonth.level === 'ESTABLISHED' &&
       signals.usage.level === 'BASE' &&
       signals.hasPage &&
       hasLowCR) {
     return {
-      action: 'Improve completion rate',
-      reason: 'Baseline traffic but low conversion (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%)' + missingPageMappingNote
-    };
+      action: 'Improve completion',
+      reason: 'Players start but don\'t finish — review the flow and content. ' + formatSignalFields_(signals, ['usage', 'cr'])    };
   }
 
-  // C. Create redhat.com page
+  // C. Create page
   if (!signals.hasPage) {
     if (hasHighUsage || hasHighMT || isNiche ||
         (hasHighCR && !isLowActivity)) {
       return {
-        action: 'Create redhat.com page',
-        reason: 'Strong signal but no redhat.com page (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
-      };
+        action: 'Create page',
+        reason: 'This demo is performing well but has no page — create a redhat.com page. ' + formatSignalFields_(signals, ['usage', 'cr', 'mt', 'page'])      };
     }
   }
 
-  // D. Need promotion
+  // D. Increase visibility
   if (isNiche && signals.hasPage) {
     return {
-      action: 'Need promotion',
-      reason: 'Low traffic but meaningful MT value (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
-    };
+      action: 'Increase visibility',
+      reason: 'Good content, low visibility — needs distribution. ' + formatSignalFields_(signals, ['usage', 'mt', 'activeMonth'])    };
   }
   if (!isNoActivity && !isNewContent && signals.usage.level === 'BELOW' &&
       (signals.cr.level === 'HIGH' || signals.cr.level === 'BASE')) {
     return {
-      action: 'Need promotion',
-      reason: 'Low traffic but strong completion (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%)' + missingPageMappingNote
-    };
+      action: 'Increase visibility',
+      reason: 'Good content, low visibility — needs distribution. ' + formatSignalFields_(signals, ['usage', 'cr'])    };
   }
 
-  // D2. Need promotion — 3/3 all-time signals but declining or stale
-  if ((trend === 'declining' || trend === 'stale') && !isLowActivity && !isNoActivity && !isNewContent) {
+  // D2. Increase visibility — 3/3 all-time signals but declining or stale
+  if ((signals.trend === 'declining' || signals.trend === 'stale') && !isLowActivity && !isNoActivity && !isNewContent) {
     if (signals.count === 3) {
       return {
-        action: 'Need promotion',
-        reason: 'All signals above baseline but trend ' + trend + ' (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
-      };
+        action: 'Increase visibility',
+        reason: 'Good content, low visibility — needs distribution. ' + formatSignalFields_(signals, ['usage', 'cr', 'mt', 'trend'])      };
     }
   }
 
-  // E. Retire
+  // E. Consider retirement
   if (isLowActivity && !hasHighCR && !hasHighMT && !isNiche) {
     return {
-      action: 'Retire',
-      reason: 'No signals above baseline, no recent recovery (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
-    };
+      action: 'Consider retirement',
+      reason: 'This demo is flagged for retirement — consider updating it or confirming retirement. ' + formatSignalFields_(signals, ['activeMonth', 'usage', 'mt'])    };
   }
 
-  if (isNoActivity && contentAge && contentAge.available && contentAge.months > 3 &&
+  if (isNoActivity && signals.contentAge && signals.contentAge.available &&
+      signals.contentAge.level !== 'NEW' &&
       signals.mt.level === 'NONE') {
     return {
-      action: 'Retire',
-      reason: 'No activity after ' + contentAge.months + ' months, no MT value (Maturity ' + signals.maturity.level + ', MT NONE)' + missingPageMappingNote
-    };
+      action: 'Consider retirement',
+      reason: 'This demo is flagged for retirement — consider updating it or confirming retirement. ' + formatSignalFields_(signals, ['activeMonth', 'contentAge', 'mt'])    };
   }
 
   if (isStalled &&
       signals.usage.level === 'BELOW' &&
       signals.mt.level !== 'HIGH' && signals.mt.level !== 'BASE') {
     return {
-      action: 'Retire',
-      reason: 'Stalled content with limited activity (Maturity ' + signals.maturity.level + ' ' + signals.maturity.months + ' mo., Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
-    };
+      action: 'Consider retirement',
+      reason: 'This demo is flagged for retirement — consider updating it or confirming retirement. ' + formatSignalFields_(signals, ['activeMonth', 'usage', 'mt'])    };
   }
 
-  // F. Needs human review
-  if (isNoActivity && contentAge && !contentAge.available) {
+  // F. Needs review
+  if (isNoActivity && signals.contentAge && !signals.contentAge.available) {
     return {
-      action: 'Needs human review',
-      reason: 'Content age cannot be calculated because both the received and published timestamps are missing.' + missingPageMappingNote
-    };
+      action: 'Needs review',
+      reason: 'System can\'t classify — needs manual review. ' + formatSignalFields_(signals, ['usage', 'contentAge'])    };
   }
 
-  // G. Keep
-  if (isNoActivity && contentAge && contentAge.available && contentAge.months <= 3 &&
+  // G. No action needed
+  if (isNoActivity && signals.contentAge && signals.contentAge.level === 'NEW' &&
       signals.mt.level === 'NONE') {
     return {
-      action: 'Keep',
-      reason: 'New content, too early to evaluate (Maturity ' + signals.maturity.level + ', ' + contentAge.months + ' months, trend ' + trend + ')' + missingPageMappingNote
-    };
+      action: 'No action needed',
+      reason: 'No action needed. ' + formatSignalFields_(signals, ['usage', 'cr', 'mt'])    };
   }
 
   if (signals.usage.level === 'BASE' && !signals.hasPage) {
     return {
-      action: 'Keep',
-      reason: 'Baseline traffic but no page yet (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm)' + missingPageMappingNote
-    };
+      action: 'No action needed',
+      reason: 'No action needed. ' + formatSignalFields_(signals, ['usage', 'cr', 'mt'])    };
+  }
+
+  if (signals.count === 0 && signals.recovery.active) {
+    return {
+      action: 'No action needed',
+      reason: 'No action needed. ' + formatSignalFields_(signals, ['usage', 'cr', 'mt'])    };
   }
 
   return {
-    action: 'Keep',
-    reason: 'Current signals do not indicate a lifecycle change (Usage ' + signals.usage.level + ' ' + Math.round(signals.usage.value) + 'ppm, CR ' + signals.cr.level + ' ' + signals.cr.value + '%, MT ' + signals.mt.level + ' ' + formatCompact_(signals.mt.value) + ' ' + signals.mt.source + ')' + missingPageMappingNote
-  };
+    action: 'No action needed',
+    reason: 'No action needed. ' + formatSignalFields_(signals, ['usage', 'cr', 'mt'])  };
 }
 
 /* =========================
@@ -596,33 +643,33 @@ function computePerformanceTrend_(metrics, referenceDate) {
 
   if (hasL90Data) {
     if (allTimeRate === 0) return 'unknown';
-    if (l90Rate >= allTimeRate * PERF_THRESHOLDS.GROWING_RATIO) return 'growing';
+    if (l90Rate >= allTimeRate * PERF_THRESHOLDS.GROWING_RATIO &&
+        l90Rate >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH * 0.5) return 'growing';
     if (l90Rate >= allTimeRate * 0.5) return 'stable';
     return 'declining';
   }
 
   if (allTimeRate > 0 && metrics.lastActivityMonth) {
     if (!isWithinLatestNMonths_(metrics.lastActivityMonth, 6, referenceDate)) return 'stale';
-    if (!isWithinLatestNMonths_(metrics.lastActivityMonth, 3, referenceDate)) return 'declining';
-    return 'stable';
+    return 'declining';
   }
 
   return 'unknown';
 }
 
-function computePerformancePriority_(signals, action, contentAge, trend) {
-  if (signals.maturity.level === 'NEW') return 'Low';
-  if (action === 'Keep') return 'Low';
+function computePerformancePriority_(signals, action) {
+  if (signals.activeMonth.level === 'NEW') return 'Low';
+  if (action === 'No action needed') return 'Low';
 
   var hasMeaningfulAllTime = signals.count >= 1;
 
   if (signals.highCount >= 2) return 'High';
-  if ((trend === 'declining' || trend === 'stale') && hasMeaningfulAllTime) return 'High';
+  if ((signals.trend === 'declining' || signals.trend === 'stale') && hasMeaningfulAllTime) return 'High';
 
   if (signals.highCount === 1) return 'Medium';
-  if (trend === 'declining' || trend === 'stale') return 'Medium';
+  if (signals.trend === 'declining' || signals.trend === 'stale') return 'Medium';
 
-  if (contentAge && contentAge.available && contentAge.months > 12) return 'Medium';
+  if (signals.contentAge && signals.contentAge.level === 'MATURE') return 'Medium';
 
   return 'Low';
 }
@@ -634,56 +681,22 @@ function formatCompact_(n) {
 }
 
 
-function computePerformanceScore_(metrics, trend, signals) {
+function computePerformanceScore_(signals) {
   if (!signals.hasAnyActivity) return 0;
 
   var score = 0;
 
-  // Component 1: L90 current performance (0-60)
-  var hasL90Data = metrics.l90Players > 0 || metrics.l90Completions > 0 ||
-                   metrics.l90MtOpp > 0 || metrics.l90MtWon > 0;
+  score += signals.count * 20;
+  score += signals.highCount * 5;
 
-  var l90Ppm = metrics.l90Players / 3;
-  if (l90Ppm >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) score += 25;
+  if (signals.trend === 'growing') score += 15;
+  else if (signals.trend === 'stable') score += 10;
+  else if (signals.trend === 'declining') score += 5;
 
-  var l90Cr = metrics.l90Players > 0 ? metrics.l90Completions / metrics.l90Players : 0;
-  if (l90Cr >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE && metrics.l90Completions >= 5) score += 15;
-
-  if (metrics.l90MtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP / 4 ||
-      metrics.l90MtWon >= PERF_THRESHOLDS.BASELINE_MT_WON / 4) score += 20;
-
-  // Component 2: All-time performance (0-20)
-  if (metrics.playersPerMonth >= PERF_THRESHOLDS.BASELINE_PLAYERS_PER_MONTH) score += 4;
-  if (metrics.completionRate >= PERF_THRESHOLDS.BASELINE_COMPLETION_RATE &&
-      metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) score += 4;
-  if (metrics.mtOpp >= PERF_THRESHOLDS.BASELINE_MT_OPP ||
-      metrics.mtWon >= PERF_THRESHOLDS.BASELINE_MT_WON) score += 4;
-  if (metrics.playersPerMonth >= PERF_THRESHOLDS.HIGH_PLAYERS_PER_MONTH &&
-      metrics.totalPlayers >= PERF_THRESHOLDS.MIN_PLAYERS_FOR_RATE) score += 3;
-  if (metrics.completionRate >= PERF_THRESHOLDS.HIGH_COMPLETION_RATE &&
-      metrics.completions >= PERF_THRESHOLDS.BASELINE_COMPLETIONS) score += 3;
-  if (metrics.mtOpp >= PERF_THRESHOLDS.HIGH_MT_OPP ||
-      metrics.mtWon >= PERF_THRESHOLDS.HIGH_MT_WON) score += 2;
-
-  // Component 3: L90 trend health (0-10)
-  if (hasL90Data && metrics.playersPerMonth > 0) {
-    var l90Rate = metrics.l90Players / 3;
-    var ratio = l90Rate / metrics.playersPerMonth;
-    score += ratio >= 0.5 ? 10 : Math.round(ratio * 20);
-  } else if (!hasL90Data && metrics.activeMonths >= PERF_THRESHOLDS.MIN_ACTIVE_MONTHS) {
-    score += 0;
-  } else {
-    score += 5;
-  }
-
-  // Component 4: Maturity (0-10)
-  if (metrics.activeMonths >= 12) {
-    score += 10;
-  } else if (metrics.activeMonths >= PERF_THRESHOLDS.MIN_ACTIVE_MONTHS) {
-    score += Math.round((metrics.activeMonths / 12) * 10);
-  } else if (metrics.activeMonths >= 1) {
-    score += 3;
-  }
+  var mat = signals.activeMonth.level;
+  if (mat === 'ESTABLISHED') score += 10;
+  else if (mat === 'NEW') score += 5;
+  else if (mat === 'STALLED') score += 3;
 
   return Math.min(100, score);
 }
@@ -772,11 +785,11 @@ function hasMinimumRequiredMetrics_(row, headerMap) {
 }
 
 function makeSkipResult_(reason) {
-  return { outcome: 'skipped', signals: '', flags: '', action: '', reason: '', priority: '', score: '', tier: '', trend: '', result: 'Skipped — ' + reason };
+  return { outcome: 'skipped', signals: '', flags: '', action: '', reason: '', priority: '', score: '', tier: '', trend: '', contentAgeMonths: null, result: 'Skipped — ' + reason };
 }
 
 function makeReviewResult_(reason) {
-  return { outcome: 'needs_review', signals: '', flags: '', action: 'Needs human review', reason: reason, priority: '', score: '', tier: '', trend: '', result: 'Needs human review — ' + reason };
+  return { outcome: 'needs_review', signals: '', flags: '', action: 'Needs review', reason: reason, priority: '', score: '', tier: '', trend: '', contentAgeMonths: null, result: 'Needs review — ' + reason };
 }
 
 function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
@@ -831,27 +844,49 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
   var signals = computePerformanceSignals_(metrics, referenceDate);
 
   var contentAge = computeContentAge_(row, headerMap, referenceDate);
+  signals.contentAge = {
+    months: contentAge.available ? contentAge.months : null,
+    available: contentAge.available,
+    level: contentAge.available
+      ? (contentAge.months > PERF_THRESHOLDS.CONTENT_AGE_MATURE ? 'MATURE'
+         : contentAge.months > PERF_THRESHOLDS.CONTENT_AGE_NEW ? 'RECENT' : 'NEW')
+      : 'UNKNOWN'
+  };
+
   var trend = computePerformanceTrend_(metrics, referenceDate);
-  var actionResult = computePerformanceAction_(signals, contentAge, trend);
-  var priority = computePerformancePriority_(signals, actionResult.action, contentAge, trend);
-  var score = computePerformanceScore_(metrics, trend, signals);
+  signals.trend = trend;
+
+  var actionResult = computePerformanceAction_(signals);
+  var priority = computePerformancePriority_(signals, actionResult.action);
+  var score = computePerformanceScore_(signals);
   var tier = computePerformanceTier_(score);
 
-  if (contentAge && contentAge.available && contentAge.months >= 6 &&
-      metrics.activeMonths > 0 && metrics.activeMonths / contentAge.months < 0.5) {
+  if (tier === 'Low' && priority === 'High') priority = 'Medium';
+
+  if (signals.contentAge.available && signals.contentAge.months >= 6 &&
+      metrics.activeMonths > 0 && metrics.activeMonths / signals.contentAge.months < 0.5) {
     flags.push('Sporadic activity');
+  }
+
+  var signalsStr = buildSignalsString_(signals);
+  if (trend === 'growing' || trend === 'stable' || trend === 'declining') {
+    var allTimeRate = Math.round(metrics.playersPerMonth);
+    var l90Rate = Math.round(metrics.l90Players / 3);
+    var ratio = metrics.playersPerMonth > 0 ? Math.round((metrics.l90Players / 3 / metrics.playersPerMonth) * 100) : 0;
+    signalsStr += ' | L90 trend: ' + ratio + '% (' + trend + ' ' + allTimeRate + '→' + l90Rate + 'ppm)';
   }
 
   return {
     outcome: 'processed',
-    signals: buildSignalsString_(signals),
+    signals: signalsStr,
     flags: flags.join(', '),
     action: actionResult.action,
     reason: actionResult.reason,
     priority: priority,
     score: score,
     tier: tier,
-    trend: trend,
+    trend: trend.charAt(0).toUpperCase() + trend.slice(1),
+    contentAgeMonths: signals.contentAge.available ? signals.contentAge.months : null,
     result: 'Processed'
   };
 }
@@ -899,6 +934,11 @@ function runPerformanceLabels() {
   var outTrend = [];
   var outAge = [];
   var outResult = [];
+  var outAssigned = [];
+  var outActionStatus = [];
+
+  var currentActionStatusValues = sheet.getRange(startRow, cols.actionStatusCol, dataRows, 1).getValues();
+  var currentCompletedDateValues = sheet.getRange(startRow, cols.actionCompletedDateCol, dataRows, 1).getValues();
 
   for (var i = 0; i < allData.length; i++) {
     var row = allData[i];
@@ -919,8 +959,6 @@ function runPerformanceLabels() {
         }
       }
 
-      var contentAge = computeContentAge_(row, headerMap, referenceDate);
-
       outSignals.push([c.signals]);
       outFlags.push([c.flags]);
       outAction.push([c.action]);
@@ -929,8 +967,42 @@ function runPerformanceLabels() {
       outScore.push([c.score !== '' ? c.score : '']);
       outTier.push([c.tier || '']);
       outTrend.push([c.trend || '']);
-      outAge.push([contentAge.available ? contentAge.months : '']);
+      outAge.push([c.contentAgeMonths != null ? c.contentAgeMonths : '']);
       outResult.push([c.result]);
+
+      var assigned = '';
+      var actionStatus = '';
+      var currentStatus = String(currentActionStatusValues[i][0] || '').trim();
+
+      if (c.action && c.action !== 'No action needed') {
+        if (CREATOR_ACTIONS_.indexOf(c.action) !== -1) {
+          assigned = String(safeGetByName(row, headerMap, ENHANCED_CONFIG.COLUMNS.CREATOR_NAME) || '').trim() || 'Creator';
+        } else if (ADMIN_ACTIONS_.indexOf(c.action) !== -1) {
+          assigned = 'Admin';
+        }
+
+        if (currentStatus === 'Pending Review' || currentStatus === 'Resubmit') {
+          actionStatus = currentStatus;
+        } else if (currentStatus === 'Completed') {
+          var completedDate = currentCompletedDateValues[i][0];
+          if (completedDate) {
+            var parsed = parseDate_(completedDate);
+            var sixMonthsAgo = new Date();
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+            actionStatus = (parsed && parsed > sixMonthsAgo) ? 'Completed' : 'Open';
+          } else {
+            actionStatus = 'Open';
+          }
+        } else if (assigned) {
+          actionStatus = 'Open';
+        }
+      } else {
+        if (currentStatus === 'Pending Review' || currentStatus === 'Resubmit') {
+          actionStatus = currentStatus;
+        }
+      }
+      outAssigned.push([assigned]);
+      outActionStatus.push([actionStatus]);
 
       if (c.outcome === 'processed') {
         counts.processed++;
@@ -957,7 +1029,7 @@ function runPerformanceLabels() {
         }
       } else if (c.outcome === 'needs_review') {
         counts.needsReview++;
-        var reviewReason = c.result.replace('Needs human review — ', '');
+        var reviewReason = c.result.replace('Needs review — ', '');
         reviewReasons[reviewReason] = (reviewReasons[reviewReason] || 0) + 1;
         needsReviewDetails.push(rowLabel + ' — ' + c.result);
         if (c.action) {
@@ -984,6 +1056,8 @@ function runPerformanceLabels() {
       outTrend.push(['']);
       outAge.push(['']);
       outResult.push(['Error — ' + String(e.message || e).substring(0, 100)]);
+      outAssigned.push(['']);
+      outActionStatus.push(['']);
       Logger.log('ERROR: ' + rowLabel + ' — ' + (e.message || e));
       counts.errors++;
     }
@@ -1003,13 +1077,15 @@ function runPerformanceLabels() {
   ageRange.setNumberFormat('0');
   ageRange.setValues(outAge);
   sheet.getRange(startRow, cols.resultCol, dataRows, 1).setValues(outResult);
+  sheet.getRange(startRow, cols.assignedCol, dataRows, 1).setValues(outAssigned);
+  sheet.getRange(startRow, cols.actionStatusCol, dataRows, 1).setValues(outActionStatus);
 
   Logger.log('');
   Logger.log('=== Audit Summary ===');
   Logger.log('Total source rows: ' + counts.total);
   Logger.log('Processed: ' + counts.processed);
   Logger.log('Skipped: ' + counts.skipped);
-  Logger.log('Needs human review (processing): ' + counts.needsReview);
+  Logger.log('Needs review (processing): ' + counts.needsReview);
   Logger.log('Errors: ' + counts.errors);
 
   Logger.log('');
@@ -1066,7 +1142,7 @@ function runPerformanceLabels() {
 
   if (needsReviewDetails.length > 0) {
     Logger.log('');
-    Logger.log('Needs human review rows:');
+    Logger.log('Needs review rows:');
     for (var nr = 0; nr < needsReviewDetails.length; nr++) {
       Logger.log('  ' + needsReviewDetails[nr]);
     }
@@ -1121,7 +1197,7 @@ function runPerformanceLabels() {
         validationErrors++;
       }
       if (!vTrend) {
-        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Processed but missing Performance Trend');
+        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Processed but missing Performance L90 Trend');
         validationErrors++;
       }
     } else if (vResult.indexOf('Skipped') === 0) {
@@ -1129,17 +1205,17 @@ function runPerformanceLabels() {
         Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Skipped but has stale labels');
         validationErrors++;
       }
-    } else if (vResult.indexOf('Needs human review') === 0) {
-      if (vAction !== 'Needs human review') {
-        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs human review but Action="' + vAction + '"');
+    } else if (vResult.indexOf('Needs review') === 0) {
+      if (vAction !== 'Needs review') {
+        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs review but Action="' + vAction + '"');
         validationErrors++;
       }
       if (!vReason) {
-        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs human review but missing reason');
+        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs review but missing reason');
         validationErrors++;
       }
       if (vSignals || vFlags || vScore !== '' || vTier || vTrend) {
-        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs human review but has stale labels');
+        Logger.log('VALIDATION FAIL: Row ' + vRowIndex + ' — Needs review but has stale labels');
         validationErrors++;
       }
     } else if (vResult.indexOf('Error') === 0) {
@@ -1175,7 +1251,153 @@ function clearPerformanceLabels() {
   sheet.getRange(startRow, cols.trendCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.ageCol, dataRows, 1).clearContent();
   sheet.getRange(startRow, cols.resultCol, dataRows, 1).clearContent();
-  Logger.log('Cleared: Performance Signals, Performance Flags, Recommended action, Recommended action reason, Performance Priority, Performance Score, Performance Tier, Performance Trend, Age, Processing Result.');
+  sheet.getRange(startRow, cols.assignedCol, dataRows, 1).clearContent();
+  sheet.getRange(startRow, cols.actionStatusCol, dataRows, 1).clearContent();
+  sheet.getRange(startRow, cols.responseCol, dataRows, 1).clearContent();
+  Logger.log('Cleared: Performance Signals, Performance Flags, Recommended action, Recommended action reason, Action Priority, Performance Score, Performance Tier, Performance L90 Trend, Content Age, Processing Result, Assigned, Action Status, Response.');
+}
+
+/* =========================
+   RESPONSE QUEUE — BATCH APPLY
+========================= */
+
+function applyApprovedResponses() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet() ||
+           SpreadsheetApp.openById(getConfigProperty('MASTER_SHEET_ID'));
+  var queueSheet = ss.getSheetByName('Response_Queue');
+  if (!queueSheet) {
+    Logger.log('No Response_Queue sheet found.');
+    return;
+  }
+
+  var queueLastRow = queueSheet.getLastRow();
+  if (queueLastRow <= 1) {
+    Logger.log('Response_Queue is empty.');
+    return;
+  }
+
+  var queueHeaders = queueSheet.getRange(1, 1, 1, queueSheet.getLastColumn()).getValues()[0]
+    .map(function(h) { return String(h || '').trim(); });
+  var queueData = queueSheet.getRange(2, 1, queueLastRow - 1, queueHeaders.length).getValues();
+
+  var qCol = function(name) { return queueHeaders.indexOf(name); };
+  var approvalIdx = qCol('Approval');
+  var processedIdx = qCol('Processed');
+  var numberIdx = qCol('Number');
+  var responseIdx = qCol('Response');
+  var newLinkIdx = qCol('New Link');
+  var notesIdx = qCol('Notes');
+  var metaChangesIdx = qCol('Metadata Changes');
+
+  if (approvalIdx === -1 || processedIdx === -1 || numberIdx === -1) {
+    Logger.log('Response_Queue missing required columns.');
+    return;
+  }
+
+  var toApply = [];
+  for (var i = 0; i < queueData.length; i++) {
+    var approval = String(queueData[i][approvalIdx] || '').trim();
+    var processed = String(queueData[i][processedIdx] || '').trim();
+    if (approval === 'Approved' && !processed) {
+      toApply.push({ queueRow: i + 2, data: queueData[i] });
+    }
+  }
+
+  if (toApply.length === 0) {
+    Logger.log('No approved unprocessed responses.');
+    return;
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    var masterSheet = getMasterSheet();
+    var headerMap = getHeaderMapFromSheet(masterSheet, ENHANCED_CONFIG.SHEETS.HEADER_ROW);
+    var masterLastRow = masterSheet.getLastRow();
+    var startRow = ENHANCED_CONFIG.SHEETS.HEADER_ROW + 1;
+    var masterData = masterSheet.getRange(startRow, 1, masterLastRow - ENHANCED_CONFIG.SHEETS.HEADER_ROW, masterSheet.getLastColumn()).getValues();
+
+    var numberColIdx = headerMap[ENHANCED_CONFIG.COLUMNS.NUMBER];
+    var numberToRowIdx = {};
+    for (var j = 0; j < masterData.length; j++) {
+      var num = String(masterData[j][numberColIdx] || '').trim();
+      if (num) numberToRowIdx[num] = j;
+    }
+
+    var actionStatusColIdx = headerMap[PERF_LABEL_COLUMNS.ACTION_STATUS];
+    var responseColIdx = headerMap[PERF_LABEL_COLUMNS.RESPONSE];
+    var creationLinkColIdx = headerMap[ENHANCED_CONFIG.COLUMNS.CREATION_LINK];
+
+    var applied = 0;
+    var skipped = 0;
+
+    for (var k = 0; k < toApply.length; k++) {
+      var entry = toApply[k];
+      var number = String(entry.data[numberIdx] || '').trim();
+      var masterIdx = numberToRowIdx[number];
+
+      if (masterIdx === undefined) {
+        Logger.log('SKIP: Number "' + number + '" not found on Request_Master (queue row ' + entry.queueRow + ')');
+        skipped++;
+        continue;
+      }
+
+      var masterRow = startRow + masterIdx;
+
+      var creatorResponse = String(entry.data[responseIdx] || '').trim();
+      if (creatorResponse && actionStatusColIdx != null) {
+        masterSheet.getRange(masterRow, actionStatusColIdx + 1).setValue('Completed');
+      }
+
+      var notes = String(entry.data[notesIdx] || '').trim();
+      if (responseColIdx != null) {
+        var parts = [];
+        if (creatorResponse) parts.push(creatorResponse);
+        if (notes) parts.push(notes);
+        if (parts.length > 0) {
+          masterSheet.getRange(masterRow, responseColIdx + 1).setValue(parts.join(' | '));
+        }
+      }
+
+      var newLink = String(entry.data[newLinkIdx] || '').trim();
+      if (newLink && creationLinkColIdx != null) {
+        masterSheet.getRange(masterRow, creationLinkColIdx + 1).setValue(newLink);
+      }
+
+      var metaJson = String(entry.data[metaChangesIdx] || '').trim();
+      if (metaJson) {
+        try {
+          var changes = JSON.parse(metaJson);
+          var changedFields = Object.keys(changes);
+          for (var m = 0; m < changedFields.length; m++) {
+            var fieldName = changedFields[m];
+            var colIdx = headerMap[fieldName];
+            if (colIdx != null) {
+              masterSheet.getRange(masterRow, colIdx + 1).setValue(changes[fieldName]);
+            } else {
+              Logger.log('WARNING: Metadata field "' + fieldName + '" not found in headers');
+            }
+          }
+        } catch (e) {
+          Logger.log('WARNING: Failed to parse metadata changes for #' + number + ': ' + e.message);
+        }
+      }
+
+      queueSheet.getRange(entry.queueRow, processedIdx + 1).setValue(new Date().toISOString());
+
+      Logger.log('APPLIED: #' + number + ' — Response: ' + creatorResponse +
+        (newLink ? ', New link' : '') + (metaJson ? ', Metadata changes' : ''));
+      applied++;
+    }
+
+    Logger.log('=== Apply Summary ===');
+    Logger.log('Approved rows found: ' + toApply.length);
+    Logger.log('Applied: ' + applied);
+    Logger.log('Skipped: ' + skipped);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* =========================
@@ -1249,15 +1471,15 @@ function testPerformanceRules() {
 
   assertFlags('Flag: High usage (no page, low MT → no Low opp value)',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
-    ['High usage', 'Low engagement']);
+    ['High usage', 'Low completion']);
 
   assertFlags('Flag: High engagement (new content → no Low opp value)',
     computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 40, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
     ['High engagement']);
 
-  assertFlags('Flag: Low engagement',
+  assertFlags('Flag: Low completion',
     computePerformanceFlags_({ activeMonths: 2, totalPlayers: 30, playersPerMonth: 10, completions: 5, completionRate: 0.15, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
-    ['Low engagement']);
+    ['Low completion']);
 
   assertFlags('Flag: High biz impact (opp, valid mapping)',
     computePerformanceFlags_({ activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
@@ -1273,15 +1495,15 @@ function testPerformanceRules() {
 
   assertFlags('Flag: High-value niche ignores mapping status',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 50, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: false }),
-    ['High-value niche', 'Low engagement']);
+    ['High-value niche', 'Low completion']);
 
   assertFlags('Flag: Missing page mapping blocks Low opportunity value',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: false }),
-    ['High usage', 'Low engagement']);
+    ['High usage', 'Low completion']);
 
   assertFlags('Flag: High-value niche',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 50, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
-    ['High-value niche', 'Low engagement']);
+    ['High-value niche', 'Low completion']);
 
   assertFlags('Flag: None (low players)',
     computePerformanceFlags_({ activeMonths: 2, totalPlayers: 10, playersPerMonth: 5, completions: 3, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
@@ -1291,11 +1513,11 @@ function testPerformanceRules() {
 
   assertFlags('Flag: Low opp value (mature + High usage + page + valid mapping)',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
-    ['High usage', 'Low engagement', 'Low opportunity value']);
+    ['High usage', 'Low completion', 'Low opportunity value']);
 
   assertFlags('Flag: No Low opp value (no page)',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: false, mtMappingValid: true }),
-    ['High usage', 'Low engagement']);
+    ['High usage', 'Low completion']);
 
   assertFlags('Flag: No Low opp value (High engagement + below baseline usage)',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 30, playersPerMonth: 6, completions: 40, completionRate: 0.55, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
@@ -1307,7 +1529,7 @@ function testPerformanceRules() {
 
   assertFlags('Flag: No Low opp value (New content)',
     computePerformanceFlags_({ activeMonths: 2, totalPlayers: 150, playersPerMonth: 75, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
-    ['High usage', 'Low engagement']);
+    ['High usage', 'Low completion']);
 
   assertFlags('Flag: No Low opp value (no High usage/engagement)',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 20, playersPerMonth: 4, completions: 2, completionRate: 0.10, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
@@ -1315,15 +1537,15 @@ function testPerformanceRules() {
 
   assertFlags('Flag: No Low opp value (MT opp = $50K)',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 50000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
-    ['High usage', 'Low engagement']);
+    ['High usage', 'Low completion']);
 
   assertFlags('Flag: Low opp value coexists with High business impact (MT won >= $25K)',
     computePerformanceFlags_({ activeMonths: 5, totalPlayers: 150, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 30000, hasContentSpecificPage: true, mtMappingValid: true }),
-    ['High usage', 'Low engagement', 'High business impact', 'Low opportunity value']);
+    ['High usage', 'Low completion', 'High business impact', 'Low opportunity value']);
 
   assertFlags('Flag: Low opp value requires Active Months >= 4',
     computePerformanceFlags_({ activeMonths: 3, totalPlayers: 150, playersPerMonth: 50, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: true, mtMappingValid: true }),
-    ['High usage', 'Low engagement']);
+    ['High usage', 'Low completion']);
 
   // --- Threshold tests ---
 
@@ -1345,13 +1567,13 @@ function testPerformanceRules() {
   assert('Signals: usage HIGH when ppm >= 25', sig1.usage.level, 'HIGH');
   assert('Signals: usage value is ppm', sig1.usage.value, 30);
   assert('Signals: usage threshold is high threshold', sig1.usage.threshold, PERF_THRESHOLDS.HIGH_PLAYERS_PER_MONTH);
-  assert('Signals: cr HIGH when rate >= 50% + completions >= 25', sig1.cr.level, 'HIGH');
+  assert('Signals: cr HIGH when rate >= 50%', sig1.cr.level, 'HIGH');
   assert('Signals: mt HIGH when opp >= $100K', sig1.mt.level, 'HIGH');
   assert('Signals: mt source is opp', sig1.mt.source, 'opp');
   assert('Signals: hasPage true', sig1.hasPage, true);
   assert('Signals: hasMapping true', sig1.hasMapping, true);
-  assert('Signals: maturity ESTABLISHED when >= 4 months', sig1.maturity.level, 'ESTABLISHED');
-  assert('Signals: maturity months', sig1.maturity.months, 12);
+  assert('Signals: activeMonth ESTABLISHED when >= 4 months', sig1.activeMonth.level, 'ESTABLISHED');
+  assert('Signals: activeMonth months', sig1.activeMonth.months, 12);
   assert('Signals: count 3', sig1.count, 3);
   assert('Signals: highCount 3', sig1.highCount, 3);
   assert('Signals: hasAnyActivity true', sig1.hasAnyActivity, true);
@@ -1368,16 +1590,16 @@ function testPerformanceRules() {
 
   var sigMetrics3 = { activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
   var sig3 = computePerformanceSignals_(sigMetrics3, referenceDate);
-  assert('Signals: maturity INACTIVE when 0 months + 0 players', sig3.maturity.level, 'INACTIVE');
+  assert('Signals: activeMonth INACTIVE when 0 months + 0 players', sig3.activeMonth.level, 'INACTIVE');
   assert('Signals: hasAnyActivity false', sig3.hasAnyActivity, false);
 
   var sigMetrics4 = { activeMonths: 2, totalPlayers: 50, playersPerMonth: 25, completions: 40, completionRate: 0.50, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, firstActivityMonth: recentDate, lastActivityMonth: referenceDate, l90Players: 50, l90Completions: 20, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
   var sig4 = computePerformanceSignals_(sigMetrics4, referenceDate);
-  assert('Signals: maturity NEW when 1-3 months + recent', sig4.maturity.level, 'NEW');
+  assert('Signals: activeMonth NEW when 1-3 months + recent', sig4.activeMonth.level, 'NEW');
 
   var sigMetrics5 = { activeMonths: 2, totalPlayers: 20, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: oldDate, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
   var sig5 = computePerformanceSignals_(sigMetrics5, referenceDate);
-  assert('Signals: maturity STALLED when 1-3 months + not recent', sig5.maturity.level, 'STALLED');
+  assert('Signals: activeMonth STALLED when 1-3 months + not recent', sig5.activeMonth.level, 'STALLED');
 
   var sigMetrics6 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.15, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
   var sig6 = computePerformanceSignals_(sigMetrics6, referenceDate);
@@ -1385,17 +1607,24 @@ function testPerformanceRules() {
   assert('Signals: cr LOW when rate < 20%', sig6.cr.level, 'LOW');
   assert('Signals: recovery not active when no L90 data', sig6.recovery.active, false);
 
+  var sigMetrics7 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.55, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, l90Players: 30, l90Completions: 5, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
+  var sig7 = computePerformanceSignals_(sigMetrics7, referenceDate);
+  assert('Signals: cr HIGH with < 25 completions when rate >= 50%', sig7.cr.level, 'HIGH');
+
+  var sigMetrics8 = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 10, completionRate: 0.45, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, l90Players: 30, l90Completions: 5, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
+  var sig8 = computePerformanceSignals_(sigMetrics8, referenceDate);
+  assert('Signals: cr BASE with < 25 completions when rate >= 40%', sig8.cr.level, 'BASE');
+
   Logger.log('--- Signals String ---');
 
   var sigStr1 = buildSignalsString_(sig1);
-  assert('SignalsStr: contains Usage HIGH', sigStr1.indexOf('Usage: HIGH') !== -1, true);
-  assert('SignalsStr: contains 30ppm', sigStr1.indexOf('30ppm') !== -1, true);
+  assert('SignalsStr: contains Usage 30ppm', sigStr1.indexOf('Usage: 30ppm') !== -1, true);
   assert('SignalsStr: contains high 25', sigStr1.indexOf('high 25') !== -1, true);
-  assert('SignalsStr: contains CR HIGH', sigStr1.indexOf('CR: HIGH') !== -1, true);
-  assert('SignalsStr: contains MT HIGH', sigStr1.indexOf('MT: HIGH') !== -1, true);
+  assert('SignalsStr: contains CR value', sigStr1.indexOf('CR: 55%') !== -1, true);
+  assert('SignalsStr: contains MT value', sigStr1.indexOf('MT: $') !== -1, true);
   assert('SignalsStr: contains has page', sigStr1.indexOf('has page') !== -1, true);
   assert('SignalsStr: contains has mapping', sigStr1.indexOf('has mapping') !== -1, true);
-  assert('SignalsStr: contains Maturity ESTABLISHED', sigStr1.indexOf('Maturity: ESTABLISHED') !== -1, true);
+  assert('SignalsStr: contains ActiveMonth months', sigStr1.indexOf('ActiveMonth: 12 mo.') !== -1, true);
   assert('SignalsStr: no recovery line when count > 0', sigStr1.indexOf('recovery') === -1 && sigStr1.indexOf('Recovery') === -1, true);
 
   var sigStr2 = buildSignalsString_(sig2);
@@ -1407,155 +1636,178 @@ function testPerformanceRules() {
 
   // --- Recommended action tests ---
 
-  function testSignals_(overrides) {
+  function testSignals_(overrides, opts) {
     var base = { activeMonths: 6, totalPlayers: 60, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, mtMappingValid: true };
     for (var k in overrides) base[k] = overrides[k];
-    return computePerformanceSignals_(base, referenceDate);
+    var sig = computePerformanceSignals_(base, referenceDate);
+    sig.trend = (opts && opts.trend) || 'unknown';
+    if (opts && opts.contentAge) {
+      var ca = opts.contentAge;
+      sig.contentAge = {
+        months: ca.available ? ca.months : null,
+        available: ca.available,
+        level: ca.available
+          ? (ca.months > PERF_THRESHOLDS.CONTENT_AGE_MATURE ? 'MATURE'
+             : ca.months > PERF_THRESHOLDS.CONTENT_AGE_NEW ? 'RECENT' : 'NEW')
+          : 'UNKNOWN'
+      };
+    } else {
+      sig.contentAge = { months: null, available: false, level: 'UNKNOWN' };
+    }
+    return sig;
   }
 
   var noActCA = { months: 5, available: true };
   var noActCAShort = { months: 2, available: true };
   var noActCAUnavail = { months: null, available: false };
 
-  // A. Verify data mapping / Improve low MT value
-  var arSig1 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 50000, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null });
-  var arResult1 = computePerformanceAction_(arSig1, noActCA, 'unknown');
-  assert('Action: Verify data mapping (no activity + MT)', arResult1.action, 'Verify data mapping');
-  assertHasReason('Reason: Verify data mapping (no activity + MT)', arResult1);
+  // A. Review data linkage / Boost sales impact
+  var arSig1 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 50000, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null }, { contentAge: noActCA });
+  var arResult1 = computePerformanceAction_(arSig1);
+  assert('Action: Review data linkage (no activity + MT)', arResult1.action, 'Review data linkage');
+  assertHasReason('Reason: Review data linkage (no activity + MT)', arResult1);
 
-  var arSig2 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 9000, mtWon: 2000, hasContentSpecificPage: true });
-  var arResult2 = computePerformanceAction_(arSig2, noActCA, 'stable');
-  assert('Action: Improve low MT value (High usage + page + low MT)', arResult2.action, 'Improve low MT value');
+  var arSig2 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 9000, mtWon: 2000, hasContentSpecificPage: true }, { trend: 'stable', contentAge: noActCA });
+  var arResult2 = computePerformanceAction_(arSig2);
+  assert('Action: Boost sales impact (High usage + page + low MT)', arResult2.action, 'Boost sales impact');
 
-  var arSig3 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: false });
-  var arResult3 = computePerformanceAction_(arSig3, null, 'stable');
-  assert('Action: No Improve low MT value (no mapping)', arResult3.action !== 'Improve low MT value', true);
+  var arSig3 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: false }, { trend: 'stable' });
+  var arResult3 = computePerformanceAction_(arSig3);
+  assert('Action: No Boost sales impact (no mapping)', arResult3.action !== 'Boost sales impact', true);
 
-  var arSig4 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 15000, hasContentSpecificPage: true });
-  var arResult4 = computePerformanceAction_(arSig4, null, 'stable');
-  assert('Action: No Improve low MT value (MT won >= $10K)', arResult4.action !== 'Improve low MT value', true);
+  var arSig4 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'stable' });
+  var arResult4 = computePerformanceAction_(arSig4);
+  assert('Action: No Boost sales impact (MT won >= $10K)', arResult4.action !== 'Boost sales impact', true);
 
-  // B. Improve completion rate
-  var rcSig1 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
-  var rcResult1 = computePerformanceAction_(rcSig1, null, 'stable');
-  assert('Action: Improve completion rate (High usage + Low CR)', rcResult1.action, 'Improve completion rate');
-  assertHasReason('Reason: Improve completion rate', rcResult1);
+  // B. Improve completion
+  var rcSig1 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var rcResult1 = computePerformanceAction_(rcSig1);
+  assert('Action: Improve completion (High usage + Low CR)', rcResult1.action, 'Improve completion');
+  assertHasReason('Reason: Improve completion', rcResult1);
 
-  var rcSig2 = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true });
-  var rcResult2 = computePerformanceAction_(rcSig2, null, 'stable');
-  assert('Action: Improve completion rate (BASE usage + page + Low CR)', rcResult2.action, 'Improve completion rate');
+  var rcSig2 = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true }, { trend: 'stable' });
+  var rcResult2 = computePerformanceAction_(rcSig2);
+  assert('Action: Improve completion (BASE usage + page + Low CR)', rcResult2.action, 'Improve completion');
 
-  var rcSig3 = testSignals_({ activeMonths: 2, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, firstActivityMonth: recentDate });
-  var rcResult3 = computePerformanceAction_(rcSig3, null, 'stable');
-  assert('Action: New content skips Improve CR despite High usage + Low CR', rcResult3.action, 'Keep');
+  var rcSig3 = testSignals_({ activeMonths: 2, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, firstActivityMonth: recentDate }, { trend: 'stable' });
+  var rcResult3 = computePerformanceAction_(rcSig3);
+  assert('Action: New content skips Improve completion despite High usage + Low CR', rcResult3.action, 'No action needed');
 
-  // C. Create redhat.com page
-  var cpSig1 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
-  var cpResult1 = computePerformanceAction_(cpSig1, null, 'stable');
-  assert('Action: Create redhat.com page (High usage, no page)', cpResult1.action, 'Create redhat.com page');
-  assertHasReason('Reason: Create redhat.com page', cpResult1);
+  // C. Create page
+  var cpSig1 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var cpResult1 = computePerformanceAction_(cpSig1);
+  assert('Action: Create page (High usage, no page)', cpResult1.action, 'Create page');
+  assertHasReason('Reason: Create page', cpResult1);
 
-  var cpSig2 = testSignals_({ playersPerMonth: 10, completions: 40, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
-  var cpResult2 = computePerformanceAction_(cpSig2, null, 'stable');
-  assert('Action: Create redhat.com page (High CR, no page)', cpResult2.action, 'Create redhat.com page');
+  var cpSig2 = testSignals_({ playersPerMonth: 10, completions: 40, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var cpResult2 = computePerformanceAction_(cpSig2);
+  assert('Action: Create page (High CR, no page)', cpResult2.action, 'Create page');
 
-  var cpSig3 = testSignals_({ playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false });
-  var cpResult3 = computePerformanceAction_(cpSig3, null, 'stable');
-  assert('Action: Create redhat.com page (High MT, no page)', cpResult3.action, 'Create redhat.com page');
+  var cpSig3 = testSignals_({ playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var cpResult3 = computePerformanceAction_(cpSig3);
+  assert('Action: Create page (High MT, no page)', cpResult3.action, 'Create page');
 
-  var cpSig4 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false });
-  var cpResult4 = computePerformanceAction_(cpSig4, null, 'stable');
-  assert('Action: Create redhat.com page (Niche, no page)', cpResult4.action, 'Create redhat.com page');
+  var cpSig4 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var cpResult4 = computePerformanceAction_(cpSig4);
+  assert('Action: Create page (Niche, no page)', cpResult4.action, 'Create page');
 
-  var cpSig5 = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
-  var cpResult5 = computePerformanceAction_(cpSig5, null, 'stable');
-  assert('Action: BASE usage + no page → Keep (not Create page)', cpResult5.action, 'Keep');
+  var cpSig5 = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var cpResult5 = computePerformanceAction_(cpSig5);
+  assert('Action: BASE usage + no page → No action needed (not Create page)', cpResult5.action, 'No action needed');
 
-  // D. Need promotion
-  var npSig1 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true });
-  var npResult1 = computePerformanceAction_(npSig1, null, 'stable');
-  assert('Action: Need promotion (niche, has page)', npResult1.action, 'Need promotion');
-  assertHasReason('Reason: Need promotion', npResult1);
+  // D. Increase visibility
+  var npSig1 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true }, { trend: 'stable' });
+  var npResult1 = computePerformanceAction_(npSig1);
+  assert('Action: Increase visibility (niche, has page)', npResult1.action, 'Increase visibility');
+  assertHasReason('Reason: Increase visibility', npResult1);
 
-  var npSig2 = testSignals_({ playersPerMonth: 10, completions: 30, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
-  var npResult2 = computePerformanceAction_(npSig2, null, 'stable');
-  assert('Action: Need promotion (Low activity + baseline CR)', npResult2.action, 'Need promotion');
+  var npSig2 = testSignals_({ playersPerMonth: 10, completions: 30, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var npResult2 = computePerformanceAction_(npSig2);
+  assert('Action: Increase visibility (Low activity + baseline CR)', npResult2.action, 'Increase visibility');
 
-  // D2. Need promotion — 3/3 all-time signals + declining/stale
-  var d2Sig = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true });
-  var d2Declining = computePerformanceAction_(d2Sig, null, 'declining');
-  assert('Action: 3/3 + declining → Need promotion', d2Declining.action, 'Need promotion');
+  // D2. Increase visibility — 3/3 all-time signals + declining/stale
+  var d2Sig = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'declining' });
+  var d2Declining = computePerformanceAction_(d2Sig);
+  assert('Action: 3/3 + declining → Increase visibility', d2Declining.action, 'Increase visibility');
 
-  var d2Stale = computePerformanceAction_(d2Sig, null, 'stale');
-  assert('Action: 3/3 + stale → Need promotion', d2Stale.action, 'Need promotion');
+  d2Sig.trend = 'stale';
+  var d2Stale = computePerformanceAction_(d2Sig);
+  assert('Action: 3/3 + stale → Increase visibility', d2Stale.action, 'Increase visibility');
 
-  var d2Stable = computePerformanceAction_(d2Sig, null, 'stable');
-  assert('Action: 3/3 + stable → Keep (not Need promotion)', d2Stable.action, 'Keep');
+  d2Sig.trend = 'stable';
+  var d2Stable = computePerformanceAction_(d2Sig);
+  assert('Action: 3/3 + stable → No action needed (not Increase visibility)', d2Stable.action, 'No action needed');
 
-  var d2Growing = computePerformanceAction_(d2Sig, null, 'growing');
-  assert('Action: 3/3 + growing → Keep (not Need promotion)', d2Growing.action, 'Keep');
+  d2Sig.trend = 'growing';
+  var d2Growing = computePerformanceAction_(d2Sig);
+  assert('Action: 3/3 + growing → No action needed (not Increase visibility)', d2Growing.action, 'No action needed');
 
-  var d2Sig2 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.35, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true });
-  var d2Only2Result = computePerformanceAction_(d2Sig2, null, 'declining');
-  assert('Action: 2/3 + declining → NOT Need promotion', d2Only2Result.action !== 'Need promotion', true);
+  var d2Sig2 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.35, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'declining' });
+  var d2Only2Result = computePerformanceAction_(d2Sig2);
+  assert('Action: 2/3 + declining → NOT Increase visibility', d2Only2Result.action !== 'Increase visibility', true);
 
-  var d2SigFixable = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.15, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: false });
-  var d2FixableWins = computePerformanceAction_(d2SigFixable, null, 'declining');
-  assert('Action: 3/3 + declining + High usage + Low CR → Improve CR wins', d2FixableWins.action, 'Improve completion rate');
+  var d2SigFixable = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.15, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: false }, { trend: 'declining' });
+  var d2FixableWins = computePerformanceAction_(d2SigFixable);
+  assert('Action: 3/3 + declining + High usage + Low CR → Improve completion wins', d2FixableWins.action, 'Improve completion');
 
-  // E. Retire
-  var retSig1 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
-  var retResult1 = computePerformanceAction_(retSig1, null, 'stable');
-  assert('Action: Retire (Low activity, no positive signals)', retResult1.action, 'Retire');
-  assertHasReason('Reason: Retire', retResult1);
+  // E. Consider retirement
+  var retSig1 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var retResult1 = computePerformanceAction_(retSig1);
+  assert('Action: Consider retirement (Low activity, no positive signals)', retResult1.action, 'Consider retirement');
+  assertHasReason('Reason: Consider retirement', retResult1);
 
-  var retSig2 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, firstActivityMonth: null, lastActivityMonth: null });
-  var retResult2 = computePerformanceAction_(retSig2, noActCA, 'unknown');
-  assert('Action: Retire (No activity + age >3 + MT=0)', retResult2.action, 'Retire');
+  var retSig2 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: true, firstActivityMonth: null, lastActivityMonth: null }, { contentAge: noActCA });
+  var retResult2 = computePerformanceAction_(retSig2);
+  assert('Action: Consider retirement (No activity + age >3 + MT=0)', retResult2.action, 'Consider retirement');
 
-  var retSig3 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null });
-  var retResult3 = computePerformanceAction_(retSig3, noActCA, 'unknown');
-  assert('Action: Retire (No activity + age >3 + no page + MT=0)', retResult3.action, 'Retire');
+  var retSig3 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null }, { contentAge: noActCA });
+  var retResult3 = computePerformanceAction_(retSig3);
+  assert('Action: Consider retirement (No activity + age >3 + no page + MT=0)', retResult3.action, 'Consider retirement');
 
-  // F. Needs human review
-  var nhrSig = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null });
-  var nhrResult2 = computePerformanceAction_(nhrSig, noActCAUnavail, 'unknown');
-  assert('Action: Needs human review (age unavailable)', nhrResult2.action, 'Needs human review');
-  assert('Reason: age unavailable mentions timestamps', nhrResult2.reason.indexOf('timestamps') !== -1, true);
+  // F. Needs review
+  var nhrSig = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null }, { contentAge: noActCAUnavail });
+  var nhrResult2 = computePerformanceAction_(nhrSig);
+  assert('Action: Needs review (age unavailable)', nhrResult2.action, 'Needs review');
+  assert('Reason: age unavailable mentions manual review', nhrResult2.reason.indexOf('manual review') !== -1, true);
 
-  // G. Keep
-  var keepSig1 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true });
-  var keepResult1 = computePerformanceAction_(keepSig1, null, 'stable');
-  assert('Action: Keep (strong signals)', keepResult1.action, 'Keep');
-  assertHasReason('Reason: Keep', keepResult1);
+  // G. No action needed
+  var keepSig1 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'stable' });
+  var keepResult1 = computePerformanceAction_(keepSig1);
+  assert('Action: No action needed (strong signals)', keepResult1.action, 'No action needed');
+  assertHasReason('Reason: No action needed', keepResult1);
 
-  var keepSig2 = testSignals_({ activeMonths: 2, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: recentDate });
-  var keepResult2 = computePerformanceAction_(keepSig2, null, 'stable');
-  assert('Action: Keep (New content)', keepResult2.action, 'Keep');
+  var keepSig2 = testSignals_({ activeMonths: 2, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: recentDate }, { trend: 'stable' });
+  var keepResult2 = computePerformanceAction_(keepSig2);
+  assert('Action: No action needed (New content)', keepResult2.action, 'No action needed');
 
-  var keepSig3 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null });
-  var keepResult3 = computePerformanceAction_(keepSig3, noActCAShort, 'unknown');
-  assert('Action: Keep (No activity + age <=3 + MT=0)', keepResult3.action, 'Keep');
+  var keepSig3 = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null }, { contentAge: noActCAShort });
+  var keepResult3 = computePerformanceAction_(keepSig3);
+  assert('Action: No action needed (No activity + age <=3 + MT=0)', keepResult3.action, 'No action needed');
 
-  var keepSig4 = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
-  var keepResult4 = computePerformanceAction_(keepSig4, null, 'stable');
-  assert('Action: Keep (BASE usage + no page)', keepResult4.action, 'Keep');
+  var keepSig4 = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var keepResult4 = computePerformanceAction_(keepSig4);
+  assert('Action: No action needed (BASE usage + no page)', keepResult4.action, 'No action needed');
 
-  // --- Missing page mapping appends explanation ---
-  var missingMapSig = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: false });
-  var missingMapResult = computePerformanceAction_(missingMapSig, null, 'stable');
-  assert('Reason: Missing page mapping appends explanation', missingMapResult.reason.indexOf('missing from the metrics mapping') !== -1, true);
+  // --- Recovery reason ---
+  var recoverySig = testSignals_({ activeMonths: 6, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false, l90Players: 60, l90Completions: 15, l90MtOpp: 0, l90MtWon: 0 }, { trend: 'stable' });
+  var recoveryResult = computePerformanceAction_(recoverySig);
+  assert('Action: No action needed (recovery active, 0/3 signals)', recoveryResult.action, 'No action needed');
+
+  // --- Missing page mapping no longer appends explanation ---
+  var missingMapSig = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true, mtMappingValid: false }, { trend: 'stable' });
+  var missingMapResult = computePerformanceAction_(missingMapSig);
+  assert('Reason: Missing page mapping does not append explanation', missingMapResult.reason.indexOf('missing from the metrics mapping') === -1, true);
 
   // --- Every action has a reason ---
   var allActions = [
-    computePerformanceAction_(testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 50000, mtWon: 0, firstActivityMonth: null, lastActivityMonth: null }), noActCA, 'unknown'),
-    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true }), null, 'stable'),
-    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }), null, 'stable'),
-    computePerformanceAction_(testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true }), null, 'stable'),
-    computePerformanceAction_(testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }), null, 'stable'),
-    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 30, completionRate: 0.45, mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true }), null, 'stable'),
-    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true }), null, 'stable'),
-    computePerformanceAction_(testSignals_({ activeMonths: 2, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: recentDate }), null, 'stable')
+    computePerformanceAction_(testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 50000, mtWon: 0, firstActivityMonth: null, lastActivityMonth: null }, { contentAge: noActCA })),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true }, { trend: 'stable' })),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' })),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true }, { trend: 'stable' })),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' })),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 30, completionRate: 0.45, mtOpp: 10000, mtWon: 3000, hasContentSpecificPage: true }, { trend: 'stable' })),
+    computePerformanceAction_(testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'stable' })),
+    computePerformanceAction_(testSignals_({ activeMonths: 2, playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: recentDate }, { trend: 'stable' }))
   ];
   var allHaveReasons = true;
   for (var ai = 0; ai < allActions.length; ai++) {
@@ -1584,8 +1836,8 @@ function testPerformanceRules() {
   var lastAct3mo = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 2, 1);
   var lastAct5mo = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 5, 1);
   var lastAct8mo = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 8, 1);
-  assert('Trend: stable via lastActivity fallback (3mo)',
-    computePerformanceTrend_({ playersPerMonth: 10, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: lastAct3mo }, referenceDate), 'stable');
+  assert('Trend: declining via lastActivity fallback (3mo, no L90)',
+    computePerformanceTrend_({ playersPerMonth: 10, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: lastAct3mo }, referenceDate), 'declining');
   assert('Trend: declining via lastActivity fallback (5mo)',
     computePerformanceTrend_({ playersPerMonth: 10, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: lastAct5mo }, referenceDate), 'declining');
   assert('Trend: stale via lastActivity fallback (8mo)',
@@ -1599,62 +1851,73 @@ function testPerformanceRules() {
   assert('Trend: stable when L90 ratio below growing threshold',
     computePerformanceTrend_(justBelowGrowing, referenceDate), 'stable');
 
-  var priSig2High = testSignals_({ playersPerMonth: 30, completions: 50, completionRate: 0.55, mtOpp: 150000, mtWon: 30000, hasContentSpecificPage: true });
+  var growingRatioButLowAbsolute = { playersPerMonth: 4, l90Players: 15, l90Completions: 2, l90MtOpp: 0, l90MtWon: 0, lastActivityMonth: referenceDate };
+  assert('Trend: stable when L90 ratio >= GROWING_RATIO but L90 ppm below floor (5ppm < 7.5)',
+    computePerformanceTrend_(growingRatioButLowAbsolute, referenceDate), 'stable');
+
+  var priSig2High = testSignals_({ playersPerMonth: 30, completions: 50, completionRate: 0.55, mtOpp: 150000, mtWon: 30000, hasContentSpecificPage: true }, { trend: 'stable' });
   assert('Priority: High (2+ high signals)',
-    computePerformancePriority_(priSig2High, 'Improve completion rate', null, 'stable'), 'High');
-  var priSigDeclMeaningful = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 60000, mtWon: 0, hasContentSpecificPage: true });
+    computePerformancePriority_(priSig2High, 'Improve completion'), 'High');
+  var priSigDeclMeaningful = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 60000, mtWon: 0, hasContentSpecificPage: true }, { trend: 'declining' });
   assert('Priority: High (declining + meaningful all-time)',
-    computePerformancePriority_(priSigDeclMeaningful, 'Improve completion rate', null, 'declining'), 'High');
-  var priSig1High = testSignals_({ playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true });
+    computePerformancePriority_(priSigDeclMeaningful, 'Improve completion'), 'High');
+  var priSig1High = testSignals_({ playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true }, { trend: 'stable' });
   assert('Priority: Medium (1 high signal, stable)',
-    computePerformancePriority_(priSig1High, 'Improve completion rate', null, 'stable'), 'Medium');
-  var priSigDecl = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false });
+    computePerformancePriority_(priSig1High, 'Improve completion'), 'Medium');
+  var priSigDecl = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 5000, mtWon: 1000, hasContentSpecificPage: false }, { trend: 'declining' });
   assert('Priority: Medium (declining + below baseline)',
-    computePerformancePriority_(priSigDecl, 'Retire', null, 'declining'), 'Medium');
-  var priSig0High = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true });
+    computePerformancePriority_(priSigDecl, 'Consider retirement'), 'Medium');
+  var priSig0High = testSignals_({ playersPerMonth: 22, completions: 10, completionRate: 0.30, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true }, { trend: 'stable' });
   assert('Priority: Low (0 high signals, stable)',
-    computePerformancePriority_(priSig0High, 'Need promotion', null, 'stable'), 'Low');
-  var priSigNew = testSignals_({ activeMonths: 2, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, firstActivityMonth: recentDate });
+    computePerformancePriority_(priSig0High, 'Increase visibility'), 'Low');
+  var priSigNew = testSignals_({ activeMonths: 2, playersPerMonth: 30, completions: 10, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true, firstActivityMonth: recentDate }, { trend: 'stable' });
   assert('Priority: Low (New content always)',
-    computePerformancePriority_(priSigNew, 'Keep', null, 'stable'), 'Low');
-  assert('Priority: Low (Keep action always)',
-    computePerformancePriority_(priSig2High, 'Keep', null, 'stable'), 'Low');
-  var priSigAge = testSignals_({ playersPerMonth: 5, completions: 2, completionRate: 0.10, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false });
-  assert('Priority: Medium (age bump, contentAge > 12, no signals)',
-    computePerformancePriority_(priSigAge, 'Retire', { months: 18, available: true }, 'stable'), 'Medium');
-  assert('Priority: Low (no age bump, contentAge <= 12)',
-    computePerformancePriority_(priSigAge, 'Retire', { months: 10, available: true }, 'stable'), 'Low');
-  assert('Priority: Low (no age bump, contentAge unavailable)',
-    computePerformancePriority_(priSigAge, 'Retire', null, 'stable'), 'Low');
+    computePerformancePriority_(priSigNew, 'No action needed'), 'Low');
+  assert('Priority: Low (No action needed always)',
+    computePerformancePriority_(priSig2High, 'No action needed'), 'Low');
+  var priSigAgeMature = testSignals_({ playersPerMonth: 5, completions: 2, completionRate: 0.10, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable', contentAge: { months: 18, available: true } });
+  assert('Priority: Medium (age bump, contentAge MATURE, no signals)',
+    computePerformancePriority_(priSigAgeMature, 'Consider retirement'), 'Medium');
+  var priSigAgeRecent = testSignals_({ playersPerMonth: 5, completions: 2, completionRate: 0.10, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable', contentAge: { months: 10, available: true } });
+  assert('Priority: Low (no age bump, contentAge RECENT)',
+    computePerformancePriority_(priSigAgeRecent, 'Consider retirement'), 'Low');
+  var priSigAgeUnknown = testSignals_({ playersPerMonth: 5, completions: 2, completionRate: 0.10, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  assert('Priority: Low (no age bump, contentAge UNKNOWN)',
+    computePerformancePriority_(priSigAgeUnknown, 'Consider retirement'), 'Low');
 
   // --- computePerformanceScore_ tests ---
   Logger.log('--- computePerformanceScore_ ---');
 
-  var scoreNoActMetrics = { playersPerMonth: 0, totalPlayers: 0, completionRate: 0, completions: 0, mtOpp: 0, mtWon: 0, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null, mtMappingValid: true };
-  var scoreNoActivity = computePerformanceScore_(scoreNoActMetrics, 'unknown', computePerformanceSignals_(scoreNoActMetrics, referenceDate));
+  var scoreNoActSig = computePerformanceSignals_({ playersPerMonth: 0, totalPlayers: 0, completionRate: 0, completions: 0, mtOpp: 0, mtWon: 0, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null, mtMappingValid: true }, referenceDate);
+  scoreNoActSig.trend = 'unknown';
+  var scoreNoActivity = computePerformanceScore_(scoreNoActSig);
   assert('Score: No activity = 0', scoreNoActivity, 0);
 
-  var score3HMetrics = { playersPerMonth: 30, totalPlayers: 360, completionRate: 0.55, completions: 198, mtOpp: 150000, mtWon: 30000, l90Players: 90, l90Completions: 50, l90MtOpp: 40000, l90MtWon: 8000, activeMonths: 12, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true };
-  var scoreStable3High = computePerformanceScore_(score3HMetrics, 'stable', computePerformanceSignals_(score3HMetrics, referenceDate));
-  assert('Score: Performing 3/3 + all high + mature >= 90', scoreStable3High >= 90, true);
+  var scoreStable3HighSig = computePerformanceSignals_({ playersPerMonth: 30, totalPlayers: 360, completionRate: 0.55, completions: 198, mtOpp: 150000, mtWon: 30000, l90Players: 90, l90Completions: 50, l90MtOpp: 40000, l90MtWon: 8000, activeMonths: 12, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true }, referenceDate);
+  scoreStable3HighSig.trend = 'stable';
+  var scoreStable3High = computePerformanceScore_(scoreStable3HighSig);
+  assert('Score: 3 HIGH + ESTABLISHED + stable >= 90', scoreStable3High >= 90, true);
 
-  var score1SMetrics = { playersPerMonth: 18, totalPlayers: 108, completionRate: 0.30, completions: 20, mtOpp: 30000, mtWon: 5000, l90Players: 15, l90Completions: 5, l90MtOpp: 8000, l90MtWon: 1000, activeMonths: 6, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true };
-  var scoreStable1Signal = computePerformanceScore_(score1SMetrics, 'stable', computePerformanceSignals_(score1SMetrics, referenceDate));
-  assert('Score: Performing 1/3 signal, moderate L90 >= 10', scoreStable1Signal >= 10, true);
-  assert('Score: Performing 1/3 signal, moderate L90 <= 50', scoreStable1Signal <= 50, true);
+  var scoreStable1Sig = computePerformanceSignals_({ playersPerMonth: 18, totalPlayers: 108, completionRate: 0.30, completions: 20, mtOpp: 30000, mtWon: 5000, l90Players: 15, l90Completions: 5, l90MtOpp: 8000, l90MtWon: 1000, activeMonths: 6, hasContentSpecificPage: false, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true }, referenceDate);
+  scoreStable1Sig.trend = 'stable';
+  var scoreStable1Signal = computePerformanceScore_(scoreStable1Sig);
+  assert('Score: 1/3 BASE + ESTABLISHED + stable = 40', scoreStable1Signal, 40);
 
-  var scoreDeclMetrics = { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 10, l90Completions: 3, l90MtOpp: 5000, l90MtWon: 1000, activeMonths: 12, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true };
-  var scoreDeclining = computePerformanceScore_(scoreDeclMetrics, 'declining', computePerformanceSignals_(scoreDeclMetrics, referenceDate));
-  assert('Score: Declining trend with high baseline < stable equivalent', scoreDeclining < scoreStable3High, true);
+  var scoreDeclSig = computePerformanceSignals_({ playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 10, l90Completions: 3, l90MtOpp: 5000, l90MtWon: 1000, activeMonths: 12, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true }, referenceDate);
+  scoreDeclSig.trend = 'declining';
+  var scoreDeclining = computePerformanceScore_(scoreDeclSig);
+  assert('Score: Declining trend < stable equivalent', scoreDeclining < scoreStable3High, true);
 
-  var scoreDeadMetrics = { playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 12, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true };
-  var scoreDeadDemo = computePerformanceScore_(scoreDeadMetrics, 'stale', computePerformanceSignals_(scoreDeadMetrics, referenceDate));
-  assert('Score: Dead demo with great history <= 30 (Low tier)', scoreDeadDemo <= 30, true);
+  var scoreDeadSig = computePerformanceSignals_({ playersPerMonth: 25, totalPlayers: 300, completionRate: 0.50, completions: 150, mtOpp: 100000, mtWon: 25000, l90Players: 0, l90Completions: 0, l90MtOpp: 0, l90MtWon: 0, activeMonths: 12, hasContentSpecificPage: true, firstActivityMonth: oldDate, lastActivityMonth: referenceDate, mtMappingValid: true }, referenceDate);
+  scoreDeadSig.trend = 'stale';
+  var scoreDeadDemo = computePerformanceScore_(scoreDeadSig);
+  assert('Score: Stale demo with 3 HIGH signals still scores high (signals are all-time)', scoreDeadDemo >= 70, true);
+  assert('Score: Stale demo scores less than stable equivalent', scoreDeadDemo < scoreStable3High, true);
 
-  var scoreNewMetrics = { playersPerMonth: 5, totalPlayers: 10, completionRate: 0.20, completions: 2, mtOpp: 1000, mtWon: 0, l90Players: 10, l90Completions: 2, l90MtOpp: 1000, l90MtWon: 0, activeMonths: 2, hasContentSpecificPage: false, firstActivityMonth: recentDate, lastActivityMonth: referenceDate, mtMappingValid: true };
-  var scoreNewContent = computePerformanceScore_(scoreNewMetrics, 'unknown', computePerformanceSignals_(scoreNewMetrics, referenceDate));
-  assert('Score: New content with low metrics >= 5', scoreNewContent >= 5, true);
-  assert('Score: New content with low metrics <= 30', scoreNewContent <= 30, true);
+  var scoreNewSig = computePerformanceSignals_({ playersPerMonth: 5, totalPlayers: 10, completionRate: 0.20, completions: 2, mtOpp: 1000, mtWon: 0, l90Players: 10, l90Completions: 2, l90MtOpp: 1000, l90MtWon: 0, activeMonths: 2, hasContentSpecificPage: false, firstActivityMonth: recentDate, lastActivityMonth: referenceDate, mtMappingValid: true }, referenceDate);
+  scoreNewSig.trend = 'unknown';
+  var scoreNewContent = computePerformanceScore_(scoreNewSig);
+  assert('Score: New content 0/3 + NEW = 5', scoreNewContent, 5);
 
   // --- computePerformanceTier_ tests ---
   Logger.log('--- computePerformanceTier_ ---');
@@ -1769,7 +2032,7 @@ function testProcessingAudit() {
 
   var blankWithOldLabels = makeRow({});
   blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PERF_SIGNALS]] = 'Usage: HIGH 30ppm (high 25)';
-  blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PERF_ACTION]] = 'Keep';
+  blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PERF_ACTION]] = 'No action needed';
   blankWithOldLabels[hm[PERF_LABEL_COLUMNS.PROCESSING_RESULT]] = 'Processed';
   assert('isRowBlank: output columns → still blank', isRowBlank_(blankWithOldLabels, hm), true);
 
@@ -1794,12 +2057,12 @@ function testProcessingAudit() {
   assert('Audit: blank status + complete data → Processed', rBlankStatus.outcome, 'processed');
   assert('Audit: blank status → has reason', rBlankStatus.reason !== '', true);
 
-  // --- Blank Status + missing metrics → Needs human review ---
+  // --- Blank Status + missing metrics → Needs review ---
   var blankStatusNoMetrics = makeRow({});
   blankStatusNoMetrics[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '65';
   blankStatusNoMetrics[hm[ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE]] = 'Blank Status No Metrics';
   var rBlankNoMetrics = classifyRow_(blankStatusNoMetrics, hm, {}, referenceDate);
-  assert('Audit: blank status + missing metrics → Needs human review', rBlankNoMetrics.outcome, 'needs_review');
+  assert('Audit: blank status + missing metrics → Needs review', rBlankNoMetrics.outcome, 'needs_review');
 
   // --- IE Received → Processed ---
   var receivedRow = makeFullDataRow({});
@@ -1856,29 +2119,29 @@ function testProcessingAudit() {
   // --- Empty row → Skipped ---
   assert('Audit: empty row → Skipped', classifyRow_(makeRow({}), hm, {}, referenceDate).result, 'Skipped — Blank row');
 
-  // --- Missing identifier → Needs human review ---
+  // --- Missing identifier → Needs review ---
   var noIdRow = makeRow({});
   noIdRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
   noIdRow[hm[ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE]] = 'No Number';
   noIdRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 6;
   noIdRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 100;
   var rNoId = classifyRow_(noIdRow, hm, {}, referenceDate);
-  assert('Audit: missing identifier → Needs human review', rNoId.outcome, 'needs_review');
+  assert('Audit: missing identifier → Needs review', rNoId.outcome, 'needs_review');
   assert('Audit: missing identifier → reason', rNoId.reason, 'The Number column is blank, so this row cannot be matched to metrics data.');
 
-  // --- Duplicate identifier → Needs human review ---
+  // --- Duplicate identifier → Needs review ---
   var dupRow = makeFullDataRow({});
   dupRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '42';
   var rDup = classifyRow_(dupRow, hm, { '42': 5 }, referenceDate);
-  assert('Audit: duplicate → Needs human review', rDup.outcome, 'needs_review');
+  assert('Audit: duplicate → Needs review', rDup.outcome, 'needs_review');
   assert('Audit: duplicate → reason mentions same identifier', rDup.reason.indexOf('same identifier') !== -1, true);
 
-  // --- Unlinked request → Needs human review ---
+  // --- Unlinked request → Needs review ---
   var unlinkedRow = makeFullDataRow({});
   unlinkedRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '200';
   unlinkedRow[hm[PERF_METRIC_COLUMNS.METRICS_MAPPING_STATUS]] = 'Unlinked request';
   var rUnlinked = classifyRow_(unlinkedRow, hm, {}, referenceDate);
-  assert('Audit: Unlinked request → Needs human review', rUnlinked.outcome, 'needs_review');
+  assert('Audit: Unlinked request → Needs review', rUnlinked.outcome, 'needs_review');
   assert('Audit: Unlinked request → reason', rUnlinked.reason.indexOf('not linked') !== -1, true);
 
   // --- Shared display-key → Processed ---
@@ -1896,7 +2159,7 @@ function testProcessingAudit() {
   assert('Audit: Missing page mapping → no High business impact', rMissingMap.flags.indexOf('High business impact') === -1, true);
   assert('Audit: Missing page mapping → no High-value niche', rMissingMap.flags.indexOf('High-value niche') === -1, true);
   assert('Audit: Missing page mapping → no Low opportunity value', rMissingMap.flags.indexOf('Low opportunity value') === -1, true);
-  assert('Audit: Missing page mapping → reason mentions mapping', rMissingMap.reason.indexOf('missing from the metrics mapping') !== -1, true);
+  assert('Audit: Missing page mapping → reason does not mention mapping', rMissingMap.reason.indexOf('missing from the metrics mapping') === -1, true);
 
   // --- Page detection in parseMetrics_ ---
   var pgBase = {};
@@ -1936,7 +2199,7 @@ function testProcessingAudit() {
   noActMTRow[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0;
   noActMTRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 50000;
   noActMTRow[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 0;
-  assert('Audit: No activity + MT >$0 → Verify data mapping', classifyRow_(noActMTRow, hm, {}, referenceDate).action, 'Verify data mapping');
+  assert('Audit: No activity + MT >$0 → Review data linkage', classifyRow_(noActMTRow, hm, {}, referenceDate).action, 'Review data linkage');
 
   var noActScoreRow = makeRow({});
   noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '310';
@@ -1963,7 +2226,7 @@ function testProcessingAudit() {
   noActYoungRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 0;
   noActYoungRow[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 0;
   noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS]] = new Date(2026, 4, 1);
-  assert('Audit: No activity + age <=3 + MT=0 → Keep', classifyRow_(noActYoungRow, hm, {}, referenceDate).action, 'Keep');
+  assert('Audit: No activity + age <=3 + MT=0 → No action needed', classifyRow_(noActYoungRow, hm, {}, referenceDate).action, 'No action needed');
 
   var noActOldPageRow = makeRow({});
   noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '302';
@@ -1977,7 +2240,7 @@ function testProcessingAudit() {
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 0;
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.DRUPAL_PAGE_URL]] = 'https://www.redhat.com/en/interactive-experiences/my-demo';
   noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS]] = new Date(2025, 6, 1);
-  assert('Audit: No activity + age >3 + page + MT=0 → Retire', classifyRow_(noActOldPageRow, hm, {}, referenceDate).action, 'Retire');
+  assert('Audit: No activity + age >3 + page + MT=0 → Consider retirement', classifyRow_(noActOldPageRow, hm, {}, referenceDate).action, 'Consider retirement');
 
   var noActOldNoPageRow = makeRow({});
   noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '303';
@@ -1990,7 +2253,7 @@ function testProcessingAudit() {
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 0;
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 0;
   noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS]] = new Date(2025, 6, 1);
-  assert('Audit: No activity + age >3 + no page + MT=0 → Retire', classifyRow_(noActOldNoPageRow, hm, {}, referenceDate).action, 'Retire');
+  assert('Audit: No activity + age >3 + no page + MT=0 → Consider retirement', classifyRow_(noActOldNoPageRow, hm, {}, referenceDate).action, 'Consider retirement');
 
   var noActNoAge = makeRow({});
   noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '304';
@@ -2003,8 +2266,8 @@ function testProcessingAudit() {
   noActNoAge[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 0;
   noActNoAge[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 0;
   var rNoActNoAge = classifyRow_(noActNoAge, hm, {}, referenceDate);
-  assert('Audit: No activity + age unavailable → Needs human review', rNoActNoAge.action, 'Needs human review');
-  assert('Audit: No activity + age unavailable → reason mentions timestamps', rNoActNoAge.reason.indexOf('timestamps') !== -1, true);
+  assert('Audit: No activity + age unavailable → Needs review', rNoActNoAge.action, 'Needs review');
+  assert('Audit: No activity + age unavailable → reason mentions manual review', rNoActNoAge.reason.indexOf('manual review') !== -1, true);
 
   // --- Stale activity → Retire ---
   var staleRow = makeRow({});
@@ -2019,9 +2282,9 @@ function testProcessingAudit() {
   staleRow[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 500;
   staleRow[hm[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH]] = oldDate;
   var rStale = classifyRow_(staleRow, hm, {}, referenceDate);
-  assert('Audit: Stale activity → Retire', rStale.action, 'Retire');
+  assert('Audit: Stale activity → Consider retirement', rStale.action, 'Consider retirement');
   assert('Audit: Stale activity → has signals', rStale.signals !== '', true);
-  assert('Audit: Stale activity → reason mentions stalled', rStale.reason.indexOf('Stalled content') !== -1, true);
+  assert('Audit: Stale activity → reason mentions retirement', rStale.reason.indexOf('flagged for retirement') !== -1, true);
 
   // --- Low opp value end-to-end ---
   var lowOppRow = makeFullDataRow({});
@@ -2032,7 +2295,7 @@ function testProcessingAudit() {
   lowOppRow[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.20;
   lowOppRow[hm[PERF_METRIC_COLUMNS.DRUPAL_PAGE_URL]] = 'https://www.redhat.com/en/interactive-experiences/my-demo';
   var rLowOpp = classifyRow_(lowOppRow, hm, {}, referenceDate);
-  assert('Audit: Low opp + low MT won → Improve low MT value', rLowOpp.action, 'Improve low MT value');
+  assert('Audit: Low opp + low MT won → Boost sales impact', rLowOpp.action, 'Boost sales impact');
   assert('Audit: Low opp flag present', rLowOpp.flags.indexOf('Low opportunity value') !== -1, true);
 
   var lowOppHighWon = makeFullDataRow({});
@@ -2042,7 +2305,7 @@ function testProcessingAudit() {
   lowOppHighWon[hm[PERF_METRIC_COLUMNS.COMPLETIONS]] = 10;
   lowOppHighWon[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.20;
   lowOppHighWon[hm[PERF_METRIC_COLUMNS.DRUPAL_PAGE_URL]] = 'https://www.redhat.com/en/interactive-experiences/my-demo';
-  assert('Audit: Low opp + MT won >= $10K → not Improve low MT value', classifyRow_(lowOppHighWon, hm, {}, referenceDate).action !== 'Improve low MT value', true);
+  assert('Audit: Low opp + MT won >= $10K → not Boost sales impact', classifyRow_(lowOppHighWon, hm, {}, referenceDate).action !== 'Boost sales impact', true);
 
   // --- 15-24.99 + no page → Keep ---
   var midNoPage = makeFullDataRow({});
@@ -2053,9 +2316,9 @@ function testProcessingAudit() {
   midNoPage[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.42;
   midNoPage[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 1000;
   midNoPage[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 500;
-  assert('Audit: 15-24.99 + no page → Keep', classifyRow_(midNoPage, hm, {}, referenceDate).action, 'Keep');
+  assert('Audit: 15-24.99 + no page → No action needed', classifyRow_(midNoPage, hm, {}, referenceDate).action, 'No action needed');
 
-  // --- 15-24.99 + page + Low engagement → Improve completion rate ---
+  // --- 15-24.99 + page + Low completion → Improve completion rate ---
   var midPageLowEng = makeFullDataRow({});
   midPageLowEng[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '401';
   midPageLowEng[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 22;
@@ -2065,7 +2328,7 @@ function testProcessingAudit() {
   midPageLowEng[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 60000;
   midPageLowEng[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 15000;
   midPageLowEng[hm[PERF_METRIC_COLUMNS.DRUPAL_PAGE_URL]] = 'https://www.redhat.com/en/interactive-experiences/my-demo';
-  assert('Audit: 15-24.99 + page + Low engagement → Improve completion rate', classifyRow_(midPageLowEng, hm, {}, referenceDate).action, 'Improve completion rate');
+  assert('Audit: 15-24.99 + page + Low completion → Improve completion', classifyRow_(midPageLowEng, hm, {}, referenceDate).action, 'Improve completion');
 
   // --- Final Action column never touched ---
   assert('Column: PERF_ACTION is Recommended action', PERF_LABEL_COLUMNS.PERF_ACTION, 'Recommended action');
@@ -2084,7 +2347,7 @@ function testProcessingAudit() {
   }
   assert('Reason: every row with action has reason', allReasons, true);
 
-  // --- Needs human review has specific reason ---
+  // --- Needs review has specific reason ---
   assert('Reason: Unlinked has specific reason', classifyRow_(unlinkedRow, hm, {}, referenceDate).reason.indexOf('not linked') !== -1, true);
   assert('Reason: Missing identifier has specific reason', rNoId.reason, 'The Number column is blank, so this row cannot be matched to metrics data.');
   assert('Reason: Duplicate has specific reason', rDup.reason.indexOf('same identifier') !== -1, true);
@@ -2120,7 +2383,7 @@ function testProcessingAudit() {
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 0;
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 0;
   noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS]] = oldDate;
-  assert('Audit: No activity + blank rate + age >3 → Retire', classifyRow_(noActBlankRateOld, hm, {}, referenceDate).action, 'Retire');
+  assert('Audit: No activity + blank rate + age >3 → Consider retirement', classifyRow_(noActBlankRateOld, hm, {}, referenceDate).action, 'Consider retirement');
 
   var noActBlankRateNew = makeRow({});
   noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '306';
@@ -2133,7 +2396,7 @@ function testProcessingAudit() {
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 0;
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 0;
   noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS]] = recentDate;
-  assert('Audit: No activity + blank rate + age ≤3 → Keep', classifyRow_(noActBlankRateNew, hm, {}, referenceDate).action, 'Keep');
+  assert('Audit: No activity + blank rate + age ≤3 → No action needed', classifyRow_(noActBlankRateNew, hm, {}, referenceDate).action, 'No action needed');
 
   // --- Low activity + blank rate ---
   var lowActBlankRate = makeRow({});
@@ -2147,7 +2410,7 @@ function testProcessingAudit() {
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 0;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 0;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH]] = oldDate;
-  assert('Audit: Low activity + blank rate → Retire', classifyRow_(lowActBlankRate, hm, {}, referenceDate).action, 'Retire');
+  assert('Audit: Low activity + blank rate → Consider retirement', classifyRow_(lowActBlankRate, hm, {}, referenceDate).action, 'Consider retirement');
 
   // --- Priority end-to-end ---
   var priorityRow = makeFullDataRow({});
@@ -2163,7 +2426,20 @@ function testProcessingAudit() {
   assert('Audit: Processed row score <= 100', pResult.score <= 100, true);
   assert('Audit: Processed row has tier', ['Top', 'Mid', 'Low', 'Inactive'].indexOf(pResult.tier) !== -1, true);
   assert('Audit: Processed row has trend', pResult.trend !== '', true);
-  assert('Audit: Trend is valid value', ['growing', 'stable', 'declining', 'stale', 'unknown'].indexOf(pResult.trend) !== -1, true);
+  assert('Audit: Trend is valid value', ['Growing', 'Stable', 'Declining', 'Stale', 'Unknown'].indexOf(pResult.trend) !== -1, true);
+
+  // Priority cap: High priority capped to Medium on Low-tier demos
+  var lowTierRow = makeFullDataRow({});
+  lowTierRow[hm[PERF_METRIC_COLUMNS.ALL_TIME_PLAYERS]] = 20;
+  lowTierRow[hm[PERF_METRIC_COLUMNS.ALL_TIME_COMPLETIONS]] = 2;
+  lowTierRow[hm[PERF_METRIC_COLUMNS.L90_PLAYERS]] = 2;
+  lowTierRow[hm[PERF_METRIC_COLUMNS.LAST_ACTIVITY_MONTH]] = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 8, 1);
+  lowTierRow[hm[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH]] = new Date(2024, 0, 1);
+  lowTierRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 10;
+  var ltResult = classifyRow_(lowTierRow, hm, {}, referenceDate);
+  if (ltResult.tier === 'Low' && ltResult.outcome === 'processed') {
+    assert('Audit: Low tier caps priority at Medium', ltResult.priority !== 'High', true);
+  }
 
   var skipResult = classifyRow_(makeRow({}), hm, {}, referenceDate);
   assert('Audit: Skipped row has empty priority', skipResult.priority, '');
@@ -2269,10 +2545,10 @@ function testProcessingAudit() {
 
   // Retire action should never appear with Mid or Top tier
   assert('Coherence: Low activity demo with Retire → Low or Inactive tier',
-    rLowActCo.action === 'Retire' ? (rLowActCo.tier === 'Low' || rLowActCo.tier === 'Inactive') : true, true);
+    rLowActCo.action === 'Consider retirement' ? (rLowActCo.tier === 'Low' || rLowActCo.tier === 'Inactive') : true, true);
 
-  // Keep action always means Low priority
-  assert('Coherence: Keep → Low priority (existing check)', pResult.action === 'Keep' ? pResult.priority === 'Low' : true, true);
+  // No action needed always means Low priority
+  assert('Coherence: No action needed → Low priority (existing check)', pResult.action === 'No action needed' ? pResult.priority === 'Low' : true, true);
 
   Logger.log('---');
   Logger.log('Results: ' + passed + ' passed, ' + failed + ' failed out of ' + (passed + failed) + ' tests.');
