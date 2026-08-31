@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Verification workflow**: See @AGENTS.md for the Context → Impact → Plan → Build → Verify → Review → Evidence → Stop workflow and verification rules.
+
 ## Project Overview
 
 Arcade Finder is an internal Red Hat tool that runs as a single Google Apps Script project backed by a Google Sheets spreadsheet. It serves two purposes:
