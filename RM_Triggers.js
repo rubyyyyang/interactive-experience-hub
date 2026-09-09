@@ -178,6 +178,9 @@ function onFormSubmit(event) {
       processRequestFormSubmission(event);
     } else if (sheetName === getCreatorFormSheetName()) {
       processCreatorFormSubmission(event);
+    } else if (sheetName === FORM_SHEET_NAME) {
+      onUpdatePlanFormSubmit(event);
+      console.log("Performance review update form processed");
     } else {
       console.log(`Unknown form submission sheet: ${sheetName}`);
     }

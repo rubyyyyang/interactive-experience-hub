@@ -7,7 +7,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "node tests/finder-logic.test.js && node tests/creator-lifecycle-notifications.test.js",
+    "test": "node tests/finder-logic.test.js && node tests/creator-lifecycle-notifications.test.js && node tests/form-submit-routing.test.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
