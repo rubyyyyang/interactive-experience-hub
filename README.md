@@ -59,6 +59,11 @@ Production deployment is currently performed manually in Google Apps Script afte
 
 `.claspignore` defines which local development files are excluded from Apps Script deployment.
 
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Runbook](docs/runbook.md)
+
 ## Related repository
 
 Creator-facing intake, AI-assisted submission processing, and the Status Tracker are maintained in:
