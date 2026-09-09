@@ -14,3 +14,8 @@ node_modules/
 
 # Local working artifacts
 email_gen.js
+
+# Local workflow artifacts
+AGENTS.md
+CLAUDE.md
+docs/superpowers/
