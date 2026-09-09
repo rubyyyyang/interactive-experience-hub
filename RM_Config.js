@@ -37,15 +37,15 @@ const ENHANCED_CONFIG = {
       LANDING_PAGE_ADMIN: "U054Q340C9Z" // Ruby Yang
     },
     MESSAGE_TEMPLATES: {
-      REQUEST_OPEN: "🆕 *New IE Request Open*",
+      REQUEST_OPEN: "🆕 *New Demo Request Open*",
       REQUEST_APPROVED: "✅ *Request Approved*",
-      IE_RECEIVED: "📥 *IE Received*",
-      IE_REVIEWED: "📝 *IE Reviewed*",
-      IE_PUBLISHED: "🚀 *IE Published on the landing page*",
-      IE_RETIRED: "📦 *IE Retired*",
+      DEMO_RECEIVED: "📥 *Demo Received*",
+      DEMO_REVIEWED: "📝 *Demo Reviewed*",
+      DEMO_PUBLISHED: "🚀 *Published on the landing page*",
+      DEMO_RETIRED: "📦 *Retired*",
       CLOSED: "🛑 *Closed*",
       PROD_LINK_ADDED: "✅ *Prod link added!*",
-      CREATOR_CHANNEL_NEW_REQUEST: "🆕 *New IE Request*"
+      CREATOR_CHANNEL_NEW_REQUEST: "🆕 *New Demo Request*"
     }
   },
 
@@ -66,16 +66,16 @@ const ENHANCED_CONFIG = {
   STATUS: {
     REQUEST_OPEN: "Request Open",
     REQUEST_APPROVED: "Request Approved",
-    IE_RECEIVED: "IE Received",
-    IE_REVIEWED: "IE Reviewed",
-    IE_PUBLISHED: "IE Published",
-    IE_RETIRED: "IE Retired",
+    DEMO_RECEIVED: "Demo Received",
+    DEMO_REVIEWED: "Demo Reviewed",
+    DEMO_PUBLISHED: "Published",
+    DEMO_RETIRED: "Retired",
     CLOSED: "Closed"
   },
 
   STATUS_LIFECYCLE_ORDER: [
-    "Request Open", "Request Approved", "IE Received",
-    "IE Reviewed", "IE Published", "IE Retired", "Closed"
+    "Request Open", "Request Approved", "Demo Received",
+    "Demo Reviewed", "Published", "Retired", "Closed"
   ],
 
   /* =========================
@@ -93,6 +93,7 @@ const ENHANCED_CONFIG = {
     // Core identification
     NUMBER: "Number",
     STATUS: "Status",
+    PUBLISH_STATES: "Publish states",
     GLOBAL_ID: "Global ID",
     ORIGIN_TYPE: "Origin Type",
 
@@ -100,7 +101,7 @@ const ENHANCED_CONFIG = {
     THREAD_TS: "thread_ts",
     RECEIVED_THREAD_TS: "received_thread_ts",
 
-    // Sent flags
+    // Sent flags (Slack notifications)
     RECEIVED_SENT: "Received sent?",
     REVIEWED_SENT: "Reviewed sent?",
     PUBLISHED_SENT: "Published sent?",
@@ -109,6 +110,11 @@ const ENHANCED_CONFIG = {
     CLOSED_SENT: "Closed sent?",
     PROD_SENT: "Prod sent?",
     CREATOR_CHANNEL_SENT: "Creator channel sent?",
+
+    // Creator email sent flags (independent from Slack)
+    CREATOR_SUBMISSION_EMAIL_SENT: "Creator Submission Email Sent?",
+    CREATOR_PUBLISHED_EMAIL_SENT: "Creator Published Email Sent?",
+    CREATOR_RETIRED_EMAIL_SENT: "Creator Retired Email Sent?",
 
     // Request fields
     CREATION_BRIEF_DOC_URL: "Creation Brief Doc URL",
@@ -120,7 +126,6 @@ const ENHANCED_CONFIG = {
     PRIMARY_PRODUCT: "Primary Product",
     PRODUCT: "Product",
     CONTENT_TYPE: "Content Type",
-    FINAL_CONTENT_TYPE: "Final Content Type",
     PRIORITY: "Priority",
     DEADLINE: "Deadline",
     CONTACTED_BU: "Contacted BU",
@@ -144,7 +149,7 @@ const ENHANCED_CONFIG = {
     CREATOR_EMAIL: "Creator Email",
     FINAL_DEMO_TITLE: "Final Demo Title",
     CREATION_LINK: "Creation Link",
-    CREATOR_SUBMITTED_TS: "Creator Submission Timestamp",
+    CREATOR_SUBMITTED_TS: "Creator Submitted Timestamp",
     QUARTER: "Quarter",
     DEMO_DESCRIPTION: "Demo Description",
     LANGUAGE: "Language",
@@ -160,14 +165,18 @@ const ENHANCED_CONFIG = {
 
     // Production
     PROD_ARCADE_LINK: "Production Link",
-    LATEST_PROD_LINK: "Latest Prod Link",
+
+    // Discovery / publish window
+    FEATURED_START_DATE: "Featured Start Date",
+    FEATURED_END_DATE: "Featured End Date",
+    LATEST_START_DATE: "Latest Start Date",
+    LATEST_END_DATE: "Latest End Date",
 
     // Misc
-    PUBLIC_SITE_LINK: "Public Site Link",
+    DRUPAL_PAGE_URL: "Drupal Page URL",
     JIRA_TICKET_URL: "Jira Ticket URL",
     RHAC_PAGE: "RHAC page",
     NOTE: "Note",
-    JOIN_KEY: "Join Key",
     METADATA: "Metadata",
 
     // Status timestamps
@@ -285,10 +294,10 @@ function getStatusToTimestampMapping() {
   return {
     [ENHANCED_CONFIG.STATUS.REQUEST_OPEN]: ENHANCED_CONFIG.COLUMNS.STATUS_OPEN_TS,
     [ENHANCED_CONFIG.STATUS.REQUEST_APPROVED]: ENHANCED_CONFIG.COLUMNS.STATUS_APPROVED_TS,
-    [ENHANCED_CONFIG.STATUS.IE_RECEIVED]: ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS,
-    [ENHANCED_CONFIG.STATUS.IE_REVIEWED]: ENHANCED_CONFIG.COLUMNS.STATUS_REVIEWED_TS,
-    [ENHANCED_CONFIG.STATUS.IE_PUBLISHED]: ENHANCED_CONFIG.COLUMNS.STATUS_PUBLISHED_TS,
-    [ENHANCED_CONFIG.STATUS.IE_RETIRED]: ENHANCED_CONFIG.COLUMNS.STATUS_RETIRED_TS,
+    [ENHANCED_CONFIG.STATUS.DEMO_RECEIVED]: ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS,
+    [ENHANCED_CONFIG.STATUS.DEMO_REVIEWED]: ENHANCED_CONFIG.COLUMNS.STATUS_REVIEWED_TS,
+    [ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED]: ENHANCED_CONFIG.COLUMNS.STATUS_PUBLISHED_TS,
+    [ENHANCED_CONFIG.STATUS.DEMO_RETIRED]: ENHANCED_CONFIG.COLUMNS.STATUS_RETIRED_TS,
     [ENHANCED_CONFIG.STATUS.CLOSED]: ENHANCED_CONFIG.COLUMNS.STATUS_CLOSED_TS
   };
 }
@@ -336,25 +345,6 @@ function notifyConfigurationChange(key, oldValue, newValue) {
   }
 }
 
-/* =========================
-   LIMITED BACKWARD COMPATIBILITY
-========================= */
-
-function getProp_(key) {
-  return getConfigProperty(key, "");
-}
-
-const RM_CORE = {
-  DEFAULT_MASTER_SHEET_NAME: ENHANCED_CONFIG.SHEETS.MASTER_NAME_DEFAULT,
-  HEADER_ROW: ENHANCED_CONFIG.SHEETS.HEADER_ROW,
-  STATUS: ENHANCED_CONFIG.STATUS,
-  COL: ENHANCED_CONFIG.COLUMNS
-};
-
-const SHARED_CONFIG = {
-  TEMPLATE_ID_FALLBACK: ENHANCED_CONFIG.DRIVE.TEMPLATE_ID_DEFAULT,
-  OUTPUT_FOLDER_ID_FALLBACK: ENHANCED_CONFIG.DRIVE.OUTPUT_FOLDER_ID_DEFAULT
-};
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
