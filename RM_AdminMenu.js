@@ -6,6 +6,7 @@
  *
  * Menu delegates to:
  * - RM_Metrics.js: pullMetricsFromDatabricks(), clearMetricsData()
+ * - RH_AllTimeMetricsMap.js: syncAllTimeMetricsToRequestMaster(), clearAllTimeMetricsFromRequestMaster()
  * - RM_Performance.js: runPerformanceLabels(), clearPerformanceLabels()
  * - email_gen.js: promptForCreator(), syncFormResponsesToQueue()
  *
@@ -23,10 +24,12 @@ function onOpen() {
 
   ui.createMenu('Admin')
     .addItem('Pull Metrics from Databricks', 'pullMetricsFromDatabricks')
+    .addItem('Sync All-Time Metrics', 'syncAllTimeMetricsToRequestMaster')
     .addItem('Run Performance Labels', 'runPerformanceLabels')
     .addSeparator()
     .addSubMenu(ui.createMenu('Clear Data')
       .addItem('Clear Metrics', 'clearMetricsData')
+      .addItem('Clear All-Time Metrics', 'clearAllTimeMetricsFromRequestMaster')
       .addItem('Clear Performance Labels', 'clearPerformanceLabels'))
     .addToUi();
 

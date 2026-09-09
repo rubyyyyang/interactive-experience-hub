@@ -28,7 +28,11 @@ Current performance analysis engine that computes performance signals, flags, re
 
 **RM_Metrics.js**
 
-Databricks metrics workflow that retrieves engagement and sales metrics and writes the resulting metrics to `Request_Master`.
+Databricks metrics workflow that retrieves YTD engagement and sales metrics and writes the resulting metrics to `Request_Master`.
+
+**RH_AllTimeMetricsMap.js**
+
+Manual all-time and L90 metrics mapper that reads SQL output from the `All Time Metrics` sheet and writes all-time Players, Completions, MT values, Active Months, L90 metrics, and mapping status into `Request_Master` by Request Number.
 
 **email_gen.js**
 

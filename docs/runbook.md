@@ -58,6 +58,24 @@ Triggers can be reviewed in the Google Apps Script Triggers panel.
 
 `deleteAllTriggers()` removes all installable triggers for the project. Review the existing trigger configuration before using it. It should not be treated as a routine development step.
 
+## Manual metrics refresh
+
+The Hub supports two metrics workflows:
+
+**YTD metrics (automated):**
+- Run "Pull Metrics from Databricks" from the Admin menu
+- Retrieves year-to-date engagement and sales metrics via Databricks API
+- Updates YTD columns in Request_Master
+
+**All-time and L90 metrics (manual):**
+1. Run external SQL query to generate all-time and L90 metrics
+2. Paste SQL results into the "All Time Metrics" sheet
+3. Run "Sync All-Time Metrics" from the Admin menu
+4. All-time and L90 columns are updated in Request_Master
+5. Run "Run Performance Labels" when updated performance recommendations are needed
+
+"Clear All-Time Metrics" is destructive to all-time and L90 metric columns and should only be used intentionally before a full re-sync.
+
 ## Troubleshooting
 
 For workflow or notification failures, check:
