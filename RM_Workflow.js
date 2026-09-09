@@ -422,15 +422,6 @@ function upsertMasterRowByGlobalId(globalId, payload) {
       });
     }
 
-    const latestProdIdx = getColumnIndex(ENHANCED_CONFIG.COLUMNS.LATEST_PROD_LINK);
-    if (latestProdIdx !== -1) {
-      const prodIdx = getColumnIndex(ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK);
-      var prodVal = prodIdx !== -1 ? newRow[prodIdx] : "";
-      sheet.getRange(rowIndex, latestProdIdx + 1).setValue(
-        computeLatestProdLink_(prodVal)
-      );
-    }
-
     const number = numberIndex !== -1 ? newRow[numberIndex] : "";
 
     logWorkflowEvent("master_row_upserted", {
@@ -1016,23 +1007,51 @@ function processIEReviewed(context, lifecycleThreadTs) {
 }
 
 function processIEPublished(context, lifecycleThreadTs) {
-  return processSimpleStatusReply(
+  const slackResult = processSimpleStatusReply(
     context,
     lifecycleThreadTs,
     ENHANCED_CONFIG.COLUMNS.PUBLISHED_SENT,
     ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_PUBLISHED,
     "published_reply"
   );
+
+  // Send creator email notification (independent from Slack)
+  if (typeof buildArcadeLifecycleContext === "function" && typeof dispatchCreatorLifecycleNotification === "function") {
+    try {
+      const lifecycleContext = buildArcadeLifecycleContext(context, ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED);
+      if (lifecycleContext) {
+        dispatchCreatorLifecycleNotification(lifecycleContext);
+      }
+    } catch (error) {
+      logError("processIEPublished_creatorEmail", error, { rowNumber: context.rowNumber });
+    }
+  }
+
+  return slackResult;
 }
 
 function processIERetired(context, lifecycleThreadTs) {
-  return processSimpleStatusReply(
+  const slackResult = processSimpleStatusReply(
     context,
     lifecycleThreadTs,
     ENHANCED_CONFIG.COLUMNS.RETIRED_SENT,
     ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_RETIRED,
     "retired_reply"
   );
+
+  // Send creator email notification (independent from Slack)
+  if (typeof buildArcadeLifecycleContext === "function" && typeof dispatchCreatorLifecycleNotification === "function") {
+    try {
+      const lifecycleContext = buildArcadeLifecycleContext(context, ENHANCED_CONFIG.STATUS.DEMO_RETIRED);
+      if (lifecycleContext) {
+        dispatchCreatorLifecycleNotification(lifecycleContext);
+      }
+    } catch (error) {
+      logError("processIERetired_creatorEmail", error, { rowNumber: context.rowNumber });
+    }
+  }
+
+  return slackResult;
 }
 
 function processClosed(context, requestThreadTs) {

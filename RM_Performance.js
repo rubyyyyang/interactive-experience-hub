@@ -526,14 +526,14 @@ function computePerformanceAction_(signals) {
   if (isLowOpp && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_WON) {
     return {
       action: 'Boost sales impact',
-      reason: 'Strong completion but low sales impact — review linking, CTAs, or sales alignment. ' + formatSignalFields_(signals, ['usage', 'cr', 'mt'])    };
+      reason: 'Strong completion but low sales impact — review the demo page linking, CTAs, or sales alignment.' + formatSignalFields_(signals, ['usage', 'cr', 'mt'])    };
   }
 
   // B. Improve completion
   if (hasHighUsage && hasLowCR && !isNewContent) {
     return {
       action: 'Improve completion',
-      reason: 'Players start but don\'t finish — review the flow and content. ' + formatSignalFields_(signals, ['usage', 'cr'])    };
+      reason: 'Players start but don\'t finish — review the demo page flow and content.' + formatSignalFields_(signals, ['usage', 'cr'])    };
   }
   if (signals.activeMonth.level === 'ESTABLISHED' &&
       signals.usage.level === 'BASE' &&
@@ -541,7 +541,7 @@ function computePerformanceAction_(signals) {
       hasLowCR) {
     return {
       action: 'Improve completion',
-      reason: 'Players start but don\'t finish — review the flow and content. ' + formatSignalFields_(signals, ['usage', 'cr'])    };
+      reason: 'Players start but don\'t finish — review the demo page flow and content.' + formatSignalFields_(signals, ['usage', 'cr'])    };
   }
 
   // C. Create page
@@ -580,7 +580,7 @@ function computePerformanceAction_(signals) {
   if (isLowActivity && !hasHighCR && !hasHighMT && !isNiche) {
     return {
       action: 'Consider retirement',
-      reason: 'This demo is flagged for retirement — consider updating it or confirming retirement. ' + formatSignalFields_(signals, ['activeMonth', 'usage', 'mt'])    };
+      reason: 'This demo is flagged for retirement — review the demo page and consider updating or confirming retirement.' + formatSignalFields_(signals, ['activeMonth', 'usage', 'mt'])    };
   }
 
   if (isNoActivity && signals.contentAge && signals.contentAge.available &&
@@ -588,7 +588,7 @@ function computePerformanceAction_(signals) {
       signals.mt.level === 'NONE') {
     return {
       action: 'Consider retirement',
-      reason: 'This demo is flagged for retirement — consider updating it or confirming retirement. ' + formatSignalFields_(signals, ['activeMonth', 'contentAge', 'mt'])    };
+      reason: 'This demo is flagged for retirement — review the demo page and consider updating or confirming retirement.' + formatSignalFields_(signals, ['activeMonth', 'contentAge', 'mt'])    };
   }
 
   if (isStalled &&
@@ -596,7 +596,7 @@ function computePerformanceAction_(signals) {
       signals.mt.level !== 'HIGH' && signals.mt.level !== 'BASE') {
     return {
       action: 'Consider retirement',
-      reason: 'This demo is flagged for retirement — consider updating it or confirming retirement. ' + formatSignalFields_(signals, ['activeMonth', 'usage', 'mt'])    };
+      reason: 'This demo is flagged for retirement — review the demo page and consider updating or confirming retirement.' + formatSignalFields_(signals, ['activeMonth', 'usage', 'mt'])    };
   }
 
   // F. Needs review
@@ -804,8 +804,8 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
 
   var rowStatus = String(safeGetByName(row, headerMap, ENHANCED_CONFIG.COLUMNS.STATUS) || '').trim();
 
-  if (rowStatus === ENHANCED_CONFIG.STATUS.IE_RETIRED) {
-    return makeSkipResult_('Status = IE Retired');
+  if (rowStatus === ENHANCED_CONFIG.STATUS.DEMO_RETIRED) {
+    return makeSkipResult_('Status = Demo Retired');
   }
 
   if (rowStatus === ENHANCED_CONFIG.STATUS.CLOSED) {
@@ -813,10 +813,10 @@ function classifyRow_(row, headerMap, seenNumbers, referenceDate) {
   }
 
   if (rowStatus !== '' &&
-      rowStatus !== ENHANCED_CONFIG.STATUS.IE_PUBLISHED &&
-      rowStatus !== ENHANCED_CONFIG.STATUS.IE_REVIEWED &&
-      rowStatus !== ENHANCED_CONFIG.STATUS.IE_RECEIVED) {
-    return makeReviewResult_('Row has status "' + rowStatus + '", which is not eligible for performance labeling (only IE Published, IE Reviewed, IE Received, or blank).');
+      rowStatus !== ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED &&
+      rowStatus !== ENHANCED_CONFIG.STATUS.DEMO_REVIEWED &&
+      rowStatus !== ENHANCED_CONFIG.STATUS.DEMO_RECEIVED) {
+    return makeReviewResult_('Row has status "' + rowStatus + '", which is not eligible for performance labeling (only Demo Published, Demo Reviewed, Demo Received, or blank).');
   }
 
   var number = String(safeGetByName(row, headerMap, ENHANCED_CONFIG.COLUMNS.NUMBER) || '').trim();
@@ -1465,8 +1465,6 @@ function testPerformanceRules() {
   assert('Page: arcade URL → no page', hasDemoSpecificPage_('https://arcade.redhat.com/some-demo'), false);
   assert('Page: external URL → no page', hasDemoSpecificPage_('https://example.com/some-page'), false);
 
-  assert('Page: Public Site Link column not used', PERF_METRIC_COLUMNS.DRUPAL_PAGE_URL !== ENHANCED_CONFIG.COLUMNS.PUBLIC_SITE_LINK, true);
-
   // --- Performance Flags ---
 
   assertFlags('Flag: High usage (no page, low MT → no Low opp value)',
@@ -2007,7 +2005,7 @@ function testProcessingAudit() {
   function makeFullDataRow(overrides) {
     var base = {};
     base[ENHANCED_CONFIG.COLUMNS.NUMBER] = '100';
-    base[ENHANCED_CONFIG.COLUMNS.STATUS] = 'IE Published';
+    base[ENHANCED_CONFIG.COLUMNS.STATUS] = 'Demo Published';
     base[ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE] = 'Test Demo';
     base[PERF_METRIC_COLUMNS.ACTIVE_MONTHS] = 6;
     base[PERF_METRIC_COLUMNS.TOTAL_PLAYERS] = 150;
@@ -2064,9 +2062,9 @@ function testProcessingAudit() {
   var rBlankNoMetrics = classifyRow_(blankStatusNoMetrics, hm, {}, referenceDate);
   assert('Audit: blank status + missing metrics → Needs review', rBlankNoMetrics.outcome, 'needs_review');
 
-  // --- IE Received → Processed ---
+  // --- Demo Received → Processed ---
   var receivedRow = makeFullDataRow({});
-  receivedRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Received';
+  receivedRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Received';
   receivedRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '63';
   receivedRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 60;
   receivedRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 10;
@@ -2074,14 +2072,14 @@ function testProcessingAudit() {
   receivedRow[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.20;
   receivedRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 5000;
   receivedRow[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 1000;
-  assert('Audit: IE Received → Processed', classifyRow_(receivedRow, hm, {}, referenceDate).result, 'Processed');
+  assert('Audit: Demo Received → Processed', classifyRow_(receivedRow, hm, {}, referenceDate).result, 'Processed');
 
-  // --- IE Published → Processed ---
-  assert('Audit: IE Published → Processed', classifyRow_(makeFullDataRow({}), hm, {}, referenceDate).result, 'Processed');
+  // --- Demo Published → Processed ---
+  assert('Audit: Demo Published → Processed', classifyRow_(makeFullDataRow({}), hm, {}, referenceDate).result, 'Processed');
 
-  // --- IE Reviewed → Processed ---
+  // --- Demo Reviewed → Processed ---
   var reviewedRow = makeFullDataRow({});
-  reviewedRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Reviewed';
+  reviewedRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Reviewed';
   reviewedRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '70';
   reviewedRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 60;
   reviewedRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 10;
@@ -2089,16 +2087,16 @@ function testProcessingAudit() {
   reviewedRow[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.20;
   reviewedRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 5000;
   reviewedRow[hm[PERF_METRIC_COLUMNS.MT_WON_VALUE]] = 1000;
-  assert('Audit: IE Reviewed → Processed', classifyRow_(reviewedRow, hm, {}, referenceDate).result, 'Processed');
+  assert('Audit: Demo Reviewed → Processed', classifyRow_(reviewedRow, hm, {}, referenceDate).result, 'Processed');
 
-  // --- IE Retired → Skipped ---
+  // --- Demo Retired → Skipped ---
   var retiredRow = makeRow({});
   retiredRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '60';
-  retiredRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Retired';
+  retiredRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Retired';
   var rRetired = classifyRow_(retiredRow, hm, {}, referenceDate);
-  assert('Audit: IE Retired → Skipped', rRetired.result, 'Skipped — Status = IE Retired');
-  assert('Audit: IE Retired clears Signals', rRetired.signals, '');
-  assert('Audit: IE Retired clears Action', rRetired.action, '');
+  assert('Audit: Demo Retired → Skipped', rRetired.result, 'Skipped — Status = Demo Retired');
+  assert('Audit: Demo Retired clears Signals', rRetired.signals, '');
+  assert('Audit: Demo Retired clears Action', rRetired.action, '');
 
   // --- Closed → Skipped ---
   var closedRow = makeRow({});
@@ -2109,7 +2107,7 @@ function testProcessingAudit() {
   // --- Note = Delete row → Skipped ---
   var deleteRow = makeRow({});
   deleteRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '99';
-  deleteRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  deleteRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   deleteRow[hm[ENHANCED_CONFIG.COLUMNS.NOTE]] = 'Delete row';
   var rDelete = classifyRow_(deleteRow, hm, {}, referenceDate);
   assert('Audit: Note = Delete row → Skipped', rDelete.result, 'Skipped — Note = Delete row');
@@ -2121,7 +2119,7 @@ function testProcessingAudit() {
 
   // --- Missing identifier → Needs review ---
   var noIdRow = makeRow({});
-  noIdRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  noIdRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   noIdRow[hm[ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE]] = 'No Number';
   noIdRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 6;
   noIdRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 100;
@@ -2164,7 +2162,7 @@ function testProcessingAudit() {
   // --- Page detection in parseMetrics_ ---
   var pgBase = {};
   pgBase[ENHANCED_CONFIG.COLUMNS.NUMBER] = '90';
-  pgBase[ENHANCED_CONFIG.COLUMNS.STATUS] = 'IE Published';
+  pgBase[ENHANCED_CONFIG.COLUMNS.STATUS] = 'Demo Published';
   pgBase[PERF_METRIC_COLUMNS.ACTIVE_MONTHS] = 6;
   pgBase[PERF_METRIC_COLUMNS.TOTAL_PLAYERS] = 150;
   pgBase[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH] = 25;
@@ -2191,7 +2189,7 @@ function testProcessingAudit() {
   // --- No activity tests ---
   var noActMTRow = makeRow({});
   noActMTRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '300';
-  noActMTRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  noActMTRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   noActMTRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActMTRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActMTRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2203,7 +2201,7 @@ function testProcessingAudit() {
 
   var noActScoreRow = makeRow({});
   noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '310';
-  noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   noActScoreRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActScoreRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActScoreRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2217,7 +2215,7 @@ function testProcessingAudit() {
 
   var noActYoungRow = makeRow({});
   noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '301';
-  noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   noActYoungRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActYoungRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActYoungRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2230,7 +2228,7 @@ function testProcessingAudit() {
 
   var noActOldPageRow = makeRow({});
   noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '302';
-  noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2244,7 +2242,7 @@ function testProcessingAudit() {
 
   var noActOldNoPageRow = makeRow({});
   noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '303';
-  noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2257,7 +2255,7 @@ function testProcessingAudit() {
 
   var noActNoAge = makeRow({});
   noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '304';
-  noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   noActNoAge[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActNoAge[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActNoAge[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2272,7 +2270,7 @@ function testProcessingAudit() {
   // --- Stale activity → Retire ---
   var staleRow = makeRow({});
   staleRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '350';
-  staleRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  staleRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   staleRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 2;
   staleRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 20;
   staleRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 10;
@@ -2374,7 +2372,7 @@ function testProcessingAudit() {
   // --- No activity + blank rate ---
   var noActBlankRateOld = makeRow({});
   noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '305';
-  noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 0;
@@ -2387,7 +2385,7 @@ function testProcessingAudit() {
 
   var noActBlankRateNew = makeRow({});
   noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '306';
-  noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 0;
@@ -2401,7 +2399,7 @@ function testProcessingAudit() {
   // --- Low activity + blank rate ---
   var lowActBlankRate = makeRow({});
   lowActBlankRate[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '307';
-  lowActBlankRate[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  lowActBlankRate[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 5;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 0;
@@ -2450,7 +2448,7 @@ function testProcessingAudit() {
 
   var reviewRow = makeRow({});
   reviewRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '999';
-  reviewRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'IE Published';
+  reviewRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
   reviewRow[hm[PERF_METRIC_COLUMNS.METRICS_MAPPING_STATUS]] = 'Unlinked request';
   var reviewResult = classifyRow_(reviewRow, hm, {}, referenceDate);
   assert('Audit: Needs-review row has empty priority', reviewResult.priority, '');

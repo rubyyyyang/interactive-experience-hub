@@ -246,8 +246,10 @@ function normalizeStatusCanonical(rawStatus) {
     "ie reviewed": ENHANCED_CONFIG.STATUS.DEMO_REVIEWED,
     "published": ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED,
     "ie published": ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED,
+    "demo published": ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED,
     "retired": ENHANCED_CONFIG.STATUS.DEMO_RETIRED,
     "ie retired": ENHANCED_CONFIG.STATUS.DEMO_RETIRED,
+    "demo retired": ENHANCED_CONFIG.STATUS.DEMO_RETIRED,
     "closed": ENHANCED_CONFIG.STATUS.CLOSED
   };
 
@@ -407,8 +409,8 @@ function getHeaderCacheStats() {
   return stats;
 }
 
-function computeLatestProdLink_(prodLink) {
-  var p = String(prodLink || "").trim();
+function extractLastLine_(multiLineValue) {
+  var p = String(multiLineValue || "").trim();
   if (p) {
     var lines = p.split("\n");
     for (var i = lines.length - 1; i >= 0; i--) {
@@ -417,17 +419,5 @@ function computeLatestProdLink_(prodLink) {
     }
   }
   return "";
-}
-
-function stampLatestProdLink_(sheet, headerMap, rowNumber) {
-  var latestCol = headerMap[ENHANCED_CONFIG.COLUMNS.LATEST_PROD_LINK];
-  if (latestCol == null) return;
-
-  var prodCol = headerMap[ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK];
-
-  var rowData = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var prodLink = prodCol != null ? String(rowData[prodCol] || "") : "";
-
-  sheet.getRange(rowNumber, latestCol + 1).setValue(computeLatestProdLink_(prodLink));
 }
 
