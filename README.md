@@ -64,6 +64,12 @@ Production deployment is currently performed manually in Google Apps Script afte
 - [Architecture](docs/architecture.md)
 - [Runbook](docs/runbook.md)
 
+## Internal Resources
+
+- [Google Apps Script project](https://script.google.com/u/0/home/projects/1j9kP2ZqJpQoUdszg4-X1Nvc0BaMG23KB2uMKLvf3T35k4KfpoZac_xpQ/edit)
+- [Request_Master spreadsheet](https://docs.google.com/spreadsheets/d/1t7TJtTL-jbUaCVKVLMMOahbKcL5b1IyCf3uUSCmQo4A/edit?gid=1123598561#gid=1123598561)
+- [Production app](https://script.google.com/a/macros/redhat.com/s/AKfycbw-i5dNh9DOHOyGuo9-pbfrQCazwImd48wfxTDD8wecsg4tk5h6yXGy25OJFx1F5COgsw/exec)
+
 ## Related repository
 
 Creator-facing intake, AI-assisted submission processing, and the Status Tracker are maintained in:
