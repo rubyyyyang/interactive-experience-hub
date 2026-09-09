@@ -1,7 +1,16 @@
 CLAUDE.md
+AGENTS.md
 .claude/**
 .superpowers/**
 docs/**
+tests/**
+node_modules/**
+playwright/**
+playwright-report/**
+test-results/**
+playwright.config.ts
+package.json
+package-lock.json
 .clasp.json
 .gitignore
 .DS_Store

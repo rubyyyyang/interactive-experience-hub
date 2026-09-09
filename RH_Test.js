@@ -296,6 +296,64 @@ function test__system_check() {
   return checks;
 }
 
+function test__timestamp_diagnosis() {
+  console.log("🔍 Diagnosing Status Timestamp stamping...\n");
+
+  // 1. Check installed triggers
+  const triggers = ScriptApp.getProjectTriggers();
+  const onEditTriggers = triggers.filter(t => t.getHandlerFunction() === "onEdit");
+  console.log(`📋 Installed triggers: ${triggers.length} total, ${onEditTriggers.length} onEdit`);
+  for (const t of triggers) {
+    console.log(`  - ${t.getHandlerFunction()} (${t.getEventType()})`);
+  }
+  if (onEditTriggers.length === 0) {
+    console.log("❌ No installable onEdit trigger found! Run installTriggers() to fix.");
+  } else {
+    console.log("✅ onEdit installable trigger exists");
+  }
+
+  // 2. Check timestamp column headers
+  const sheet = getMasterSheet();
+  const headerMap = getHeaderMapFromSheet(sheet, ENHANCED_CONFIG.SHEETS.HEADER_ROW);
+  const statusToTs = getStatusToTimestampMapping();
+
+  console.log("\n📋 Status → Timestamp column mapping:");
+  let allColumnsFound = true;
+  for (const [status, tsColumn] of Object.entries(statusToTs)) {
+    const idx = headerMap[tsColumn];
+    const found = idx != null;
+    if (!found) allColumnsFound = false;
+    console.log(`  ${found ? "✅" : "❌"} "${status}" → "${tsColumn}" (col ${found ? idx + 1 : "NOT FOUND"})`);
+  }
+
+  // 3. Check Status column itself
+  const statusIdx = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
+  console.log(`\n📋 Status column: "${ENHANCED_CONFIG.COLUMNS.STATUS}" → col ${statusIdx != null ? statusIdx + 1 : "NOT FOUND"}`);
+
+  // 4. Show all headers containing "status" or "timestamp" for debugging mismatches
+  console.log("\n📋 All headers containing 'status' or 'timestamp':");
+  for (const [name, idx] of Object.entries(headerMap)) {
+    if (name.toLowerCase().includes("status") || name.toLowerCase().includes("timestamp")) {
+      console.log(`  col ${idx + 1}: "${name}"`);
+    }
+  }
+
+  // 5. Test normalizeStatusCanonical
+  const testValues = ["Demo Published", "IE Published", "Demo Reviewed", "IE Reviewed"];
+  console.log("\n📋 Status normalization test:");
+  for (const val of testValues) {
+    const canonical = normalizeStatusCanonical(val);
+    const tsCol = statusToTs[canonical];
+    console.log(`  "${val}" → canonical="${canonical}" → tsColumn="${tsCol || "NONE"}"`);
+  }
+
+  console.log("\n" + (allColumnsFound && onEditTriggers.length > 0
+    ? "✅ Everything looks correct. If timestamps still don't fill, check the Execution log for errors during onEdit."
+    : "❌ Issues found above. Fix them and re-test."));
+
+  return { triggersOk: onEditTriggers.length > 0, columnsOk: allColumnsFound };
+}
+
 // === LEGACY COMPATIBILITY ===
 
 /**

@@ -336,42 +336,6 @@ function convertDurationToPerRowFormulas() {
 }
 
 
-/**
- * Backfill Latest Prod Link for all rows using code-based computation.
- * Extracts last line from Production Link (line 1 = v1, line 2 = v2, …),
- * falls back to Creation Link.
- *
- * Run once from Apps Script editor.
- */
-function backfillLatestProdLink() {
-  var sheet = getMasterSheet();
-  var headerMap = getHeaderMapFromSheet(sheet, ENHANCED_CONFIG.SHEETS.HEADER_ROW);
-
-  var latestCol = headerMap[ENHANCED_CONFIG.COLUMNS.LATEST_PROD_LINK];
-  if (latestCol == null) {
-    throw new Error("Latest Prod Link column not found in Request_Master");
-  }
-  var prodCol = headerMap[ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK];
-  if (prodCol == null) {
-    throw new Error("Production Link column not found in Request_Master");
-  }
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    console.log("No data rows");
-    return;
-  }
-
-  var data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
-  var output = [];
-  for (var i = 0; i < data.length; i++) {
-    output.push([computeLatestProdLink_(data[i][prodCol])]);
-  }
-
-  sheet.getRange(2, latestCol + 1, output.length, 1).setValues(output);
-  SpreadsheetApp.flush();
-  console.log("Latest Prod Link: backfilled " + output.length + " rows with computed values");
-}
-
 function columnToLetter_(colIndex) {
   var letter = "";
   var temp = colIndex;
