@@ -17,6 +17,12 @@
  * Same spreadsheet, same Request_Master
  ***************************************/
 
+// Discovery cache schema version
+// Increment this when cached Discovery payload semantics or dependencies change
+// (e.g., changes to filter detection, record normalization, facet structure, or bundle shape)
+// to intentionally invalidate existing cache entries.
+const DISCOVERY_CACHE_SCHEMA_VERSION = 1;
+
 const DISCOVERY_WEBAPP_CONFIG = {
   MASTER_SHEET: "Request_Master",
   HEADER_ROW: 1,
@@ -32,13 +38,6 @@ const DISCOVERY_WEBAPP_CONFIG = {
   ALLOWED_EMAIL_DOMAINS: ["redhat.com"],
 };
 
-function onEdit(e) {
-  try {
-    if (e && e.source && e.source.getActiveSheet().getName() === "Request_Master") {
-      CacheService.getScriptCache().put("DISCOVERY_DIRTY", "1", 900);
-    }
-  } catch (err) {}
-}
 
 const DISCOVERY_RUNTIME_MEMO = {
   versionKey: "",
@@ -59,29 +58,27 @@ const DISCOVERY_SEARCH_SYNONYMS = {
   "multilayered": ["multi layer", "multi-layer", "multilayer"],
 };
 
-const DISCOVERY_REQUIRED_HEADERS = [
-  "Status",
-  "Final Demo Title",
-  "Suggested Demo Title",
-  "Product",
-  "Event",
-  "Production Link",
-  "Public Site Link",
-  "RHAC page",
-  "Latest Prod Link",
-  "Number",
-];
+function getDiscoveryRequiredHeaders_() {
+  return [
+    ENHANCED_CONFIG.COLUMNS.STATUS,
+    ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE,
+    ENHANCED_CONFIG.COLUMNS.SUGGESTED_TITLE,
+    ENHANCED_CONFIG.COLUMNS.PRODUCT,
+    ENHANCED_CONFIG.COLUMNS.EVENT,
+    ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK,
+    ENHANCED_CONFIG.COLUMNS.DRUPAL_PAGE_URL,
+    ENHANCED_CONFIG.COLUMNS.RHAC_PAGE,
+    ENHANCED_CONFIG.COLUMNS.NUMBER,
+  ];
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
 
 function doGet(e) {
-  var page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'discovery';
-
-  if (page === 'lifecycle') {
-    return HtmlService.createHtmlOutputFromFile('lifecycle')
-      .setTitle('Arcade Lifecycle Dashboard')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  }
-
-  return HtmlService.createHtmlOutputFromFile("discovery")
+  return HtmlService.createTemplateFromFile("discovery")
+    .evaluate()
     .setTitle("The Interact Hub")
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -108,31 +105,47 @@ function getDiscoveryInitialBootstrap() {
 }
 
 function getDiscoveryFilterOptions() {
-  return getDiscoveryFilterOptions_();
+  return {
+    filterOptions: getDiscoveryFilterOptions_(),
+    synonymMap: DISCOVERY_SEARCH_SYNONYMS,
+  };
 }
 
 function getDiscoveryBootstrap() {
   const me = getActiveEmail_();
   const isEditor = isEditor_(me);
-  const normalized = normalizeDiscoveryParams_({
-    q: "",
-    products: [],
-    events: [],
-    tdps: [],
-    marketingPrograms: [],
-    salesTactics: [],
-    creatorNames: [],
-    page: 1,
-    pageSize: DISCOVERY_WEBAPP_CONFIG.PAGE_SIZE,
-  });
 
-  const bundle = getDiscoveryIndexBundle_();
+  const sh = getMasterSheet_();
+  const versionKey = getDiscoverySheetVersion_(sh);
+  const cacheKey = "bootstrap:" + versionKey;
+
+  let dataPayload = getScriptCacheJson_(cacheKey);
+  if (!dataPayload) {
+    const normalized = normalizeDiscoveryParams_({
+      q: "",
+      products: [],
+      events: [],
+      tdps: [],
+      marketingPrograms: [],
+      salesTactics: [],
+      creatorNames: [],
+      page: 1,
+      pageSize: DISCOVERY_WEBAPP_CONFIG.PAGE_SIZE,
+    });
+
+    const bundle = getDiscoveryIndexBundle_();
+    dataPayload = {
+      initial: buildDiscoveryListResultFromBundle_(bundle, normalized),
+      filterOptions: buildDiscoveryFilterOptionsFromBundle_(bundle),
+    };
+    putScriptCacheJson_(cacheKey, dataPayload, DISCOVERY_WEBAPP_CONFIG.INDEX_CACHE_SECONDS);
+  }
 
   return {
     me: me || "",
     isEditor,
-    initial: buildDiscoveryListResultFromBundle_(bundle, normalized),
-    filterOptions: buildDiscoveryFilterOptionsFromBundle_(bundle),
+    initial: dataPayload.initial,
+    filterOptions: dataPayload.filterOptions,
     synonymMap: DISCOVERY_SEARCH_SYNONYMS,
   };
 }
@@ -143,7 +156,8 @@ function listDiscoveryPage(params) {
 
 function getDiscoveryRecord(recordId) {
   const sh = getMasterSheet_();
-  const headerMap = getHeaderMapFromSheet_(sh, DISCOVERY_WEBAPP_CONFIG.HEADER_ROW);
+  const headerMap = getHeaderMapFromSheet(sh, DISCOVERY_WEBAPP_CONFIG.HEADER_ROW);
+  validateRequiredHeaders_(headerMap);
 
   const rowNumber = Number(recordId);
   if (
@@ -499,6 +513,7 @@ function buildDiscoveryFilterOptionsFromBundle_(bundle) {
     marketingPrograms: new Set(),
     salesTactics: new Set(),
     creatorNames: new Set(),
+    formats: new Set(),
   };
 
   for (let i = 0; i < index.length; i++) {
@@ -509,6 +524,7 @@ function buildDiscoveryFilterOptionsFromBundle_(bundle) {
     addIf_(sets.marketingPrograms, item.marketingProgram);
     addIf_(sets.salesTactics, item.salesTactic);
     addIf_(sets.creatorNames, item.creatorNameClean);
+    addIf_(sets.formats, item.format);
   }
 
   return {
@@ -518,6 +534,7 @@ function buildDiscoveryFilterOptionsFromBundle_(bundle) {
     marketingPrograms: [...sets.marketingPrograms].sort(),
     salesTactics: [...sets.salesTactics].sort(),
     creatorNames: [...sets.creatorNames].sort(),
+    formats: [...sets.formats].sort(),
   };
 }
 
@@ -529,6 +546,7 @@ function buildDiscoveryListResultFromBundle_(bundle, normalized) {
   const marketingPrograms = normalized.marketingPrograms;
   const salesTactics = normalized.salesTactics;
   const creatorNames = normalized.creatorNames;
+  const formats = normalized.formats;
   const page = normalized.page;
   const pageSize = normalized.pageSize;
 
@@ -544,6 +562,7 @@ function buildDiscoveryListResultFromBundle_(bundle, normalized) {
   candidateIds = intersectCandidateIds_(candidateIds, getFacetRecordIds_(facetMaps.marketingPrograms, marketingPrograms));
   candidateIds = intersectCandidateIds_(candidateIds, getFacetRecordIds_(facetMaps.salesTactics, salesTactics));
   candidateIds = intersectCandidateIds_(candidateIds, getFacetRecordIds_(facetMaps.creatorNames, creatorNames));
+  candidateIds = intersectCandidateIds_(candidateIds, getFacetRecordIds_(facetMaps.formats, formats));
 
   if (q) {
     const searchCandidateIds = getSearchCandidateIds_(searchIndex, normalized);
@@ -575,6 +594,9 @@ function buildDiscoveryListResultFromBundle_(bundle, normalized) {
       const ap = Number(a.sortPriority || 99);
       const bp = Number(b.sortPriority || 99);
       if (ap !== bp) return ap - bp;
+      var ta = a.sortTs ? new Date(a.sortTs).getTime() : 0;
+      var tb = b.sortTs ? new Date(b.sortTs).getTime() : 0;
+      if (ta || tb) return (tb || 0) - (ta || 0);
       return (Number(b.number) || 0) - (Number(a.number) || 0);
     });
   }
@@ -680,53 +702,57 @@ function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkCont
     return ensureHttps_(normalizeValueForUi_(row[idx]));
   };
 
-  const status = normalizeStatusCanonical_(get("Status"));
-  const publishStates = get("Publish states");
+  const COL = ENHANCED_CONFIG.COLUMNS;
 
-  const finalTitle = get("Final Demo Title");
-  const suggestedTitle = get("Suggested Demo Title");
-  const title = finalTitle || suggestedTitle || "Untitled";
+  const status = normalizeStatusCanonical(get(COL.STATUS));
+  const publishStates = get(COL.PUBLISH_STATES);
 
-  // Combine Primary Product + Product, and remove duplicates
-  const primaryProduct = get("Primary Product");
-  const relatedProducts = get("Product");
+  const finalTitle = get(COL.FINAL_DEMO_TITLE);
+  const suggestedTitle = get(COL.SUGGESTED_TITLE);
+  const title = finalTitle || suggestedTitle || get("Video Title") || "Untitled";
+
+  const primaryProduct = get(COL.PRIMARY_PRODUCT);
+  const relatedProducts = get(COL.PRODUCT);
   const combinedProducts = combineUniqueProducts_(primaryProduct, relatedProducts);
 
-  const eventName = get("Event");
-  const tdp = get("TDP") || get("Technology Decision Point") || get("Primary TDP");
-  const marketingProgram =
-    get("Marketing Program") || get("Primary Marketing Program");
-  const salesTactic = get("Sales Tactic") || get("Primary Sales Tactic");
-  const description = get("Demo Description") || get("Context Description");
-  const personas = get("Personas");
-  const language = get("Language");
-  const duration = get("Duration");
-  const creatorName = get("Creator Name");
-  const creatorTeam = get("Creator Team");
-  const creatorEmail = get("Creator Email");
-  const globalId = get("Global ID");
-  const verticals = get("Verticals");
-  const originType = get("Origin Type");
-  const itemNumber = Number(get("Number")) || 0;
+  const eventName = get(COL.EVENT);
+  const tdp = get(COL.TDP);
+  const marketingProgram = get(COL.MARKETING_PROGRAM);
+  const salesTactic = get(COL.SALES_TACTIC);
+  const description = get(COL.DEMO_DESCRIPTION) || get(COL.CONTEXT_DESC);
+  const personas = get(COL.PERSONAS);
+  const language = get(COL.LANGUAGE);
+  const duration = get(COL.DURATION);
+  const creatorName = get(COL.CREATOR_NAME);
+  const creatorTeam = get(COL.CREATOR_TEAM);
+  const creatorEmail = get(COL.CREATOR_EMAIL);
+  const globalId = get(COL.GLOBAL_ID);
+  const verticals = get(COL.VERTICALS);
+  const originType = get(COL.ORIGIN_TYPE);
+  const itemNumber = Number(get(COL.NUMBER)) || 0;
 
-  const productionLink = getUrl("Production Link");
-  const publicSiteLink = getUrl("Public Site Link");
-  const rhacPage = getUrl("RHAC page");
-  const ctaLink = getUrl("CTALink");
-  const latestProdLink = getUrl("Latest Prod Link");
-  const creationLink = getUrl("Creation Link");
+  const productionLink = ensureHttps_(extractLastLine_(get(COL.PROD_ARCADE_LINK)));
+  const drupalPageUrl = getUrl(COL.DRUPAL_PAGE_URL);
+  const rhacPage = getUrl(COL.RHAC_PAGE);
+  const ctaLink = getUrl(COL.CTA_LINK);
+  const creationLink = ensureHttps_(extractLastLine_(get(COL.CREATION_LINK))) || (get("YouTube Video ID") ? 'https://www.youtube.com/watch?v=' + get("YouTube Video ID") : '');
 
-  const featuredStart = parseDateSafe_(get("Featured Start Date"));
-  const featuredEnd = parseDateSafe_(get("Featured End Date"));
-  const latestStart = parseDateSafe_(get("Latest Start Date"));
-  const latestEnd = parseDateSafe_(get("Latest End Date"));
+  const _linkBlob = (productionLink + ' ' + creationLink).toLowerCase();
+  const format = /youtu\.be|youtube\.com/.test(_linkBlob) ? 'YouTube Video'
+    : /interact\.redhat\.com|app\.arcade\.software/.test(_linkBlob) ? 'Arcade Demo'
+    : /interactive[\-\s]?lab|demo\.redhat\.com/.test(_linkBlob) ? 'Lab'
+    : '';
+
+  const featuredStart = parseDateSafe_(get(COL.FEATURED_START_DATE));
+  const featuredEnd = parseDateSafe_(get(COL.FEATURED_END_DATE));
+  const latestStart = parseDateSafe_(get(COL.LATEST_START_DATE));
+  const latestEnd = parseDateSafe_(get(COL.LATEST_END_DATE));
 
   const isReadyToUse = computeIsReadyToUse_(
     status,
     productionLink,
-    publicSiteLink,
-    rhacPage,
-    latestProdLink
+    drupalPageUrl,
+    rhacPage
   );
 
   const isDiscoverable = computeIsDiscoverable_(status, isReadyToUse);
@@ -786,10 +812,12 @@ function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkCont
   const productSearchBlob = normalizeSearchText_(combinedProducts);
 
   const sortPriority = getDiscoverySortPriority_(discoverStatus);
+  const sortTs = get(COL.STATUS_PUBLISHED_TS) || get(COL.STATUS_RECEIVED_TS) || '';
 
   return {
     recordId: String(rowNumber),
     number: itemNumber,
+    sortTs,
     title,
     discoverStatus,
     isDiscoverable,
@@ -815,13 +843,13 @@ function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkCont
     creatorEmail,
     globalId,
     productionLink,
-    publicSiteLink,
+    drupalPageUrl,
     rhacPage,
     ctaLink,
-    latestProdLink,
     creationLink,
     verticals,
     duration,
+    format,
     searchText,
     searchBlob,
     searchCompact,
@@ -864,6 +892,7 @@ function getDiscoveryIndexBundle_() {
         marketingPrograms: {},
         salesTactics: {},
         creatorNames: {},
+        formats: {},
       },
       recordMap: {},
       sortedRecordIds: [],
@@ -887,7 +916,8 @@ function getDiscoveryIndexBundle_() {
     return DISCOVERY_RUNTIME_MEMO.bundle;
   }
 
-  const headerMap = getHeaderMapFromSheet_(sh, DISCOVERY_WEBAPP_CONFIG.HEADER_ROW);
+  const headerMap = getHeaderMapFromSheet(sh, DISCOVERY_WEBAPP_CONFIG.HEADER_ROW);
+  validateRequiredHeaders_(headerMap);
   const lastCol = sh.getLastColumn();
   const rowCount = lastRow - DISCOVERY_WEBAPP_CONFIG.HEADER_ROW;
   const range = sh.getRange(
@@ -897,15 +927,15 @@ function getDiscoveryIndexBundle_() {
     lastCol
   );
   const data = range.getDisplayValues();
-  const linkOverridesByRow = getDiscoveryLinkOverridesForRange_(range, headerMap);
+  const linkOverridesByRow = getDiscoveryLinkOverridesForRange_(range, headerMap, data);
 
-  var statusColIdx = headerMap["Status"];
+  var statusColIdx = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
   var validRowSet = null;
   if (statusColIdx !== undefined && statusColIdx !== null) {
     validRowSet = new Set();
     for (var si = 0; si < data.length; si++) {
       var rawStatus = String(data[si][statusColIdx] || "").trim().toLowerCase().replace(/\s+/g, " ");
-      if (rawStatus === "ie published" || rawStatus === "ie reviewed") {
+      if (rawStatus === "published" || rawStatus === "demo published" || rawStatus === "ie published" || rawStatus === "demo reviewed" || rawStatus === "ie reviewed") {
         validRowSet.add(si);
       }
     }
@@ -920,6 +950,7 @@ function getDiscoveryIndexBundle_() {
     marketingPrograms: {},
     salesTactics: {},
     creatorNames: {},
+    formats: {},
   };
   const searchIndex = {
     terms: {},
@@ -943,7 +974,45 @@ function getDiscoveryIndexBundle_() {
     addRecordToFacetMap_(facetMaps.marketingPrograms, item.marketingProgram, recordId);
     addRecordToFacetMap_(facetMaps.salesTactics, item.salesTactic, recordId);
     addRecordToFacetMap_(facetMaps.creatorNames, item.creatorNameClean, recordId);
+    addRecordToFacetMap_(facetMaps.formats, item.format, recordId);
     addRecordToSearchIndex_(searchIndex, item, recordId);
+  }
+
+  var ytSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("YouTube_Responses");
+  if (ytSheet && ytSheet.getLastRow() > 1) {
+    var ytHeaderMap = getHeaderMapFromSheet(ytSheet, 1);
+    var ytLastRow = ytSheet.getLastRow();
+    var ytLastCol = ytSheet.getLastColumn();
+    var ytData = ytSheet.getRange(2, 1, ytLastRow - 1, ytLastCol).getDisplayValues();
+    var ytStatusIdx = ytHeaderMap[ENHANCED_CONFIG.COLUMNS.STATUS];
+
+    for (var yi = 0; yi < ytData.length; yi++) {
+      if (ytStatusIdx != null) {
+        var ytStatus = String(ytData[yi][ytStatusIdx] || "").trim().toLowerCase().replace(/\s+/g, " ");
+        if (ytStatus !== "published" && ytStatus !== "demo published" && ytStatus !== "demo reviewed") continue;
+      }
+      var ytRowNumber = 2 + yi;
+      var ytItem = buildDiscoveryRecordFromRow_(ytData[yi], ytRowNumber, ytHeaderMap, { linkOverrides: {} });
+      if (!ytItem.productionLink && ytItem.creationLink) {
+        ytItem.productionLink = ytItem.creationLink;
+        ytItem.isReadyToUse = true;
+        ytItem.isDiscoverable = true;
+      }
+      if (!ytItem.isDiscoverable) continue;
+
+      var ytRecordId = "yt-" + ytRowNumber;
+      ytItem.recordId = ytRecordId;
+      index.push(ytItem);
+      recordMap[ytRecordId] = ytItem;
+      addRecordToFacetMap_(facetMaps.products, ytItem.product, ytRecordId);
+      addRecordToFacetMap_(facetMaps.events, ytItem.event, ytRecordId);
+      addRecordToFacetMap_(facetMaps.tdps, ytItem.tdp, ytRecordId);
+      addRecordToFacetMap_(facetMaps.marketingPrograms, ytItem.marketingProgram, ytRecordId);
+      addRecordToFacetMap_(facetMaps.salesTactics, ytItem.salesTactic, ytRecordId);
+      addRecordToFacetMap_(facetMaps.creatorNames, ytItem.creatorNameClean, ytRecordId);
+      addRecordToFacetMap_(facetMaps.formats, ytItem.format, ytRecordId);
+      addRecordToSearchIndex_(searchIndex, ytItem, ytRecordId);
+    }
   }
 
   index.sort(compareDiscoveryItems_);
@@ -973,7 +1042,12 @@ function addRecordToFacetMap_(facetMap, rawValue, recordId) {
 function getDiscoverySheetVersion_(sheet) {
   const props = PropertiesService.getDocumentProperties();
   const version = props.getProperty("DISCOVERY_DATA_VERSION") || "1";
-  return [sheet.getSheetId(), sheet.getLastRow(), sheet.getLastColumn(), version].join(":");
+  var ytRows = 0;
+  try {
+    var yt = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("YouTube_Responses");
+    if (yt) ytRows = yt.getLastRow();
+  } catch (_) {}
+  return [DISCOVERY_CACHE_SCHEMA_VERSION, sheet.getSheetId(), sheet.getLastRow(), sheet.getLastColumn(), version, ytRows].join(":");
 }
 
 function bumpDiscoveryDataVersion_() {
@@ -983,29 +1057,37 @@ function bumpDiscoveryDataVersion_() {
   );
 }
 
-function getDiscoveryLinkOverridesForRange_(range, headerMap) {
+function forceInvalidateDiscoveryCache() {
+  bumpDiscoveryDataVersion_();
+  try { CacheService.getScriptCache().remove("DISCOVERY_DIRTY"); } catch (_) {}
+  DISCOVERY_RUNTIME_MEMO.versionKey = "";
+  DISCOVERY_RUNTIME_MEMO.bundle = null;
+  console.log("Discovery cache invalidated");
+}
+
+function getDiscoveryLinkOverridesForRange_(range, headerMap, displayData) {
   const rowCount = range.getNumRows();
   const overrides = Array.from({ length: rowCount }, () => ({}));
   const linkHeaders = [
-    "Production Link",
-    "Public Site Link",
-    "RHAC page",
-    "CTALink",
-    "Latest Prod Link",
+    ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK,
+    ENHANCED_CONFIG.COLUMNS.DRUPAL_PAGE_URL,
+    ENHANCED_CONFIG.COLUMNS.RHAC_PAGE,
+    ENHANCED_CONFIG.COLUMNS.CTA_LINK,
   ];
 
-  const startRow = range.getRow();
+  const linkCols = [];
   for (const header of linkHeaders) {
     const idx = headerMap[header];
-    if (idx == null) continue;
+    if (idx != null) linkCols.push(idx);
+  }
+  if (!linkCols.length) return overrides;
 
-    const colRange = range.getSheet().getRange(startRow, idx + 1, rowCount, 1);
-    const formulas = colRange.getFormulas();
-    const displayValues = colRange.getDisplayValues();
+  const allFormulas = range.getFormulas();
 
-    for (let r = 0; r < rowCount; r++) {
-      const formula = formulas[r] && formulas[r][0] ? formulas[r][0] : "";
-      const displayValue = displayValues[r] && displayValues[r][0] ? displayValues[r][0] : "";
+  for (let r = 0; r < rowCount; r++) {
+    for (const idx of linkCols) {
+      const formula = allFormulas[r][idx] || "";
+      const displayValue = displayData[r][idx] || "";
       let url = "";
 
       if (formula && /^=HYPERLINK\(/i.test(formula)) {
@@ -1037,6 +1119,7 @@ function normalizeDiscoveryParams_(params) {
     marketingPrograms: normalizeArray_(params.marketingPrograms).sort(),
     salesTactics: normalizeArray_(params.salesTactics).sort(),
     creatorNames: normalizeArray_(params.creatorNames).sort(),
+    formats: normalizeArray_(params.formats).sort(),
     page: Math.max(1, Number(params.page || 1)),
     pageSize: Math.max(1, Number(params.pageSize || DISCOVERY_WEBAPP_CONFIG.PAGE_SIZE)),
   };
@@ -1103,21 +1186,9 @@ function cleanCreatorName_(value) {
   return normalizeText_(value).replace(/[\n\r\t]+/g, " ").trim();
 }
 
-function getHeaderMapFromSheet_(sheet, headerRow) {
-  const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const map = {};
-
-  headers.forEach((h, i) => {
-    const key = String(h || "").trim();
-    if (key) map[key] = i;
-  });
-
-  validateRequiredHeaders_(map);
-  return map;
-}
 
 function validateRequiredHeaders_(headerMap) {
-  const missing = DISCOVERY_REQUIRED_HEADERS.filter((name) => headerMap[name] == null);
+  const missing = getDiscoveryRequiredHeaders_().filter((name) => headerMap[name] == null);
   if (missing.length) {
     throw new Error("Missing required sheet columns: " + missing.join(", "));
   }
@@ -1168,31 +1239,17 @@ function ensureHttps_(s) {
   return t;
 }
 
-function normalizeStatusCanonical_(raw) {
-  const s = normalizeText_(raw);
-  if (!s) return "";
 
-  const lower = s.toLowerCase();
-  if (lower === "request open") return "Request Open";
-  if (lower === "request approved" || lower === "approved") return "Request Approved";
-  if (lower === "ie received" || lower === "received") return "IE Received";
-  if (lower === "ie reviewed" || lower === "reviewed") return "IE Reviewed";
-  if (lower === "ie published" || lower === "published") return "IE Published";
-  if (lower === "ie retired" || lower === "retired") return "IE Retired";
-  if (lower === "closed") return "Closed";
 
-  return s;
-}
-
-function computeIsReadyToUse_(status, productionLink, publicSiteLink, rhacPage, latestProdLink) {
-  const canonical = normalizeStatusCanonical_(status);
-  if (canonical !== "IE Published" && canonical !== "IE Reviewed") return false;
-  return !!(productionLink || publicSiteLink || rhacPage || latestProdLink);
+function computeIsReadyToUse_(status, productionLink, drupalPageUrl, rhacPage) {
+  const canonical = normalizeStatusCanonical(status);
+  if (canonical !== ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED && canonical !== ENHANCED_CONFIG.STATUS.DEMO_REVIEWED) return false;
+  return !!(productionLink || drupalPageUrl || rhacPage);
 }
 
 function computeIsDiscoverable_(status, isReadyToUse) {
-  const canonical = normalizeStatusCanonical_(status);
-  return (canonical === "IE Published" || canonical === "IE Reviewed") && !!isReadyToUse;
+  const canonical = normalizeStatusCanonical(status);
+  return (canonical === ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED || canonical === ENHANCED_CONFIG.STATUS.DEMO_REVIEWED) && !!isReadyToUse;
 }
 
 function compareDiscoveryItems_(a, b) {
@@ -1200,14 +1257,18 @@ function compareDiscoveryItems_(a, b) {
   const sb = Number(b.sortPriority || 99);
 
   if (sa !== sb) return sa - sb;
+
+  var ta = a.sortTs ? new Date(a.sortTs).getTime() : 0;
+  var tb = b.sortTs ? new Date(b.sortTs).getTime() : 0;
+  if (ta || tb) return (tb || 0) - (ta || 0);
+
   return (Number(b.number) || 0) - (Number(a.number) || 0);
 }
 
 function getDiscoverySortPriority_(discoverStatus) {
   const order = {
     "Featured + Latest": 1,
-    "Featured": 2,
-    "Latest": 3,
+    "Featured": 1,
   };
   return order[discoverStatus] || 99;
 }
@@ -1220,8 +1281,8 @@ function computeDiscoverStatus_(
   latestEnd,
   todayRaw
 ) {
-  const canonical = normalizeStatusCanonical_(status);
-  if (canonical !== "IE Published" && canonical !== "IE Reviewed") return "";
+  const canonical = normalizeStatusCanonical(status);
+  if (canonical !== ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED && canonical !== ENHANCED_CONFIG.STATUS.DEMO_REVIEWED) return "";
 
   const today = stripTime_(todayRaw);
   const inFeatured = isDateInWindow_(today, featuredStart, featuredEnd);
@@ -1403,9 +1464,8 @@ function sanitizeRecordsForEmail_(records) {
     salesTactic: sanitizeEmailText_(record && record.salesTactic, 160),
     creatorName: sanitizeEmailText_(record && record.creatorName, 120),
     rhacPage: ensureHttps_(record && record.rhacPage),
-    publicSiteLink: ensureHttps_(record && record.publicSiteLink),
+    drupalPageUrl: ensureHttps_(record && record.drupalPageUrl),
     productionLink: ensureHttps_(record && record.productionLink),
-    latestProdLink: ensureHttps_(record && record.latestProdLink),
   }));
 }
 
@@ -1444,7 +1504,7 @@ function sendEventPackageRequest(emailData) {
 
     const subject = `Event Package Request - ${eventName} (${selectedRecords.length} Arcade${selectedRecords.length !== 1 ? "s" : ""})`;
     const arcadeList = selectedRecords.map((record, index) => {
-      const primaryLink = record.rhacPage || record.publicSiteLink || record.productionLink || record.latestProdLink || "";
+      const primaryLink = record.drupalPageUrl || record.rhacPage || record.productionLink || "";
       return `${index + 1}. ${record.title || "Untitled"}
    Product: ${record.product || "N/A"}
    TDP: ${record.tdp || "N/A"}
@@ -1511,7 +1571,7 @@ function shareArcadeCollection(emailData) {
 
     const subject = `${fromName} shared arcade demos with you (${savedRecords.length} item${savedRecords.length !== 1 ? "s" : ""})`;
     const arcadeList = savedRecords.map((record, index) => {
-      const primaryLink = record.rhacPage || record.publicSiteLink || record.productionLink || record.latestProdLink || "";
+      const primaryLink = record.drupalPageUrl || record.rhacPage || record.productionLink || "";
       return `${index + 1}. ${record.title || "Untitled"}
    Product: ${record.product || "N/A"}
    TDP: ${record.tdp || "N/A"}

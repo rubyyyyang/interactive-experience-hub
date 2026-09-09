@@ -4,3 +4,18 @@
 .claude/
 .superpowers/
 node_modules/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Local working artifacts
+email_gen.js
+
+# Local workflow artifacts
+AGENTS.md
+CLAUDE.md
+docs/superpowers/

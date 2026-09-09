@@ -176,7 +176,9 @@ function extractCreatorFormData(event) {
 
   const getLastNonEmptyByHeader = (headerName) => {
     const results = getAllNonEmptyByHeader(headerName);
-    return results.length ? results[results.length - 1] : "";
+    if (!results.length) return "";
+    var val = results[results.length - 1];
+    return String(val).replace(/^Other:\s*/i, "").trim();
   };
 
   const getAnyByHeaders = (headerNames) => {
@@ -259,6 +261,7 @@ function extractCreatorFormData(event) {
     group: getLastNonEmptyByHeader("Optional: Should this IE be grouped with another or part of a larger collection? If yes, add the name of the IE it belongs with."),
     duration: getLastNonEmptyByHeader("Duration"),
     descriptionForSeo: getLastNonEmptyByHeader("Description for SEO"),
+    destinationChannels: getLastNonEmptyByHeader("Destination Channels"),
 
     globalId: normalizeString(globalIdRaw).replace(/^'/, "")
   };
@@ -311,6 +314,13 @@ function handleCreatorWithExistingGlobalId(formData) {
 
     const workflowResult = handleRequestMasterByGlobalId(formData.globalId);
 
+    // Send creator submission received email (independent from Slack)
+    try {
+      sendArcadeSubmissionReceivedEmail(upsertResult.number, upsertResult.rowIndex);
+    } catch (error) {
+      logError('handleCreatorWithExistingGlobalId_submissionEmail', error, { number: upsertResult.number });
+    }
+
     logWorkflowEvent("creator_updated_existing_request", {
       globalId: formData.globalId,
       creatorName: formData.creatorName,
@@ -339,7 +349,7 @@ function buildCreatorPayload(formData, currentStatus) {
     [ENHANCED_CONFIG.COLUMNS.CREATOR_TEAM]: formData.creatorTeam,
     [ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE]: formData.finalDemoTitle,
     [ENHANCED_CONFIG.COLUMNS.CREATION_LINK]: formData.creationLink,
-    [ENHANCED_CONFIG.COLUMNS.CREATOR_SUBMITTED_TS]: formData.timestamp || now,
+    [ENHANCED_CONFIG.COLUMNS.CREATOR_SUBMITTED_TS]: formatTimestamp(formData.timestamp || now),
     [ENHANCED_CONFIG.COLUMNS.QUARTER]: formData.quarter,
     [ENHANCED_CONFIG.COLUMNS.DEMO_DESCRIPTION]: formData.demoDescription,
     [ENHANCED_CONFIG.COLUMNS.LANGUAGE]: formData.language,
@@ -350,7 +360,7 @@ function buildCreatorPayload(formData, currentStatus) {
     [ENHANCED_CONFIG.COLUMNS.CTA_LINK]: formData.ctaLink,
     [ENHANCED_CONFIG.COLUMNS.GROUP]: formData.group,
     [ENHANCED_CONFIG.COLUMNS.CREATOR_EMPLOYEE_ADVOC]: formData.creatorEmployeeAdvocacy,
-    [ENHANCED_CONFIG.COLUMNS.DURATION]: formData.duration,
+    [ENHANCED_CONFIG.COLUMNS.DURATION]: normalizeDuration_(formData.duration),
     [ENHANCED_CONFIG.COLUMNS.DESCRIPTION_FOR_SEO]: formData.descriptionForSeo,
 
     [ENHANCED_CONFIG.COLUMNS.CONTENT_TYPE]: formData.contentType,
@@ -361,15 +371,16 @@ function buildCreatorPayload(formData, currentStatus) {
     [ENHANCED_CONFIG.COLUMNS.TDP]: formData.tdp,
     [ENHANCED_CONFIG.COLUMNS.SALES_TACTIC]: formData.salesTactic,
     [ENHANCED_CONFIG.COLUMNS.MARKETING_PROGRAM]: formData.marketingProgram,
+    [ENHANCED_CONFIG.COLUMNS.DESTINATION]: formData.destinationChannels,
   };
 
   const order = ENHANCED_CONFIG.STATUS_LIFECYCLE_ORDER;
   const currentIdx = currentStatus ? order.indexOf(currentStatus) : -1;
-  const receivedIdx = order.indexOf(ENHANCED_CONFIG.STATUS.IE_RECEIVED);
+  const receivedIdx = order.indexOf(ENHANCED_CONFIG.STATUS.DEMO_RECEIVED);
 
   if (currentIdx <= receivedIdx) {
-    payload[ENHANCED_CONFIG.COLUMNS.STATUS] = ENHANCED_CONFIG.STATUS.IE_RECEIVED;
-    payload[ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS] = now;
+    payload[ENHANCED_CONFIG.COLUMNS.STATUS] = ENHANCED_CONFIG.STATUS.DEMO_RECEIVED;
+    payload[ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS] = formatTimestamp(now);
   }
 
   return payload;
@@ -406,6 +417,7 @@ function updateRequestDocumentWithCreatorInfo(existingRequest, formData) {
       group: formData.group || "",
       creatorEmployeeAdvocacy: formData.creatorEmployeeAdvocacy || "",
       creatorEmpAdv: formData.creatorEmployeeAdvocacy || "",
+      destination: formData.destinationChannels || "",
       originType: ENHANCED_CONFIG.ORIGIN_TYPES.REQUEST_FORM,
       globalId: formData.globalId || "",
       timestamp: formatDate(formData.timestamp || new Date())
@@ -449,6 +461,13 @@ function handleCreatorWithoutGlobalId(formData) {
     }
 
     const workflowResult = handleRequestMasterByGlobalId(newGlobalId);
+
+    // Send creator submission received email (independent from Slack)
+    try {
+      sendArcadeSubmissionReceivedEmail(upsertResult.number, upsertResult.rowIndex);
+    } catch (error) {
+      logError('handleCreatorWithoutGlobalId_submissionEmail', error, { number: upsertResult.number });
+    }
 
     logWorkflowEvent("creator_only_submission_created", {
       globalId: newGlobalId,
@@ -505,6 +524,7 @@ function prepareCreatorOnlyDocumentData(formData) {
     marketingProgram: formData.marketingProgram || "",
     event: formData.event || "",
     vertical: formData.vertical || "",
+    destination: formData.destinationChannels || "",
 
     demoTitle: formData.finalDemoTitle,
 
@@ -529,7 +549,7 @@ function prepareCreatorOnlyDocumentData(formData) {
     [ENHANCED_CONFIG.COLUMNS.CREATOR_TEAM]: formData.creatorTeam,
     [ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE]: formData.finalDemoTitle,
     [ENHANCED_CONFIG.COLUMNS.CREATION_LINK]: formData.creationLink,
-    [ENHANCED_CONFIG.COLUMNS.CREATOR_SUBMITTED_TS]: formData.timestamp || now,
+    [ENHANCED_CONFIG.COLUMNS.CREATOR_SUBMITTED_TS]: formatTimestamp(formData.timestamp || now),
     [ENHANCED_CONFIG.COLUMNS.QUARTER]: formData.quarter,
     [ENHANCED_CONFIG.COLUMNS.DEMO_DESCRIPTION]: formData.demoDescription,
     [ENHANCED_CONFIG.COLUMNS.LANGUAGE]: formData.language,
@@ -540,7 +560,7 @@ function prepareCreatorOnlyDocumentData(formData) {
     [ENHANCED_CONFIG.COLUMNS.CTA_LINK]: formData.ctaLink,
     [ENHANCED_CONFIG.COLUMNS.GROUP]: formData.group,
     [ENHANCED_CONFIG.COLUMNS.CREATOR_EMPLOYEE_ADVOC]: formData.creatorEmployeeAdvocacy,
-    [ENHANCED_CONFIG.COLUMNS.DURATION]: formData.duration,
+    [ENHANCED_CONFIG.COLUMNS.DURATION]: normalizeDuration_(formData.duration),
     [ENHANCED_CONFIG.COLUMNS.DESCRIPTION_FOR_SEO]: formData.descriptionForSeo,
 
     [ENHANCED_CONFIG.COLUMNS.CONTENT_TYPE]: formData.contentType,
@@ -551,9 +571,10 @@ function prepareCreatorOnlyDocumentData(formData) {
     [ENHANCED_CONFIG.COLUMNS.TDP]: formData.tdp,
     [ENHANCED_CONFIG.COLUMNS.SALES_TACTIC]: formData.salesTactic,
     [ENHANCED_CONFIG.COLUMNS.MARKETING_PROGRAM]: formData.marketingProgram,
+    [ENHANCED_CONFIG.COLUMNS.DESTINATION]: formData.destinationChannels,
 
-    [ENHANCED_CONFIG.COLUMNS.STATUS]: ENHANCED_CONFIG.STATUS.IE_RECEIVED,
-    [ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS]: now
+    [ENHANCED_CONFIG.COLUMNS.STATUS]: ENHANCED_CONFIG.STATUS.DEMO_RECEIVED,
+    [ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS]: formatTimestamp(now)
   };
 }
 
@@ -632,6 +653,15 @@ function buildJiraDescription(formData, result) {
    UTILITIES
 ========================= */
 
+function normalizeDuration_(value) {
+  if (!value) return "";
+  var str = String(value).trim();
+  if (!str) return "";
+  var m = str.match(/(\d+(?:\.\d+)?)/);
+  if (m) return Math.round(Number(m[1]));
+  return "";
+}
+
 function clearCreatorFormCache() {
   creatorFormCache.clear();
   console.log("Creator form cache cleared");
@@ -679,6 +709,23 @@ function doPost(e) {
         success: false,
         error: 'Unauthorized'
       });
+    }
+
+    if (payload.action === 'youtubeNotification') {
+      // Slack notification (independent from email)
+      postYouTubeSlackNotification_(payload);
+
+      // Creator email notification (independent from Slack)
+      if (typeof buildYouTubeLifecycleContext === 'function' && typeof dispatchCreatorLifecycleNotification === 'function') {
+        try {
+          const lifecycleContext = buildYouTubeLifecycleContext(payload);
+          dispatchCreatorLifecycleNotification(lifecycleContext);
+        } catch (error) {
+          logError('youtubeNotification_creatorEmail', error, { number: payload.number });
+        }
+      }
+
+      return jsonResponse_({ success: true });
     }
 
     const sheetName = payload.sheetName || getCreatorFormSheetName();
@@ -789,4 +836,46 @@ function createRequestDocFromCreator_(data) {
 
 function updateRequestDocWithCreatorFallback_(requestDocUrl, fields) {
   return updateDocumentTokens(requestDocUrl, fields);
+}
+
+function sendArcadeSubmissionReceivedEmail(number, rowIndex) {
+  try {
+    const sheet = getMasterSheet();
+    const headerMap = getHeaderMapFromSheet(sheet, ENHANCED_CONFIG.SHEETS.HEADER_ROW);
+    const lastCol = sheet.getLastColumn();
+    const rowData = sheet.getRange(rowIndex, 1, 1, lastCol).getValues()[0];
+
+    const originType = String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.ORIGIN_TYPE) || '').trim();
+    const status = normalizeStatusCanonical(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.STATUS));
+
+    console.log(`creator_submission_email_attempt: number=${number}, rowIndex=${rowIndex}, originType=${originType}, status=${status}`);
+
+    const context = buildArcadeLifecycleContext({ rowNumber: rowIndex, rowData, headerMap, originType }, status);
+
+    if (!context) {
+      console.log(`creator_submission_email_skipped: no lifecycle context built for number=${number}, status=${status}`);
+      return;
+    }
+
+    dispatchCreatorLifecycleNotification(context);
+    console.log(`creator_submission_email_dispatched: number=${number}, event=${context.event}, assetType=${context.assetType}`);
+
+  } catch (error) {
+    console.log(`creator_submission_email_failed: number=${number}, error=${error.message}`);
+    logError('sendArcadeSubmissionReceivedEmail', error, { number, rowIndex });
+  }
+}
+
+function postYouTubeSlackNotification_(payload) {
+  var parts = [
+    "📺 *YouTube Video Published*",
+    payload.number ? " #" + payload.number : "",
+    payload.title ? "*Video Title:* " + payload.title : "",
+    payload.creator ? "*Creator:* " + payload.creator : "",
+    payload.creatorTeam ? "*Creator Team:* " + payload.creatorTeam : "",
+    payload.destination ? "*Destination:* " + payload.destination : "",
+    payload.youtubeUrl ? "▶️ " + payload.youtubeUrl : ""
+  ].filter(Boolean);
+
+  postToSlack(parts.join("\n"));
 }

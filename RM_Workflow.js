@@ -60,9 +60,8 @@ function handleRequestFormNamedValues(namedValues) {
 }
 function extractFormData(namedValues) {
   const getValue = (key) => {
-    return (namedValues[key] && namedValues[key][0])
-      ? String(namedValues[key][0]).trim()
-      : "";
+    if (!namedValues[key] || !namedValues[key][0]) return "";
+    return String(namedValues[key][0]).trim().replace(/^Other:\s*/i, "");
   };
 
   const data = {
@@ -122,7 +121,7 @@ function prepareMasterPayload(formData, docUrl) {
     [ENHANCED_CONFIG.COLUMNS.ORIGIN_TYPE]: formData.originType,
     [ENHANCED_CONFIG.COLUMNS.GLOBAL_ID]: formData.globalId,
     [ENHANCED_CONFIG.COLUMNS.CREATION_BRIEF_DOC_URL]: docUrl,
-    [ENHANCED_CONFIG.COLUMNS.REQUEST_SUBMITTED_TS]: formData.timestamp || now,
+    [ENHANCED_CONFIG.COLUMNS.REQUEST_SUBMITTED_TS]: formatTimestamp(formData.timestamp || now),
 
     [ENHANCED_CONFIG.COLUMNS.REQUESTOR_NAME]: formData.requestorName,
     [ENHANCED_CONFIG.COLUMNS.REQUESTOR_EMAIL]: formData.email,
@@ -614,7 +613,7 @@ function processStatusWorkflow(context) {
         const threadTs = createRequestOpenThread(context);
         sheet.getRange(rowNumber, threadTsColumn + 1).setValue("'" + threadTs);
         return { rowNumber, threadTs, posted: "request_open_thread_created" };
-      } else if (isCreatorOnly && status === ENHANCED_CONFIG.STATUS.IE_RECEIVED) {
+      } else if (isCreatorOnly && status === ENHANCED_CONFIG.STATUS.DEMO_RECEIVED) {
         const threadTs = createCreatorOnlyReceivedThread(context);
         sheet.getRange(rowNumber, threadTsColumn + 1).setValue("'" + threadTs);
         if (receivedThreadTsColumn != null) {
@@ -634,16 +633,16 @@ function processStatusWorkflow(context) {
       case ENHANCED_CONFIG.STATUS.REQUEST_APPROVED:
         return processRequestApproved(context, requestThreadTs);
 
-      case ENHANCED_CONFIG.STATUS.IE_RECEIVED:
+      case ENHANCED_CONFIG.STATUS.DEMO_RECEIVED:
         return processIEReceived(context, lifecycleThreadTs);
 
-      case ENHANCED_CONFIG.STATUS.IE_REVIEWED:
+      case ENHANCED_CONFIG.STATUS.DEMO_REVIEWED:
         return processIEReviewed(context, lifecycleThreadTs);
 
-      case ENHANCED_CONFIG.STATUS.IE_PUBLISHED:
+      case ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED:
         return processIEPublished(context, lifecycleThreadTs);
 
-      case ENHANCED_CONFIG.STATUS.IE_RETIRED:
+      case ENHANCED_CONFIG.STATUS.DEMO_RETIRED:
         return processIERetired(context, lifecycleThreadTs);
 
       case ENHANCED_CONFIG.STATUS.CLOSED:
@@ -693,6 +692,10 @@ function createRequestOpenThread(context) {
     safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.CONTEXT_DESC) || ""
   ).trim() || "—";
 
+  const destination = String(
+    safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.DESTINATION) || ""
+  ).trim();
+
   const globalIdLine = globalId ? `*Global ID*: ${globalId}\n` : "";
 
   const meta = [number ? `#${number}` : null, globalId ? `GID: ${globalId}` : null].filter(Boolean).join("  •  ");
@@ -714,6 +717,7 @@ function createRequestOpenThread(context) {
     `*Primary Audience*: ${primaryAudience}\n` +
     `*TDP*: ${tdp || "—"}\n` +
     `*Event*: ${eventName}\n` +
+    (destination ? `*Destination*: ${destination}\n` : "") +
     globalIdLine +
     actionLine +
     (requestDocUrl ? `<${requestDocUrl}|Creation brief>` : "");
@@ -795,16 +799,18 @@ function createCreatorOnlyReceivedThread(context) {
   const creatorName = String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.CREATOR_NAME) || "").trim();
   const creatorTeam = String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.CREATOR_TEAM) || "").trim();
 
+  const destination = String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.DESTINATION) || "").trim();
   const linksLine = buildLinksLine(rowData, headerMap);
   const webAppUrl = getWebAppUrl();
   const actionLine = webAppUrl ? `<${webAppUrl}|Review and Approve here>\n` : "";
 
   const message =
-    `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.IE_RECEIVED} (not request-based)\n` +
+    `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_RECEIVED} (not request-based)\n` +
     `${number ? ` #${number}` : ""}\n` +
     `*Demo Title*: ${finalDemoTitle || suggestedTitle || "—"}\n` +
     `*Creator*: ${creatorName || "—"}\n` +
     `*Creator Team*: ${creatorTeam || "—"}\n` +
+    (destination ? `*Destination*: ${destination}\n` : "") +
     linksLine +
     actionLine;
 
@@ -824,7 +830,7 @@ function createIEReceivedThread(context) {
 
   if (isCreatorOnly) {
     receivedMsg =
-      `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.IE_RECEIVED}\n` +
+      `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_RECEIVED}\n` +
       `${number ? ` #${number}` : ""}\n` +
       `*Demo Title*: ${finalDemoTitle || suggestedTitle || "—"}\n` +
       `*Creator*: ${creatorName || "—"}\n` +
@@ -843,7 +849,7 @@ function createIEReceivedThread(context) {
     const actionLine = webAppUrl ? `<${webAppUrl}|Review and Approve here>\n` : "";
 
     receivedMsg =
-      `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.IE_RECEIVED} (based on request)\n` +
+      `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_RECEIVED} (based on request)\n` +
       metaLine +
       `*Final Demo Title*: ${finalDemoTitle || suggestedTitle || "—"}\n` +
       creatorLine +
@@ -912,7 +918,7 @@ function processIEReceived(context, lifecycleThreadTs) {
 
   const receivedSentColumn = headerMap[ENHANCED_CONFIG.COLUMNS.RECEIVED_SENT];
   if (receivedSentColumn == null) {
-    console.log(`Skipping "IE Received" Slack: missing column "${ENHANCED_CONFIG.COLUMNS.RECEIVED_SENT}"`);
+    console.log(`Skipping "Demo Received" Slack: missing column "${ENHANCED_CONFIG.COLUMNS.RECEIVED_SENT}"`);
     return { rowNumber, threadTs: lifecycleThreadTs, posted: "skipped_missing_column" };
   }
 
@@ -941,7 +947,7 @@ function processIEReceived(context, lifecycleThreadTs) {
 }
 
 function processIEReviewed(context, lifecycleThreadTs) {
-  console.log(`📝 Processing IE Reviewed status for row ${context.rowNumber}`);
+  console.log(`📝 Processing Demo Reviewed status for row ${context.rowNumber}`);
 
   const { sheet, headerMap, rowNumber, rowData } = context;
 
@@ -958,7 +964,7 @@ function processIEReviewed(context, lifecycleThreadTs) {
   if (!prodLink) {
     if (reviewedSentColumn != null && !isStatusSent(sheet, reviewedSentColumn, rowNumber)) {
       const reply =
-        `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.IE_REVIEWED}\n` +
+        `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_REVIEWED}\n` +
         `<@${ENHANCED_CONFIG.SLACK.USER_IDS.ROHAN}> <@${ENHANCED_CONFIG.SLACK.USER_IDS.BRANDON}> ` +
         `Please add the Prod link when you get a chance.`;
 
@@ -1001,23 +1007,51 @@ function processIEReviewed(context, lifecycleThreadTs) {
 }
 
 function processIEPublished(context, lifecycleThreadTs) {
-  return processSimpleStatusReply(
+  const slackResult = processSimpleStatusReply(
     context,
     lifecycleThreadTs,
     ENHANCED_CONFIG.COLUMNS.PUBLISHED_SENT,
-    ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.IE_PUBLISHED,
+    ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_PUBLISHED,
     "published_reply"
   );
+
+  // Send creator email notification (independent from Slack)
+  if (typeof buildArcadeLifecycleContext === "function" && typeof dispatchCreatorLifecycleNotification === "function") {
+    try {
+      const lifecycleContext = buildArcadeLifecycleContext(context, ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED);
+      if (lifecycleContext) {
+        dispatchCreatorLifecycleNotification(lifecycleContext);
+      }
+    } catch (error) {
+      logError("processIEPublished_creatorEmail", error, { rowNumber: context.rowNumber });
+    }
+  }
+
+  return slackResult;
 }
 
 function processIERetired(context, lifecycleThreadTs) {
-  return processSimpleStatusReply(
+  const slackResult = processSimpleStatusReply(
     context,
     lifecycleThreadTs,
     ENHANCED_CONFIG.COLUMNS.RETIRED_SENT,
-    ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.IE_RETIRED,
+    ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_RETIRED,
     "retired_reply"
   );
+
+  // Send creator email notification (independent from Slack)
+  if (typeof buildArcadeLifecycleContext === "function" && typeof dispatchCreatorLifecycleNotification === "function") {
+    try {
+      const lifecycleContext = buildArcadeLifecycleContext(context, ENHANCED_CONFIG.STATUS.DEMO_RETIRED);
+      if (lifecycleContext) {
+        dispatchCreatorLifecycleNotification(lifecycleContext);
+      }
+    } catch (error) {
+      logError("processIERetired_creatorEmail", error, { rowNumber: context.rowNumber });
+    }
+  }
+
+  return slackResult;
 }
 
 function processClosed(context, requestThreadTs) {
@@ -1129,26 +1163,3 @@ function logWorkflowEvent(eventType, details = {}) {
   }
 }
 
-/* =========================
-   LIMITED COMPATIBILITY
-========================= */
-
-function rmPostToSlack_(message, threadTs, replyBroadcast) {
-  return postToSlack(message, threadTs, replyBroadcast);
-}
-
-function rmLookupSlackUserIdByEmail_(email) {
-  return lookupSlackUserByEmail(email);
-}
-
-function rmMentionByEmail_(email) {
-  return createSlackMention(email);
-}
-
-function createGoogleDoc_(data) {
-  return createDocumentFromTemplate(data);
-}
-
-function rmUpdateRequestDocWithCreator_(requestDocUrl, fields) {
-  return updateDocumentTokens(requestDocUrl, fields);
-}

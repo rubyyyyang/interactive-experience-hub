@@ -22,21 +22,10 @@ const VERSION_SYNC_CONFIG = {
   VERSION_COLUMNS: {
     ARCADE_LINK: "Arcade link",
     ARCADE_ID: "Arcade ID",
+    TITLE: "Title",
     NUMBER: "Number",
     VERSION: "Version",
-    TITLE: "Title",
-    CONTENT_TYPE: "Content Type",
-    JOIN_KEY: "Join Key",
-    LAST_UPDATED: "Last Updated",
-    PRIMARY_MARKETING_PROGRAM: "Primary Marketing Program",
-    PRIMARY_SALES_TACTIC: "Primary Sales Tactic",
-    PRIMARY_TDP: "Primary TDP",
-    TEAM: "Team",
-    CREATOR: "Creator",
-    LANGUAGE: "Language",
-    PRODUCTS: "Product(s)",
-    EVENT_PROJECT: "Event/Project",
-    METADATA: "Metadata"
+    LAST_UPDATED: "Last Updated"
   },
 
   WATCH_COLUMNS: [
@@ -44,8 +33,7 @@ const VERSION_SYNC_CONFIG = {
     ENHANCED_CONFIG.COLUMNS.CREATION_LINK,
     ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK,
     ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE,
-    ENHANCED_CONFIG.COLUMNS.FINAL_CONTENT_TYPE,
-    ENHANCED_CONFIG.COLUMNS.JOIN_KEY,
+    ENHANCED_CONFIG.COLUMNS.CONTENT_TYPE,
     ENHANCED_CONFIG.COLUMNS.MARKETING_PROGRAM,
     ENHANCED_CONFIG.COLUMNS.SALES_TACTIC,
     ENHANCED_CONFIG.COLUMNS.TDP,
@@ -93,9 +81,21 @@ function onEdit_VersionSync(e) {
 
     const range = e.range;
     const sheet = range.getSheet();
+    const sheetName = sheet.getName();
     const masterSheetName = getMasterSheetName();
 
-    if (sheet.getName() !== masterSheetName) return;
+    // Handle YouTube_Responses edits
+    // Note: This only covers manual edits. Any future programmatic mutation path
+    // for YouTube_Responses must call bumpDiscoveryDataVersion_() because edit
+    // triggers do not fire for programmatic/API writes.
+    if (sheetName === "YouTube_Responses") {
+      if (range.getRow() > 1) {  // Ignore header row
+        bumpDiscoveryDataVersion_();
+      }
+      return;
+    }
+
+    if (sheetName !== masterSheetName) return;
 
     if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) return;
 
@@ -485,68 +485,13 @@ function buildVersionRowFromMasterRow(
 
   const lastUpdatedIdx = versionHeaderMap[VERSION_SYNC_CONFIG.VERSION_COLUMNS.LAST_UPDATED];
   if (lastUpdatedIdx != null) {
-    out[lastUpdatedIdx] = new Date();
+    out[lastUpdatedIdx] = formatTimestamp(new Date());
   }
 
   setV(
     VERSION_SYNC_CONFIG.VERSION_COLUMNS.TITLE,
     safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE) ||
       safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.SUGGESTED_TITLE)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.CONTENT_TYPE,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.FINAL_CONTENT_TYPE)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.TEAM,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.CREATOR_TEAM)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.CREATOR,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.CREATOR_NAME)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.LANGUAGE,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.LANGUAGE)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.PRODUCTS,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.PRODUCT)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.PRIMARY_MARKETING_PROGRAM,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.MARKETING_PROGRAM)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.PRIMARY_SALES_TACTIC,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.SALES_TACTIC)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.PRIMARY_TDP,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.TDP)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.EVENT_PROJECT,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.EVENT)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.JOIN_KEY,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.JOIN_KEY)
-  );
-
-  setV(
-    VERSION_SYNC_CONFIG.VERSION_COLUMNS.METADATA,
-    safeGetByName(masterRow, masterHeaderMap, ENHANCED_CONFIG.COLUMNS.METADATA)
   );
 
   return out;
@@ -606,7 +551,6 @@ function cleanupVersionEntriesForRow(versionSheet, versionHeaderMap, rowNumber, 
 
     const versionNumberColumnIndex = versionHeaderMap[VERSION_SYNC_CONFIG.VERSION_COLUMNS.NUMBER];
     const versionArcadeIdColumnIndex = versionHeaderMap[VERSION_SYNC_CONFIG.VERSION_COLUMNS.ARCADE_ID];
-    const versionJoinKeyColumnIndex = versionHeaderMap[VERSION_SYNC_CONFIG.VERSION_COLUMNS.JOIN_KEY];
 
     if (versionNumberColumnIndex == null) {
       console.warn("Number column not found in Version sheet");
@@ -643,16 +587,6 @@ function cleanupVersionEntriesForRow(versionSheet, versionHeaderMap, rowNumber, 
         const versionArcadeId = String(row[versionArcadeIdColumnIndex] || "").trim();
         if (versionArcadeId && relatedArcadeIds.has(versionArcadeId)) {
           shouldDelete = true;
-        }
-      }
-
-      if (!shouldDelete && versionJoinKeyColumnIndex != null && relatedArcadeIds.size > 0) {
-        const joinKey = String(row[versionJoinKeyColumnIndex] || "").trim();
-        for (const arcadeId of relatedArcadeIds) {
-          if (joinKey.includes(arcadeId)) {
-            shouldDelete = true;
-            break;
-          }
         }
       }
 
@@ -1120,11 +1054,10 @@ function buildRequestMasterColumnMap() {
     [ENHANCED_CONFIG.COLUMNS.STATUS]: "status",
     [ENHANCED_CONFIG.COLUMNS.ORIGIN_TYPE]: "origin_type",
 
-    [ENHANCED_CONFIG.COLUMNS.PUBLIC_SITE_LINK]: "public_site_link",
+    [ENHANCED_CONFIG.COLUMNS.DRUPAL_PAGE_URL]: "drupal_page_url",
     [ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK]: "production_link",
     [ENHANCED_CONFIG.COLUMNS.CREATION_LINK]: "creation_link",
     [ENHANCED_CONFIG.COLUMNS.RHAC_PAGE]: "rhac_page",
-    [ENHANCED_CONFIG.COLUMNS.JOIN_KEY]: "join_key",
 
     [ENHANCED_CONFIG.COLUMNS.REQUESTOR_NAME]: "requestor_name",
     [ENHANCED_CONFIG.COLUMNS.REQUESTOR_EMAIL]: "requestor_email",
@@ -1133,7 +1066,6 @@ function buildRequestMasterColumnMap() {
     [ENHANCED_CONFIG.COLUMNS.CREATOR_TEAM]: "creator_team",
 
     [ENHANCED_CONFIG.COLUMNS.CONTENT_TYPE]: "content_type",
-    [ENHANCED_CONFIG.COLUMNS.FINAL_CONTENT_TYPE]: "final_content_type",
     [ENHANCED_CONFIG.COLUMNS.PRIORITY]: "priority",
     [ENHANCED_CONFIG.COLUMNS.PRODUCT]: "product",
     [ENHANCED_CONFIG.COLUMNS.MARKETING_PROGRAM]: "marketing_program",
@@ -1155,19 +1087,8 @@ function buildVersionColumnMap() {
     [VERSION_SYNC_CONFIG.VERSION_COLUMNS.ARCADE_ID]: "arcade_id",
     [VERSION_SYNC_CONFIG.VERSION_COLUMNS.TITLE]: "title",
     [VERSION_SYNC_CONFIG.VERSION_COLUMNS.NUMBER]: "number",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.CONTENT_TYPE]: "content_type",
     [VERSION_SYNC_CONFIG.VERSION_COLUMNS.VERSION]: "version",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.JOIN_KEY]: "join_key",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.LAST_UPDATED]: "last_updated",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.PRIMARY_MARKETING_PROGRAM]: "primary_marketing_program",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.PRIMARY_SALES_TACTIC]: "primary_sales_tactic",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.PRIMARY_TDP]: "primary_tdp",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.TEAM]: "team",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.CREATOR]: "creator",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.LANGUAGE]: "language",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.PRODUCTS]: "products",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.METADATA]: "metadata",
-    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.EVENT_PROJECT]: "event_project"
+    [VERSION_SYNC_CONFIG.VERSION_COLUMNS.LAST_UPDATED]: "last_updated"
   };
 }
 

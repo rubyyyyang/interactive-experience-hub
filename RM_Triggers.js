@@ -77,7 +77,11 @@ function processEventQueue() {
 /**
  * Main spreadsheet edit trigger
  */
-function onEdit(event) {
+/**
+ * Handle spreadsheet edit events
+ * Invoked by installable trigger (not Simple Trigger)
+ */
+function handleSpreadsheetEdit(event) {
   try {
     if (!event || !event.range) {
       console.log("Invalid edit event received");
@@ -89,43 +93,59 @@ function onEdit(event) {
     const sheetName = sheet.getName();
     const masterSheetName = getMasterSheetName();
 
-    if (sheetName !== masterSheetName) {
+    // Handle Request_Master
+    if (sheetName === masterSheetName) {
+      if (range.getRow() <= ENHANCED_CONFIG.SHEETS.HEADER_ROW) {
+        return;
+      }
+
+      if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) {
+        console.log("Ignoring multi-cell edit to prevent trigger storms");
+        return;
+      }
+
+      publishEvent({
+        type: "sheet_edit",
+        sheet: sheetName,
+        row: range.getRow(),
+        column: range.getColumn(),
+        value: event.value,
+        oldValue: event.oldValue
+      });
+
+      const headerMap = getHeaderMapFromSheet(sheet, ENHANCED_CONFIG.SHEETS.HEADER_ROW);
+
+      const statusColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
+      const prodLinkColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK];
+
+      if (statusColumnIndex != null && range.getColumn() === statusColumnIndex + 1) {
+        processStatusEdit(event, sheet, headerMap);
+      } else if (prodLinkColumnIndex != null && range.getColumn() === prodLinkColumnIndex + 1) {
+        processProdLinkEdit(event, sheet, headerMap);
+      }
+
+      stampStatusTimestamp(event, sheet, headerMap);
+      bumpDiscoveryDataVersion_();
       return;
     }
 
-    if (range.getRow() <= ENHANCED_CONFIG.SHEETS.HEADER_ROW) {
+    // Handle YouTube_Responses
+    if (sheetName === 'YouTube_Responses') {
+      if (range.getRow() <= 1) {
+        return;
+      }
+
+      if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) {
+        console.log("Ignoring multi-cell edit to prevent trigger storms");
+        return;
+      }
+
+      processYouTubeStatusEdit(event, sheet);
       return;
     }
-
-    if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) {
-      console.log("Ignoring multi-cell edit to prevent trigger storms");
-      return;
-    }
-
-    publishEvent({
-      type: "sheet_edit",
-      sheet: sheetName,
-      row: range.getRow(),
-      column: range.getColumn(),
-      value: event.value,
-      oldValue: event.oldValue
-    });
-
-    const headerMap = getHeaderMapFromSheet(sheet, ENHANCED_CONFIG.SHEETS.HEADER_ROW);
-
-    const statusColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
-    const prodLinkColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK];
-
-    if (statusColumnIndex != null && range.getColumn() === statusColumnIndex + 1) {
-      processStatusEdit(event, sheet, headerMap);
-    } else if (prodLinkColumnIndex != null && range.getColumn() === prodLinkColumnIndex + 1) {
-      processProdLinkEdit(event, sheet, headerMap);
-    }
-
-    stampStatusTimestamp(event, sheet, headerMap);
 
   } catch (error) {
-    logError("onEdit", error, {
+    logError("handleSpreadsheetEdit", error, {
       event: event ? {
         row: event.range?.getRow(),
         column: event.range?.getColumn(),
@@ -240,8 +260,8 @@ function validateStatusTransition(sheet, headerMap, row, oldStatus, newStatus) {
 
     const isInvalid =
       (newStatus === ENHANCED_CONFIG.STATUS.REQUEST_APPROVED && !openTs) ||
-      (newStatus === ENHANCED_CONFIG.STATUS.IE_RECEIVED && !isCreatorOnly && !approvedTs) ||
-      (newStatus === ENHANCED_CONFIG.STATUS.IE_REVIEWED && !receivedTs);
+      (newStatus === ENHANCED_CONFIG.STATUS.DEMO_RECEIVED && !isCreatorOnly && !approvedTs) ||
+      (newStatus === ENHANCED_CONFIG.STATUS.DEMO_REVIEWED && !receivedTs);
 
     if (isInvalid) {
       const statusColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
@@ -253,8 +273,8 @@ function validateStatusTransition(sheet, headerMap, row, oldStatus, newStatus) {
 
       try {
         const errorMessage = isCreatorOnly
-          ? "Invalid status order for creator submission. Required: IE Received → IE Reviewed."
-          : "Invalid status order. Required: Open → Approved → IE Received → IE Reviewed.";
+          ? "Invalid status order for creator submission. Required: Demo Received → Demo Reviewed."
+          : "Invalid status order. Required: Open → Approved → Demo Received → Demo Reviewed.";
 
         sheet.getParent().toast(errorMessage, "Status update blocked", 5);
       } catch (toastError) {
@@ -283,7 +303,7 @@ function validateStatusTransition(sheet, headerMap, row, oldStatus, newStatus) {
 }
 
 /**
- * Process production link edits and auto-advance IE Received -> IE Reviewed
+ * Process production link edits and auto-advance Demo Received -> Demo Reviewed
  */
 function processProdLinkEdit(event, sheet, headerMap) {
   try {
@@ -293,7 +313,7 @@ function processProdLinkEdit(event, sheet, headerMap) {
     console.log(`🔗 Production link edit detected: Row ${row}, Value: "${newProdLink}"`);
 
     if (!newProdLink) {
-      console.log("⏭️ Ignoring empty production link value");
+      console.log("⏭️ Production link cleared");
       return;
     }
 
@@ -302,8 +322,8 @@ function processProdLinkEdit(event, sheet, headerMap) {
       const currentStatusRaw = String(sheet.getRange(row, statusColumnIndex + 1).getValue() || "").trim();
       const currentStatus = normalizeStatusCanonical(currentStatusRaw);
 
-      if (currentStatus === ENHANCED_CONFIG.STATUS.IE_RECEIVED) {
-        sheet.getRange(row, statusColumnIndex + 1).setValue(ENHANCED_CONFIG.STATUS.IE_REVIEWED);
+      if (currentStatus === ENHANCED_CONFIG.STATUS.DEMO_RECEIVED) {
+        sheet.getRange(row, statusColumnIndex + 1).setValue(ENHANCED_CONFIG.STATUS.DEMO_REVIEWED);
 
         const reviewedTsColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS_REVIEWED_TS];
         if (reviewedTsColumnIndex != null) {
@@ -313,13 +333,13 @@ function processProdLinkEdit(event, sheet, headerMap) {
           }
         }
 
-        console.log(`Auto-advanced status to IE Reviewed for row ${row} after prod link added`);
+        console.log(`Auto-advanced status to Demo Reviewed for row ${row} after prod link added`);
 
         publishEvent({
           type: "status_auto_advanced",
           row,
-          fromStatus: ENHANCED_CONFIG.STATUS.IE_RECEIVED,
-          toStatus: ENHANCED_CONFIG.STATUS.IE_REVIEWED,
+          fromStatus: ENHANCED_CONFIG.STATUS.DEMO_RECEIVED,
+          toStatus: ENHANCED_CONFIG.STATUS.DEMO_REVIEWED,
           trigger: "prod_link_added"
         });
       }
@@ -379,7 +399,7 @@ function stampStatusTimestamp(event, sheet, headerMap) {
     const timestampCell = sheet.getRange(range.getRow(), timestampColumnIndex + 1);
     if (timestampCell.getValue()) return;
 
-    const now = new Date();
+    const now = formatTimestamp(new Date());
     timestampCell.setValue(now);
 
     console.log(`Stamped ${timestampColumnName} for row ${range.getRow()}: ${now}`);
@@ -443,6 +463,65 @@ function processCreatorFormSubmission(event) {
   }
 }
 
+/**
+ * Process YouTube_Responses Status column edits for Retired lifecycle email
+ */
+function processYouTubeStatusEdit(event, sheet) {
+  try {
+    const range = event.range;
+    const rowNumber = range.getRow();
+    const newValue = String(event.value || '').trim();
+    const oldValue = String(event.oldValue || '').trim();
+
+    if (newValue.toLowerCase() !== 'retired') {
+      return;
+    }
+
+    if (oldValue.toLowerCase() === 'retired') {
+      return;
+    }
+
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+      .map(h => String(h || '').trim());
+
+    const headerMap = {};
+    headers.forEach((h, i) => { if (h) headerMap[h] = i; });
+
+    const statusColIndex = headers.indexOf('Status');
+    if (statusColIndex === -1 || range.getColumn() !== statusColIndex + 1) {
+      return;
+    }
+
+    const numberColIndex = headers.indexOf('Number');
+    if (numberColIndex === -1) {
+      console.warn('YouTube_Responses Number column not found');
+      return;
+    }
+
+    const rowData = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+    const number = String(rowData[numberColIndex] || '').trim();
+
+    if (!number) {
+      console.warn(`YouTube_Responses row ${rowNumber} has no Number`);
+      return;
+    }
+
+    // Send creator Retired email (independent from any Slack notification)
+    if (typeof buildYouTubeRetiredContext === 'function' && typeof dispatchCreatorLifecycleNotification === 'function') {
+      try {
+        const lifecycleContext = buildYouTubeRetiredContext(rowData, headerMap, number);
+        dispatchCreatorLifecycleNotification(lifecycleContext);
+      } catch (error) {
+        logError('processYouTubeStatusEdit_creatorEmail', error, { number, rowNumber });
+      }
+    }
+
+  } catch (error) {
+    logError('processYouTubeStatusEdit', error, { rowNumber: event.range?.getRow() });
+  }
+}
+
 /* =========================
    TRIGGER UTILITIES
 ========================= */
@@ -456,7 +535,7 @@ function installTriggers() {
 
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
-    ScriptApp.newTrigger("onEdit")
+    ScriptApp.newTrigger("handleSpreadsheetEdit")
       .forSpreadsheet(spreadsheet)
       .onEdit()
       .create();

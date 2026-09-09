@@ -240,10 +240,16 @@ function normalizeStatusCanonical(rawStatus) {
     "open": ENHANCED_CONFIG.STATUS.REQUEST_OPEN,
     "approved": ENHANCED_CONFIG.STATUS.REQUEST_APPROVED,
     "request approved": ENHANCED_CONFIG.STATUS.REQUEST_APPROVED,
-    "received": ENHANCED_CONFIG.STATUS.IE_RECEIVED,
-    "reviewed": ENHANCED_CONFIG.STATUS.IE_REVIEWED,
-    "published": ENHANCED_CONFIG.STATUS.IE_PUBLISHED,
-    "retired": ENHANCED_CONFIG.STATUS.IE_RETIRED,
+    "received": ENHANCED_CONFIG.STATUS.DEMO_RECEIVED,
+    "ie received": ENHANCED_CONFIG.STATUS.DEMO_RECEIVED,
+    "reviewed": ENHANCED_CONFIG.STATUS.DEMO_REVIEWED,
+    "ie reviewed": ENHANCED_CONFIG.STATUS.DEMO_REVIEWED,
+    "published": ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED,
+    "ie published": ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED,
+    "demo published": ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED,
+    "retired": ENHANCED_CONFIG.STATUS.DEMO_RETIRED,
+    "ie retired": ENHANCED_CONFIG.STATUS.DEMO_RETIRED,
+    "demo retired": ENHANCED_CONFIG.STATUS.DEMO_RETIRED,
     "closed": ENHANCED_CONFIG.STATUS.CLOSED
   };
 
@@ -285,6 +291,17 @@ function formatDate(value) {
   }
 
   return String(value);
+}
+
+function formatTimestamp(value) {
+  if (!value) return "";
+  try {
+    var d = (Object.prototype.toString.call(value) === "[object Date]") ? value : new Date(value);
+    if (isNaN(d)) return String(value);
+    return Utilities.formatDate(d, Session.getScriptTimeZone(), "M/d/yyyy");
+  } catch (_) {
+    return String(value);
+  }
 }
 
 /**
@@ -390,5 +407,17 @@ function getHeaderCacheStats() {
   }
 
   return stats;
+}
+
+function extractLastLine_(multiLineValue) {
+  var p = String(multiLineValue || "").trim();
+  if (p) {
+    var lines = p.split("\n");
+    for (var i = lines.length - 1; i >= 0; i--) {
+      var line = lines[i].trim();
+      if (line) return line;
+    }
+  }
+  return "";
 }
 
