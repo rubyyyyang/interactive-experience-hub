@@ -26,51 +26,53 @@ The spreadsheet is the Hub's operational workspace and data layer. The Apps Scri
 
 ```mermaid
 graph TB
-
     INTAKE[Interactive Experience Intake]
-
+    
     subgraph HUB["Interactive Experience Hub"]
-
+        direction TB
+        
         subgraph SHEET["1. Spreadsheet Operations"]
+            direction LR
             CFR[Creator_Form_Raw<br/>Interactive Demo Intake]
             RM[Request_Master<br/>Interactive Demo Lifecycle]
             YT[YouTube_Responses<br/>YouTube Intake & Lifecycle]
             PERF[Performance Review & Metrics]
         end
-
-        subgraph WEB["2. Web Experience"]
-            DISC[Search & Discovery]
-        end
-
+        
         subgraph AUTO["3. Background Automation & Integrations"]
+            direction LR
             PROCESS[Submission & Workflow Processing]
             TRIG[Form / Edit / Status Triggers]
             EMAIL[Creator Lifecycle Notifications]
             SLACK[Slack Notifications]
             DATA[Data Sync & Metrics<br/>Databricks]
         end
+        
+        subgraph WEB["2. Web Experience"]
+            DISC[Search & Discovery]
+        end
+        
+        CFR --> PROCESS
+        PROCESS --> RM
+        PROCESS --> EMAIL
+        
+        RM --> TRIG
+        RM --> PERF
+        RM --> DISC
+        
+        YT --> TRIG
+        YT --> DISC
+        
+        TRIG --> EMAIL
+        TRIG --> SLACK
+        
+        PERF --> RM
+        
+        DATA --> RM
     end
-
+    
     INTAKE -->|Interactive Demo| CFR
-    CFR --> PROCESS
-    PROCESS --> RM
-
     INTAKE -->|YouTube| YT
-    INTAKE -->|YouTube submission event| EMAIL
-
-    RM --> TRIG
-    YT --> TRIG
-
-    PROCESS --> EMAIL
-    TRIG --> EMAIL
-    TRIG --> SLACK
-
-    DATA --> RM
-    RM --> PERF
-    PERF --> RM
-
-    RM --> DISC
-    YT --> DISC
 ```
 
 ## Data flow
@@ -105,49 +107,45 @@ Lifecycle workflows / Creator notifications / Search & Discovery
 
 The Hub centralizes creator lifecycle email notifications for both Interactive Demo and YouTube content.
 
-**Interactive Demo:**
-
 ```mermaid
-graph LR
+graph TB
     INTAKE[Interactive Experience Intake]
+    
     CFR[Creator_Form_Raw]
-    HUB[Hub: Submission Processing]
-    RM[Request_Master]
-    NORM[Lifecycle Event Normalization]
-    DISPATCH[Creator Lifecycle<br/>Notification Dispatcher]
-    GMAIL[Gmail]
-    SENT[Sent-State Tracking]
-    
-    INTAKE -->|Creator submits| CFR
-    CFR --> HUB
-    HUB --> RM
-    HUB -->|SUBMISSION_RECEIVED| NORM
-    RM -->|Status changes| NORM
-    NORM -->|SUBMISSION_RECEIVED<br/>CONTENT_PUBLISHED<br/>CONTENT_RETIRED| DISPATCH
-    DISPATCH --> GMAIL
-    GMAIL -->|Email sent| SENT
-    SENT -->|Record sent flag| RM
-```
-
-**YouTube:**
-
-```mermaid
-graph LR
-    INTAKE[Interactive Experience Intake]
     YT[YouTube_Responses]
-    NORM[Lifecycle Event Normalization]
-    DISPATCH[Creator Lifecycle<br/>Notification Dispatcher]
-    GMAIL[Gmail]
-    SENT[Sent-State Tracking]
     
-    INTAKE -->|Creator submits<br/>Status: Published| YT
-    YT -->|Initial submission| NORM
-    NORM -->|SUBMISSION_RECEIVED| DISPATCH
-    YT -->|Status: Retired| NORM
-    NORM -->|CONTENT_RETIRED| DISPATCH
+    HUB_DEMO[Hub: Submission Processing]
+    RM[Request_Master]
+    
+    NORM[Lifecycle Event Normalization]
+    
+    DISPATCH[Creator Lifecycle Notification Dispatcher]
+    GMAIL[Gmail]
+    
+    SENT_DEMO[Sent-State Tracking<br/>Request_Master]
+    SENT_YT[Sent-State Tracking<br/>YouTube_Responses]
+    
+    INTAKE -->|Interactive Demo<br/>submission| CFR
+    INTAKE -->|YouTube<br/>submission| YT
+    
+    CFR --> HUB_DEMO
+    HUB_DEMO --> RM
+    
+    HUB_DEMO -->|SUBMISSION_RECEIVED| NORM
+    RM -->|CONTENT_PUBLISHED| NORM
+    RM -->|CONTENT_RETIRED| NORM
+    
+    YT -->|SUBMISSION_RECEIVED| NORM
+    YT -->|CONTENT_RETIRED| NORM
+    
+    NORM --> DISPATCH
     DISPATCH --> GMAIL
-    GMAIL -->|Email sent| SENT
-    SENT -->|Record sent flag| YT
+    
+    GMAIL -->|Interactive Demo<br/>email sent| SENT_DEMO
+    GMAIL -->|YouTube<br/>email sent| SENT_YT
+    
+    SENT_DEMO --> RM
+    SENT_YT --> YT
 ```
 
 **Key principles:**
