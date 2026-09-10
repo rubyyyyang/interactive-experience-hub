@@ -13,36 +13,92 @@ The Interactive Experience program supports two primary applications:
 - Notifies Hub for downstream processing
 
 **Interactive Experience Hub**
-- Reads from Creator_Form_Raw and processes Interactive Demo submissions into Request_Master
-- Reads from YouTube_Responses for YouTube lifecycle processing
-- Request_Master workflow orchestration
-- Creator lifecycle email notifications
-- Slack lifecycle notifications
-- Discovery web app (search and browse experience)
-- Supporting workflows for lifecycle analysis, performance metrics, and data synchronization
 
-**Data flow**:
+The Hub is a Google Apps Script solution with three main areas:
 
+1. **Spreadsheet Operations** — Content lifecycle management and performance review workflows
+2. **Web Experience** — Search and discovery for Interactive Experience content
+3. **Background Automation & Integrations** — Notifications, triggers, and data synchronization
+
+The spreadsheet is the Hub's operational workspace and data layer. The Apps Script project is the execution layer.
+
+## Hub structure
+
+```mermaid
+graph TB
+
+    INTAKE[Interactive Experience Intake]
+
+    subgraph HUB["Interactive Experience Hub"]
+
+        subgraph SHEET["1. Spreadsheet Operations"]
+            CFR[Creator_Form_Raw<br/>Interactive Demo Intake]
+            RM[Request_Master<br/>Interactive Demo Lifecycle]
+            YT[YouTube_Responses<br/>YouTube Intake & Lifecycle]
+            PERF[Performance Review & Metrics]
+        end
+
+        subgraph WEB["2. Web Experience"]
+            DISC[Search & Discovery]
+        end
+
+        subgraph AUTO["3. Background Automation & Integrations"]
+            PROCESS[Submission & Workflow Processing]
+            TRIG[Form / Edit / Status Triggers]
+            EMAIL[Creator Lifecycle Notifications]
+            SLACK[Slack Notifications]
+            DATA[Data Sync & Metrics<br/>Databricks]
+        end
+    end
+
+    INTAKE -->|Interactive Demo| CFR
+    CFR --> PROCESS
+    PROCESS --> RM
+
+    INTAKE -->|YouTube| YT
+    INTAKE -->|YouTube submission event| EMAIL
+
+    RM --> TRIG
+    YT --> TRIG
+
+    PROCESS --> EMAIL
+    TRIG --> EMAIL
+    TRIG --> SLACK
+
+    DATA --> RM
+    RM --> PERF
+    PERF --> RM
+
+    RM --> DISC
+    YT --> DISC
+```
+
+## Data flow
+
+**Interactive Demo:**
 ```text
-Interactive Demo:
-  Interactive Experience Intake
-          ↓
-  Creator_Form_Raw
-          ↓
-  Interactive Experience Hub
-          ↓
-  Request_Master
-          ↓
-  Lifecycle processing → Notifications / Discovery
+Interactive Experience Intake
+        ↓
+Creator_Form_Raw
+        ↓
+Interactive Experience Hub
+        ↓
+Request_Master
+        ↓
+Hub capabilities:
+Lifecycle workflows / Creator notifications / Search & Discovery
+```
 
-YouTube:
-  Interactive Experience Intake
-          ↓
-  YouTube_Responses
-          ↓
-  Interactive Experience Hub
-          ↓
-  Lifecycle processing → Notifications / Discovery
+**YouTube:**
+```text
+Interactive Experience Intake
+        ↓
+YouTube_Responses
+        ↓
+Interactive Experience Hub
+        ↓
+Hub capabilities:
+Lifecycle workflows / Creator notifications / Search & Discovery
 ```
 
 ## Content types

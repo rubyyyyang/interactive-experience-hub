@@ -1,21 +1,16 @@
 # Interactive Experience Hub
 
-The Interactive Experience Hub is a Google Apps Script application that supports downstream lifecycle management, notifications, discovery, and data workflows for Interactive Experience content.
+The Interactive Experience Hub is a Google Apps Script solution for downstream lifecycle management, notifications, discovery, and data workflows for Interactive Experience content.
 
-It works together with the [Interactive Experience Intake](https://github.com/rubyyyyang/interactive-experience-intake) application.
+The Hub provides three main areas:
 
-## What the Hub owns
+1. **Spreadsheet Operations** — Content lifecycle management and performance review workflows in Google Sheets
+2. **Web Experience** — Search and discovery web app for Interactive Experience content
+3. **Background Automation & Integrations** — Creator and Slack notifications, form/edit triggers, and data synchronization
 
-The Hub currently supports:
+It works together with the [Interactive Experience Intake](https://github.com/rubyyyyyang/interactive-experience-intake) application.
 
-- lifecycle processing for Interactive Demo and YouTube content
-- creator lifecycle email notifications
-- Slack lifecycle notifications
-- Request_Master workflow processing
-- Discovery search and browse experiences
-- lifecycle, performance, and data synchronization workflows
-
-The primary operational data is stored in Google Sheets.
+The spreadsheet is the Hub's operational workspace and data layer. The Apps Script project is the execution layer.
 
 ## Development
 
