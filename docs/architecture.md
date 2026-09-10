@@ -1,8 +1,8 @@
 # Interactive Experience Architecture
 
-## System overview
+## System Overview
 
-The Interactive Experience program supports two primary applications:
+The Interactive Experience program has two primary systems:
 
 **Interactive Experience Intake**
 - Creator-facing submission experience for Interactive Demo and YouTube content
@@ -13,67 +13,43 @@ The Interactive Experience program supports two primary applications:
 - Notifies Hub for downstream processing
 
 **Interactive Experience Hub**
-
-The Hub is a Google Apps Script solution with three main areas:
-
-1. **Spreadsheet Operations** — Content lifecycle management and performance review workflows
-2. **Web Experience** — Search and discovery for Interactive Experience content
-3. **Background Automation & Integrations** — Notifications, triggers, and data synchronization
-
-The spreadsheet is the Hub's operational workspace and data layer. The Apps Script project is the execution layer.
-
-## Hub structure
+- Google Apps Script solution for downstream lifecycle management
+- Spreadsheet operations, web experience, and background automation
+- Content lifecycle management, performance review, search & discovery, notifications, and data synchronization
 
 ```mermaid
-graph TB
-    INTAKE[Interactive Experience Intake]
-    
-    subgraph HUB["Interactive Experience Hub"]
-        direction TB
-        
-        subgraph SHEET["1. Spreadsheet Operations"]
-            direction LR
-            CFR[Creator_Form_Raw<br/>Interactive Demo Intake]
-            RM[Request_Master<br/>Interactive Demo Lifecycle]
-            YT[YouTube_Responses<br/>YouTube Intake & Lifecycle]
-            PERF[Performance Review & Metrics]
-        end
-        
-        subgraph AUTO["3. Background Automation & Integrations"]
-            direction LR
-            PROCESS[Submission & Workflow Processing]
-            TRIG[Form / Edit / Status Triggers]
-            EMAIL[Creator Lifecycle Notifications]
-            SLACK[Slack Notifications]
-            DATA[Data Sync & Metrics<br/>Databricks]
-        end
-        
-        subgraph WEB["2. Web Experience"]
-            DISC[Search & Discovery]
-        end
-        
-        CFR --> PROCESS
-        PROCESS --> RM
-        PROCESS --> EMAIL
-        
-        RM --> TRIG
-        RM --> PERF
-        RM --> DISC
-        
-        YT --> TRIG
-        YT --> DISC
-        
-        TRIG --> EMAIL
-        TRIG --> SLACK
-        
-        PERF --> RM
-        
-        DATA --> RM
-    end
-    
-    INTAKE -->|Interactive Demo| CFR
-    INTAKE -->|YouTube| YT
+flowchart LR
+    CREATOR[Creators] --> INTAKE[Interactive Experience Intake]
+
+    INTAKE -->|Interactive Demo via Creator_Form_Raw| HUB[Interactive Experience Hub]
+    INTAKE -->|YouTube via YouTube_Responses| HUB
 ```
+
+## Inside the Interactive Experience Hub
+
+The Hub operates through three main areas:
+
+```mermaid
+flowchart TB
+    HUB[Interactive Experience Hub]
+
+    HUB --> SHEET[Spreadsheet Operations]
+    HUB --> WEB[Web Experience]
+    HUB --> AUTO[Background Automation & Integrations]
+
+    SHEET --> LIFE[Content Lifecycle Management]
+    SHEET --> PERF[Performance Review & Metrics]
+
+    WEB --> SEARCH[Search & Discovery]
+
+    AUTO --> PROCESS[Submission & Workflow Processing]
+    AUTO --> EMAIL[Creator Lifecycle Notifications]
+    AUTO --> SLACK[Slack Notifications]
+    AUTO --> TRIG[Form / Edit / Status Triggers]
+    AUTO --> DATA[Data Sync & Databricks]
+```
+
+The spreadsheet is the Hub's operational workspace and data layer. The Apps Script project is the execution layer.
 
 ## Data flow
 
