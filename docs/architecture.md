@@ -101,6 +101,120 @@ Hub capabilities:
 Lifecycle workflows / Creator notifications / Search & Discovery
 ```
 
+## Creator Lifecycle Notification Flow
+
+The Hub centralizes creator lifecycle email notifications for both Interactive Demo and YouTube content.
+
+**Interactive Demo:**
+
+```mermaid
+graph LR
+    INTAKE[Interactive Experience Intake]
+    CFR[Creator_Form_Raw]
+    HUB[Hub: Submission Processing]
+    RM[Request_Master]
+    NORM[Lifecycle Event Normalization]
+    DISPATCH[Creator Lifecycle<br/>Notification Dispatcher]
+    GMAIL[Gmail]
+    SENT[Sent-State Tracking]
+    
+    INTAKE -->|Creator submits| CFR
+    CFR --> HUB
+    HUB --> RM
+    HUB -->|SUBMISSION_RECEIVED| NORM
+    RM -->|Status changes| NORM
+    NORM -->|SUBMISSION_RECEIVED<br/>CONTENT_PUBLISHED<br/>CONTENT_RETIRED| DISPATCH
+    DISPATCH --> GMAIL
+    GMAIL -->|Email sent| SENT
+    SENT -->|Record sent flag| RM
+```
+
+**YouTube:**
+
+```mermaid
+graph LR
+    INTAKE[Interactive Experience Intake]
+    YT[YouTube_Responses]
+    NORM[Lifecycle Event Normalization]
+    DISPATCH[Creator Lifecycle<br/>Notification Dispatcher]
+    GMAIL[Gmail]
+    SENT[Sent-State Tracking]
+    
+    INTAKE -->|Creator submits<br/>Status: Published| YT
+    YT -->|Initial submission| NORM
+    NORM -->|SUBMISSION_RECEIVED| DISPATCH
+    YT -->|Status: Retired| NORM
+    NORM -->|CONTENT_RETIRED| DISPATCH
+    DISPATCH --> GMAIL
+    GMAIL -->|Email sent| SENT
+    SENT -->|Record sent flag| YT
+```
+
+**Key principles:**
+- Hub normalizes content-type-specific statuses into shared lifecycle events
+- Interactive Demo produces three lifecycle events (submission, published, retired)
+- YouTube produces two lifecycle events (submission, retired) — no separate published email
+- Email sent-state tracking is independent from Slack notifications
+- Intake does not send creator lifecycle emails independently
+
+## Performance Review Workflow
+
+The Hub supports periodic performance review by combining metrics data, generating recommendations, and facilitating creator update-plan responses.
+
+```mermaid
+graph TB
+    DB[Databricks]
+    ATM[All Time Metrics Sheet<br/>Manual SQL Paste]
+    
+    METRICS[RM_Metrics.js<br/>YTD Metrics Pull]
+    ALLTIME[RH_AllTimeMetricsMap.js<br/>All-Time & L90 Sync]
+    
+    RM[Request_Master<br/>Metrics Storage]
+    
+    PERF[RM_Performance.js<br/>Performance Analysis]
+    SIGNALS[Performance Signals & Flags<br/>Recommended Action & Priority<br/>Score / Tier / Trend]
+    
+    EMAILGEN[email_gen.js<br/>Email Draft Generator]
+    DRAFT[Gmail Draft]
+    
+    FORM[Creator Update Form]
+    RAW[lifecycle_raw_updates Sheet]
+    ROUTE[onFormSubmit Routing]
+    SYNC[onUpdatePlanFormSubmit<br/>syncFormResponsesToQueue]
+    QUEUE[Response_Queue]
+    
+    DB --> METRICS
+    METRICS --> RM
+    
+    ATM --> ALLTIME
+    ALLTIME --> RM
+    
+    RM --> PERF
+    PERF --> SIGNALS
+    SIGNALS --> RM
+    
+    RM --> EMAILGEN
+    EMAILGEN --> DRAFT
+    
+    DRAFT -.->|Creator responds| FORM
+    FORM --> RAW
+    RAW --> ROUTE
+    ROUTE --> SYNC
+    SYNC --> QUEUE
+```
+
+**Key components:**
+- **RM_Metrics.js** — Pulls YTD engagement and sales metrics from Databricks API
+- **RH_AllTimeMetricsMap.js** — Syncs all-time and L90 metrics from manual SQL paste
+- **RM_Performance.js** — Analyzes metrics and generates performance signals, flags, and recommendations
+- **email_gen.js** — Generates Gmail drafts for creator performance review (manual, not automatic lifecycle emails)
+- **Performance review responses** — Routed through central onFormSubmit to Response_Queue for admin follow-up
+
+**Important distinctions:**
+- Performance review emails are **Gmail drafts** generated manually, not automatic lifecycle notifications
+- YTD metrics (Databricks API) and all-time/L90 metrics (manual SQL) are separate workflows
+- Creator update-plan responses flow through lifecycle_raw_updates → Response_Queue for admin review
+
 ## Content types
 
 **Interactive Experience** is the overall program.
