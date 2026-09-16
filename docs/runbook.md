@@ -94,6 +94,20 @@ For creator lifecycle email issues, also verify:
 - the raw status maps to the expected normalized lifecycle event
 - the corresponding creator email sent flag has not already been set
 
+### Creator lifecycle notifications
+
+See [Creator Lifecycle Email Reference](creator-lifecycle-emails.md) for complete email specifications including:
+- Five lifecycle email templates (Interactive Demo and Video Demo)
+- Subject lines and body copy
+- CTA labels and destinations
+- Send conditions and workflow rules
+- Shared email behavior (sender, footer, contact)
+
+**Key workflow rules**:
+- Published notifications require **both** Status = Published **and** Drupal Page URL
+- If Drupal Page URL is added after Status is already Published, the `processDrupalPageUrlEdit` trigger reprocesses the workflow
+- Each email uses idempotency tracking to prevent duplicate sends
+
 ## Deployment safety
 
 Before updating production:

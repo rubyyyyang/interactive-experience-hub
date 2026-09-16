@@ -36,15 +36,18 @@ Additional browser test commands are available in `package.json`.
 
 ## Apps Script
 
-Git is the shared source of truth for the codebase. Google Apps Script is the runtime and deployment environment.
+**GitHub `main` is the source of truth for Apps Script source.** Start work from the latest `main` branch, test changes in the DEV Apps Script project, then commit the tested source back to `main`. Avoid unreconciled source edits directly in Apps Script.
+
+Google Apps Script is the runtime and deployment environment.
 
 For normal development:
 
 ```text
 local changes
 → tests
-→ clasp push
-→ validate in the Apps Script development deployment
+→ clasp push to DEV
+→ validate in the DEV Apps Script deployment
+→ commit tested source to GitHub main
 → manually update the production deployment
 ```
 

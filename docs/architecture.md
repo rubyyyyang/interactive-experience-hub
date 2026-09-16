@@ -244,9 +244,28 @@ The Hub is the centralized lifecycle notification layer.
 
 These are independent from Slack notification sent flags.
 
+## Discovery web app
+
+The Hub provides a search and discovery web app for Interactive Experience content.
+
+**Card display**:
+- Type (Interactive Demo / Video Demo)
+- Title
+- Primary Product
+- Primary Topic
+- Status
+
+**Detail view Overview section**:
+- Primary Product
+- Product (other related products)
+- Primary Topic
+- Topic (other related topics)
+
+Topic fields apply to Interactive Demo only. Video Demo submissions do not use Topic fields.
+
 ## Design principles
 
-- **Content types may keep their own status models** — YouTube records use "Published" as their initial status, while Interactive Demos use "Demo Received"
+- **Content types may keep their own status models** — Video Demo records use "Published" as their initial status, while Interactive Demos use "Demo Received"
 - **Shared lifecycle behavior is normalized in the Hub** — Downstream workflows operate on normalized lifecycle events, not raw statuses
 - **Intake owns submission experience** — Creator-facing forms, AI-assisted drafting, and Status Tracker live in the Intake application
 - **Hub owns downstream lifecycle orchestration** — Notifications, Discovery, performance analysis, and data synchronization are Hub responsibilities
