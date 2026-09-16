@@ -117,11 +117,14 @@ function handleSpreadsheetEdit(event) {
 
       const statusColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS];
       const prodLinkColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK];
+      const drupalPageUrlColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.DRUPAL_PAGE_URL];
 
       if (statusColumnIndex != null && range.getColumn() === statusColumnIndex + 1) {
         processStatusEdit(event, sheet, headerMap);
       } else if (prodLinkColumnIndex != null && range.getColumn() === prodLinkColumnIndex + 1) {
         processProdLinkEdit(event, sheet, headerMap);
+      } else if (drupalPageUrlColumnIndex != null && range.getColumn() === drupalPageUrlColumnIndex + 1) {
+        processDrupalPageUrlEdit(event, sheet, headerMap);
       }
 
       stampStatusTimestamp(event, sheet, headerMap);
@@ -370,6 +373,48 @@ function processProdLinkEdit(event, sheet, headerMap) {
 
   } catch (error) {
     logError("processProdLinkEdit", error, { event });
+  }
+}
+
+/**
+ * Handles Drupal Page URL edit trigger to reprocess workflow.
+ * When Drupal Page URL is populated after Status is already Published,
+ * this ensures the Published notification is sent.
+ */
+function processDrupalPageUrlEdit(event, sheet, headerMap) {
+  try {
+    const row = event.range.getRow();
+    const newDrupalPageUrl = String(event.value || "").trim();
+
+    console.log(`🌐 Drupal Page URL edit detected: Row ${row}, Value: "${newDrupalPageUrl}"`);
+
+    if (!newDrupalPageUrl) {
+      console.log("⏭️ Drupal Page URL cleared");
+      return;
+    }
+
+    const numberColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.NUMBER];
+    if (numberColumnIndex != null) {
+      const requestNumber = sheet.getRange(row, numberColumnIndex + 1).getValue();
+      console.log(`🔢 Request number: ${requestNumber}`);
+
+      if (requestNumber) {
+        console.log(`📞 Calling handleRequestMasterByNumber for Drupal URL update: ${requestNumber}`);
+        try {
+          const result = handleRequestMasterByNumber(requestNumber);
+          console.log(`✅ Workflow processing completed:`, result);
+        } catch (error) {
+          console.error(`❌ Workflow processing failed:`, error);
+        }
+      } else {
+        console.log(`❌ No request number found for row ${row}`);
+      }
+    } else {
+      console.log("❌ Number column not found in header map");
+    }
+
+  } catch (error) {
+    logError("processDrupalPageUrlEdit", error, { event });
   }
 }
 

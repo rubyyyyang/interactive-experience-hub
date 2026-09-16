@@ -21,7 +21,7 @@
 // Increment this when cached Discovery payload semantics or dependencies change
 // (e.g., changes to filter detection, record normalization, facet structure, or bundle shape)
 // to intentionally invalidate existing cache entries.
-const DISCOVERY_CACHE_SCHEMA_VERSION = 1;
+const DISCOVERY_CACHE_SCHEMA_VERSION = 2;
 
 const DISCOVERY_WEBAPP_CONFIG = {
   MASTER_SHEET: "Request_Master",
@@ -680,6 +680,29 @@ function combineUniqueProducts_(primaryProduct, relatedProducts) {
 
   return merged.join(", ");
 }
+
+function combineUniqueTopics_(primaryTopic, relatedTopics) {
+  const seen = new Set();
+  const merged = [];
+
+  [primaryTopic, relatedTopics]
+    .filter(Boolean)
+    .forEach(value => {
+      String(value)
+        .split(",")
+        .map(v => v.trim())
+        .filter(Boolean)
+        .forEach(item => {
+          const key = item.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(item);
+          }
+        });
+    });
+
+  return merged.join(", ");
+}
 function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkContext) {
   const get = (name) => {
     const idx = headerMap[name];
@@ -715,6 +738,10 @@ function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkCont
   const relatedProducts = get(COL.PRODUCT);
   const combinedProducts = combineUniqueProducts_(primaryProduct, relatedProducts);
 
+  const primaryTopic = get(COL.PRIMARY_TOPIC);
+  const relatedTopics = get(COL.TOPIC);
+  const combinedTopics = combineUniqueTopics_(primaryTopic, relatedTopics);
+
   const eventName = get(COL.EVENT);
   const tdp = get(COL.TDP);
   const marketingProgram = get(COL.MARKETING_PROGRAM);
@@ -738,8 +765,8 @@ function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkCont
   const creationLink = ensureHttps_(extractLastLine_(get(COL.CREATION_LINK))) || (get("YouTube Video ID") ? 'https://www.youtube.com/watch?v=' + get("YouTube Video ID") : '');
 
   const _linkBlob = (productionLink + ' ' + creationLink).toLowerCase();
-  const format = /youtu\.be|youtube\.com/.test(_linkBlob) ? 'YouTube Video'
-    : /interact\.redhat\.com|app\.arcade\.software/.test(_linkBlob) ? 'Arcade Demo'
+  const format = /youtu\.be|youtube\.com/.test(_linkBlob) ? 'Video Demo'
+    : /interact\.redhat\.com|app\.arcade\.software/.test(_linkBlob) ? 'Interactive Demo'
     : /interactive[\-\s]?lab|demo\.redhat\.com/.test(_linkBlob) ? 'Lab'
     : '';
 
@@ -826,9 +853,12 @@ function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkCont
     // Keep these for flexibility
     primaryProduct,
     secondaryProduct: relatedProducts,
+    primaryTopic,
+    secondaryTopic: relatedTopics,
 
     // Keep "product" as the combined display/search value
     product: combinedProducts,
+    topic: combinedTopics,
 
     event: eventName,
     tdp,

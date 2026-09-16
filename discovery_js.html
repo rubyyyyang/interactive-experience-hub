@@ -82,7 +82,7 @@
       }
 
       const FILTER_DEFS = [
-        { key: "formats", label: "Format", placeholder: "All formats" },
+        { key: "formats", label: "Type", placeholder: "All types" },
         { key: "products", label: "Product", placeholder: "All products" },
         { key: "tdps", label: "TDP", placeholder: "All TDPs" },
         { key: "salesTactics", label: "Sales Tactic", placeholder: "All tactics" },
@@ -978,7 +978,7 @@ Shared via The Interact Hub`;
       
       function renderProductBadge(productName) {
         if (!productName) return '';
-        
+
         return `<span class="productBadge">
                   <span>${escapeHtml(productName)}</span>
                 </span>`;
@@ -1040,7 +1040,7 @@ Shared via The Interact Hub`;
       }
 
       function isYouTubeItem(item) {
-        return item && item.format === 'YouTube Video';
+        return item && item.format === 'Video Demo';
       }
 
       function getPrimaryLink(item){
@@ -1742,6 +1742,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
               ${item.product ? renderProductBadge(item.product) : ''}
             </div>
             <div class="meta">
+              ${item.primaryTopic ? '<div><b>Primary Topic:</b> ' + escapeHtml(item.primaryTopic) + '</div>' : ''}
               ${item.tdp ? '<div><b>TDP:</b> ' + escapeHtml(item.tdp) + '</div>' : ''}
               ${item.salesTactic ? '<div><b>Tactic:</b> ' + escapeHtml(item.salesTactic) + '</div>' : ''}
               ${item.marketingProgram ? '<div><b>Program:</b> ' + escapeHtml(item.marketingProgram) + '</div>' : ''}
@@ -1828,6 +1829,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
               </div>
 
               <div class="meta">
+                ${item.primaryTopic ? `<div><b>Primary Topic:</b> ${escapeHtml(item.primaryTopic)}</div>` : ``}
                 ${item.tdp ? `<div><b>TDP:</b> ${escapeHtml(item.tdp)}</div>` : ``}
                 ${item.salesTactic ? `<div><b>Tactic:</b> ${escapeHtml(item.salesTactic)}</div>` : ``}
                 ${item.marketingProgram ? `<div><b>Program:</b> ${escapeHtml(item.marketingProgram)}</div>` : ``}
@@ -2166,6 +2168,10 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             <div class="drawerKicker">Overview</div>
             <div class="kv">
               <div class="k">Duration</div><div class="v">${rec.duration ? escapeHtml(rec.duration) + ' min' : '—'}</div>
+              ${rec.primaryProduct ? '<div class="k">Primary Product</div><div class="v">' + escapeHtml(rec.primaryProduct) + '</div>' : ''}
+              ${rec.secondaryProduct ? '<div class="k">Product</div><div class="v">' + escapeHtml(rec.secondaryProduct) + '</div>' : ''}
+              ${rec.primaryTopic ? '<div class="k">Primary Topic</div><div class="v">' + escapeHtml(rec.primaryTopic) + '</div>' : ''}
+              ${rec.secondaryTopic ? '<div class="k">Topic</div><div class="v">' + escapeHtml(rec.secondaryTopic) + '</div>' : ''}
               <div class="k">TDP</div><div class="v">${escapeHtml(rec.tdp || "—")}</div>
               <div class="k">Marketing Program</div><div class="v">${escapeHtml(rec.marketingProgram || "—")}</div>
               <div class="k">Sales Tactic</div><div class="v">${escapeHtml(rec.salesTactic || "—")}</div>
@@ -2192,8 +2198,8 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           <div class="drawerSection">
             <div class="drawerKicker">Links</div>
             ${isYouTubeItem(rec)
-              ? (rec.productionLink ? renderDrawerLink("YouTube Video", rec.productionLink, "Watch Video", rec.recordId) : '')
-                + (rec.productionLink ? '<p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">The published YouTube video.</p>' : '')
+              ? (rec.productionLink ? renderDrawerLink("Video Demo", rec.productionLink, "Watch Video", rec.recordId) : '')
+                + (rec.productionLink ? '<p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">The published video demo.</p>' : '')
               : (getLaunchLink(rec) ? renderDrawerLink("Demo Page", getLaunchLink(rec), "Launch Demo", rec.recordId) : '')
                 + (rec.productionLink ? renderDrawerLink("Production Link", rec.productionLink) : '')
                 + (rec.productionLink ? '<p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">The published version of this demo, embedded on the demo page.</p>' : '')

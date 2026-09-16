@@ -640,6 +640,12 @@ function processStatusWorkflow(context) {
         return processIEReviewed(context, lifecycleThreadTs);
 
       case ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED:
+        // Only send Published notifications when Drupal Page URL is available
+        const drupalPageUrl = String(safeGetByName(context.rowData, context.headerMap, ENHANCED_CONFIG.COLUMNS.DRUPAL_PAGE_URL) || "").trim();
+        if (!drupalPageUrl) {
+          console.log(`Skipping Published notification - Drupal Page URL not available yet (row ${context.rowNumber})`);
+          return { rowNumber: context.rowNumber, threadTs: lifecycleThreadTs, posted: "skipped_no_drupal_url" };
+        }
         return processIEPublished(context, lifecycleThreadTs);
 
       case ENHANCED_CONFIG.STATUS.DEMO_RETIRED:
@@ -812,7 +818,8 @@ function createCreatorOnlyReceivedThread(context) {
     `*Creator Team*: ${creatorTeam || "—"}\n` +
     (destination ? `*Destination*: ${destination}\n` : "") +
     linksLine +
-    actionLine;
+    actionLine +
+    `<@${ENHANCED_CONFIG.SLACK.USER_IDS.ROHAN}> <@${ENHANCED_CONFIG.SLACK.USER_IDS.BRANDON}> <@${ENHANCED_CONFIG.SLACK.USER_IDS.RICARDO}>`;
 
   return postToSlack(message, null);
 }
@@ -834,7 +841,8 @@ function createIEReceivedThread(context) {
       `${number ? ` #${number}` : ""}\n` +
       `*Demo Title*: ${finalDemoTitle || suggestedTitle || "—"}\n` +
       `*Creator*: ${creatorName || "—"}\n` +
-      `*Creator Team*: ${creatorTeam || "—"}`;
+      `*Creator Team*: ${creatorTeam || "—"}\n` +
+      `<@${ENHANCED_CONFIG.SLACK.USER_IDS.ROHAN}> <@${ENHANCED_CONFIG.SLACK.USER_IDS.BRANDON}> <@${ENHANCED_CONFIG.SLACK.USER_IDS.RICARDO}>`;
   } else {
     const requestor = String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.REQUESTOR_NAME) || "").trim() || "—";
     const priority = String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.PRIORITY) || "").trim();
@@ -858,7 +866,8 @@ function createIEReceivedThread(context) {
       `> *Deadline*: ${deadline || "—"}\n` +
       `> *TDP*: ${tdp || "—"}\n` +
       linksLine +
-      actionLine;
+      actionLine +
+      `<@${ENHANCED_CONFIG.SLACK.USER_IDS.ROHAN}> <@${ENHANCED_CONFIG.SLACK.USER_IDS.BRANDON}> <@${ENHANCED_CONFIG.SLACK.USER_IDS.RICARDO}>`;
   }
 
   return postToSlack(receivedMsg, null);
@@ -983,8 +992,10 @@ function processIEReviewed(context, lifecycleThreadTs) {
   if (prodLink && prodSentColumn != null && !isStatusSent(sheet, prodSentColumn, rowNumber)) {
     const reply =
       `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.PROD_LINK_ADDED}\n` +
-      `<${prodLink}|View Prod Arcade Demo>\n` +
-      `<@${ENHANCED_CONFIG.SLACK.USER_IDS.LANDING_PAGE_ADMIN}> ready for you to add to the landing page!`;
+      `<${prodLink}|View Prod Arcade Demo>\n\n` +
+      `<@${ENHANCED_CONFIG.SLACK.USER_IDS.RUBY}> <@${ENHANCED_CONFIG.SLACK.USER_IDS.ROHAN}> <@${ENHANCED_CONFIG.SLACK.USER_IDS.BRANDON}> — any of you can take the next step in Drupal:\n\n` +
+      `1. <https://rhdc-internal.apps.int.spoke.prod.us-west-2.aws.paas.redhat.com/en/user|Log in>\n` +
+      `2. <https://rhdc-internal.apps.int.spoke.prod.us-west-2.aws.paas.redhat.com/en/node/add/interactive_demo|Create Interactive Demo page>`;
 
     try {
       postToSlack(reply, lifecycleThreadTs);
@@ -1007,13 +1018,22 @@ function processIEReviewed(context, lifecycleThreadTs) {
 }
 
 function processIEPublished(context, lifecycleThreadTs) {
-  const slackResult = processSimpleStatusReply(
-    context,
-    lifecycleThreadTs,
-    ENHANCED_CONFIG.COLUMNS.PUBLISHED_SENT,
-    ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_PUBLISHED,
-    "published_reply"
-  );
+  const { sheet, headerMap, rowNumber, rowData } = context;
+
+  // Custom Slack message with Drupal Page URL
+  const sentColumnIndex = headerMap[ENHANCED_CONFIG.COLUMNS.PUBLISHED_SENT];
+  let slackResult = { rowNumber, threadTs: lifecycleThreadTs, posted: "already_sent" };
+
+  if (sentColumnIndex != null && !isStatusSent(sheet, sentColumnIndex, rowNumber)) {
+    const drupalPageUrl = String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.DRUPAL_PAGE_URL) || "").trim();
+    const message = drupalPageUrl
+      ? `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_PUBLISHED}\n<${drupalPageUrl}|View Interactive Demo>\n`
+      : `${ENHANCED_CONFIG.SLACK.MESSAGE_TEMPLATES.DEMO_PUBLISHED}\n`;
+
+    postToSlack(message, lifecycleThreadTs);
+    markStatusAsSent(sheet, headerMap, rowNumber, ENHANCED_CONFIG.COLUMNS.PUBLISHED_SENT);
+    slackResult = { rowNumber, threadTs: lifecycleThreadTs, posted: "published_reply" };
+  }
 
   // Send creator email notification (independent from Slack)
   if (typeof buildArcadeLifecycleContext === "function" && typeof dispatchCreatorLifecycleNotification === "function") {

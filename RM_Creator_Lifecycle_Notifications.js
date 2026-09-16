@@ -66,7 +66,8 @@ function buildArcadeLifecycleContext(context, status) {
     isCreatorIntake,
     currentStatus: status,
     creationLink: String(safeGetByName(rowData, headerMap, 'Creation Link') || '').trim(),
-    drupalPageUrl: String(safeGetByName(rowData, headerMap, 'Drupal Page URL') || '').trim()
+    drupalPageUrl: String(safeGetByName(rowData, headerMap, 'Drupal Page URL') || '').trim(),
+    productionLink: String(safeGetByName(rowData, headerMap, ENHANCED_CONFIG.COLUMNS.PROD_ARCADE_LINK) || '').trim()
   };
 }
 
@@ -306,7 +307,10 @@ function getCreatorEmailSentColumn(assetType, event) {
    EMAIL TEMPLATES
 ========================= */
 
-const STATUS_TRACKER_URL = 'https://script.google.com/a/redhat.com/macros/s/AKfycbzh7a4vsJ0TECMRUFqAazGP8bCQkJuoRv0bhIJlBFHEWj0a4kposd5uKRABmz4QOYej/exec?page=status';
+const STATUS_TRACKER_URL = 'https://script.google.com/a/redhat.com/macros/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec?page=status';
+const INTERACT_HUB_URL = 'https://script.google.com/a/macros/redhat.com/s/AKfycbw-i5dNh9DOHOyGuo9-pbfrQCazwImd48wfxTDD8wecsg4tk5h6yXGy25OJFx1F5COgsw/exec';
+const SUBMIT_NEW_DEMO_URL = 'https://script.google.com/a/macros/redhat.com/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec';
+const TEAM_EMAIL = 'interactive-experiences@redhat.com';
 
 /**
  * Escape HTML special characters to prevent injection
@@ -328,46 +332,57 @@ function sendSubmissionReceivedEmail_(creatorEmail, creatorName, title, context)
   const assetType = context.assetType;
 
   if (assetType === 'YOUTUBE') {
-    const subject = `We received your YouTube submission: ${title}`;
+    // VIDEO DEMO - SUBMISSION RECEIVED
+    const subject = `Video Demo submitted: ${title}`;
 
     const htmlBody = `<p>Hi ${escapeHtml_(displayName)},</p>` +
-      `<p>We received your YouTube submission, "${escapeHtml_(title)}".</p>` +
-      (context.youtubeUrl ? `<p><a href="${escapeHtml_(context.youtubeUrl)}">YouTube URL</a></p>` : '') +
-      `<p>You can track your submission in the <a href="${STATUS_TRACKER_URL}">Status Tracker</a>.</p>` +
-      `<p>Thanks,<br>Interactive Experience Team</p>`;
+      `<p>We received your Video Demo submission, "${escapeHtml_(title)}".</p>` +
+      (context.youtubeUrl ? `<p><strong><a href="${escapeHtml_(context.youtubeUrl)}">View submitted video</a></strong></p>` : '') +
+      `<p>We'll review it and follow up if anything is needed. You can track its progress at any time in the <strong><a href="${STATUS_TRACKER_URL}">Status Tracker</a></strong>.</p>` +
+      `<p>Questions or changes? <a href="mailto:interactive-experiences@redhat.com">Contact the Interactive Experiences Team</a>.</p>` +
+      `<p><strong><a href="${INTERACT_HUB_URL}">Explore the Interact Hub</a></strong> · <strong><a href="${STATUS_TRACKER_URL}">Check your submissions</a></strong> · <strong><a href="${SUBMIT_NEW_DEMO_URL}">Submit new content</a></strong></p>` +
+      `<p>Thanks,<br>Interactive Experiences Team</p>`;
 
     const plainBody = `Hi ${displayName},\n\n` +
-      `We received your YouTube submission, "${title}".\n\n` +
-      (context.youtubeUrl ? `YouTube URL: ${context.youtubeUrl}\n\n` : '') +
-      `You can track your submission in the Status Tracker: ${STATUS_TRACKER_URL}\n\n` +
-      `Thanks,\nInteractive Experience Team`;
+      `We received your Video Demo submission, "${title}".\n\n` +
+      (context.youtubeUrl ? `**View submitted video**\n${context.youtubeUrl}\n\n` : '') +
+      `We'll review it and follow up if anything is needed. You can track its progress at any time in the **Status Tracker**.\n\n` +
+      `${STATUS_TRACKER_URL}\n\n` +
+      `Questions or changes? Contact the Interactive Experiences Team: interactive-experiences@redhat.com\n\n` +
+      `**Explore the Interact Hub** · **Check your submissions** · **Submit new content**\n\n` +
+      `${INTERACT_HUB_URL}\n\n${STATUS_TRACKER_URL}\n\n${SUBMIT_NEW_DEMO_URL}\n\n` +
+      `Thanks,\nInteractive Experiences Team`;
 
     GmailApp.sendEmail(creatorEmail, subject, plainBody, {
-      name: 'Interactive Experience Team',
+      name: 'Interactive Experiences Team',
       noReply: true,
       htmlBody: htmlBody
     });
 
   } else {
-    // Interactive Demo
-    const subject = `We received your Interactive Demo submission: ${title}`;
+    // INTERACTIVE DEMO - SUBMISSION RECEIVED
+    const subject = `Interactive Demo submitted: ${title}`;
 
     const htmlBody = `<p>Hi ${escapeHtml_(displayName)},</p>` +
       `<p>We received your Interactive Demo submission, "${escapeHtml_(title)}".</p>` +
-      (context.creationLink ? `<p><a href="${escapeHtml_(context.creationLink)}">Creation Link</a></p>` : '') +
-      `<p>You can track your submission in the <a href="${STATUS_TRACKER_URL}">Status Tracker</a>.</p>` +
-      `<p>We'll review it and follow up if anything is needed.</p>` +
-      `<p>Thanks,<br>Interactive Experience Team</p>`;
+      (context.creationLink ? `<p><strong><a href="${escapeHtml_(context.creationLink)}">View your submission</a></strong></p>` : '') +
+      `<p>We'll review it and follow up if anything is needed. You can track its progress at any time in the <strong><a href="${STATUS_TRACKER_URL}">Status Tracker</a></strong>.</p>` +
+      `<p>Questions or changes? <a href="mailto:interactive-experiences@redhat.com">Contact the Interactive Experiences Team</a>.</p>` +
+      `<p><strong><a href="${INTERACT_HUB_URL}">Explore the Interact Hub</a></strong> · <strong><a href="${STATUS_TRACKER_URL}">Check your submissions</a></strong> · <strong><a href="${SUBMIT_NEW_DEMO_URL}">Submit new content</a></strong></p>` +
+      `<p>Thanks,<br>Interactive Experiences Team,<br>Red Hat Demo Platform</p>`;
 
     const plainBody = `Hi ${displayName},\n\n` +
       `We received your Interactive Demo submission, "${title}".\n\n` +
-      (context.creationLink ? `Creation Link: ${context.creationLink}\n\n` : '') +
-      `You can track your submission in the Status Tracker: ${STATUS_TRACKER_URL}\n\n` +
-      `We'll review it and follow up if anything is needed.\n\n` +
-      `Thanks,\nInteractive Experience Team`;
+      (context.creationLink ? `**View your submission**\n${context.creationLink}\n\n` : '') +
+      `We'll review it and follow up if anything is needed. You can track its progress at any time in the **Status Tracker**.\n\n` +
+      `${STATUS_TRACKER_URL}\n\n` +
+      `Questions or changes? Contact the Interactive Experiences Team: interactive-experiences@redhat.com\n\n` +
+      `**Explore the Interact Hub** · **Check your submissions** · **Submit new content**\n\n` +
+      `${INTERACT_HUB_URL}\n\n${STATUS_TRACKER_URL}\n\n${SUBMIT_NEW_DEMO_URL}\n\n` +
+      `Thanks,\nInteractive Experiences Team,\nRed Hat Demo Platform`;
 
     GmailApp.sendEmail(creatorEmail, subject, plainBody, {
-      name: 'Interactive Experience Team',
+      name: 'Interactive Experiences Team',
       noReply: true,
       htmlBody: htmlBody
     });
@@ -380,22 +395,28 @@ function sendSubmissionReceivedEmail_(creatorEmail, creatorName, title, context)
 function sendPublishedEmail_(creatorEmail, creatorName, title, context) {
   const displayName = creatorName || creatorEmail.split('@')[0];
 
-  const subject = `Your Interactive Demo is published: ${title}`;
+  // INTERACTIVE DEMO - PUBLISHED
+  const subject = `Your Interactive Demo is live: ${title}`;
 
-  const htmlBody = `<p>${escapeHtml_(displayName)},</p>` +
-    `<p>Your Interactive Demo, "${escapeHtml_(title)}", has been published.</p>` +
-    (context.drupalPageUrl ? `<p><a href="${escapeHtml_(context.drupalPageUrl)}">View your Interactive Demo page</a></p>` : '') +
-    `<p>You can track your submission in the <a href="${STATUS_TRACKER_URL}">Status Tracker</a>.</p>` +
-    `<p>Thanks,<br>Interactive Experience Team</p>`;
+  const htmlBody = `<p>Hi ${escapeHtml_(displayName)},</p>` +
+    `<p>Your Interactive Demo, "${escapeHtml_(title)}", is now live.</p>` +
+    (context.drupalPageUrl ? `<p><strong><a href="${escapeHtml_(context.drupalPageUrl)}">View your Interactive Demo</a></strong></p>` : '') +
+    `<p>Your demo is now available to discover and share through the Interact Hub and interact.redhat.com.</p>` +
+    `<p>Questions or changes? <a href="mailto:interactive-experiences@redhat.com">Contact the Interactive Experiences Team</a>.</p>` +
+    `<p><strong><a href="${INTERACT_HUB_URL}">Explore the Interact Hub</a></strong> · <strong><a href="${STATUS_TRACKER_URL}">Check your submissions</a></strong> · <strong><a href="${SUBMIT_NEW_DEMO_URL}">Submit new content</a></strong></p>` +
+    `<p>Thanks,<br>Interactive Experiences Team,<br>Red Hat Demo Platform</p>`;
 
-  const plainBody = `${displayName},\n\n` +
-    `Your Interactive Demo, "${title}", has been published.\n\n` +
-    (context.drupalPageUrl ? `View your Interactive Demo page: ${context.drupalPageUrl}\n\n` : '') +
-    `You can track your submission in the Status Tracker: ${STATUS_TRACKER_URL}\n\n` +
-    `Thanks,\nInteractive Experience Team`;
+  const plainBody = `Hi ${displayName},\n\n` +
+    `Your Interactive Demo, "${title}", is now live.\n\n` +
+    (context.drupalPageUrl ? `**View your Interactive Demo**\n${context.drupalPageUrl}\n\n` : '') +
+    `Your demo is now available to discover and share through the Interact Hub and interact.redhat.com.\n\n` +
+    `Questions or changes? Contact the Interactive Experiences Team: interactive-experiences@redhat.com\n\n` +
+    `**Explore the Interact Hub** · **Check your submissions** · **Submit new content**\n\n` +
+    `${INTERACT_HUB_URL}\n\n${STATUS_TRACKER_URL}\n\n${SUBMIT_NEW_DEMO_URL}\n\n` +
+    `Thanks,\nInteractive Experiences Team,\nRed Hat Demo Platform`;
 
   GmailApp.sendEmail(creatorEmail, subject, plainBody, {
-    name: 'Interactive Experience Team',
+    name: 'Interactive Experiences Team',
     noReply: true,
     htmlBody: htmlBody
   });
@@ -409,44 +430,51 @@ function sendRetiredEmail_(creatorEmail, creatorName, title, context) {
   const assetType = context.assetType;
 
   if (assetType === 'YOUTUBE') {
-    const subject = `Your YouTube content has been retired: ${title}`;
+    // VIDEO DEMO - RETIRED
+    const subject = `Video Demo retired: ${title}`;
 
     const htmlBody = `<p>Hi ${escapeHtml_(displayName)},</p>` +
-      `<p>Your YouTube content, "${escapeHtml_(title)}", has been retired.</p>` +
-      (context.youtubeUrl ? `<p><a href="${escapeHtml_(context.youtubeUrl)}">YouTube URL</a></p>` : '') +
-      `<p>You can track your submission in the <a href="${STATUS_TRACKER_URL}">Status Tracker</a>.</p>` +
-      `<p>Thanks,<br>Interactive Experience Team</p>`;
+      `<p>Your Video Demo, "${escapeHtml_(title)}", has been retired.</p>` +
+      (context.youtubeUrl ? `<p><strong><a href="${escapeHtml_(context.youtubeUrl)}">View video</a></strong></p>` : '') +
+      `<p>Questions or changes? <a href="mailto:interactive-experiences@redhat.com">Contact the Interactive Experiences Team</a>.</p>` +
+      `<p><strong><a href="${INTERACT_HUB_URL}">Explore the Interact Hub</a></strong> · <strong><a href="${STATUS_TRACKER_URL}">Check your submissions</a></strong> · <strong><a href="${SUBMIT_NEW_DEMO_URL}">Submit new content</a></strong></p>` +
+      `<p>Thanks,<br>Interactive Experiences Team</p>`;
 
     const plainBody = `Hi ${displayName},\n\n` +
-      `Your YouTube content, "${title}", has been retired.\n\n` +
-      (context.youtubeUrl ? `YouTube URL: ${context.youtubeUrl}\n\n` : '') +
-      `You can track your submission in the Status Tracker: ${STATUS_TRACKER_URL}\n\n` +
-      `Thanks,\nInteractive Experience Team`;
+      `Your Video Demo, "${title}", has been retired.\n\n` +
+      (context.youtubeUrl ? `**View video**\n${context.youtubeUrl}\n\n` : '') +
+      `Questions or changes? Contact the Interactive Experiences Team: interactive-experiences@redhat.com\n\n` +
+      `**Explore the Interact Hub** · **Check your submissions** · **Submit new content**\n\n` +
+      `${INTERACT_HUB_URL}\n\n${STATUS_TRACKER_URL}\n\n${SUBMIT_NEW_DEMO_URL}\n\n` +
+      `Thanks,\nInteractive Experiences Team`;
 
     GmailApp.sendEmail(creatorEmail, subject, plainBody, {
-      name: 'Interactive Experience Team',
+      name: 'Interactive Experiences Team',
       noReply: true,
       htmlBody: htmlBody
     });
 
   } else {
-    // Interactive Demo
-    const subject = `Your Interactive Demo has been retired: ${title}`;
+    // INTERACTIVE DEMO - RETIRED
+    const subject = `Interactive Demo retired: ${title}`;
 
     const htmlBody = `<p>Hi ${escapeHtml_(displayName)},</p>` +
       `<p>Your Interactive Demo, "${escapeHtml_(title)}", has been retired.</p>` +
-      (context.creationLink ? `<p><a href="${escapeHtml_(context.creationLink)}">Creation Link</a></p>` : '') +
-      `<p>You can track your submission in the <a href="${STATUS_TRACKER_URL}">Status Tracker</a>.</p>` +
-      `<p>Thanks,<br>Interactive Experience Team</p>`;
+      (context.productionLink ? `<p><strong><a href="${escapeHtml_(context.productionLink)}">View submission details</a></strong></p>` : '') +
+      `<p>Questions or changes? <a href="mailto:interactive-experiences@redhat.com">Contact the Interactive Experiences Team</a>.</p>` +
+      `<p><strong><a href="${INTERACT_HUB_URL}">Explore the Interact Hub</a></strong> · <strong><a href="${STATUS_TRACKER_URL}">Check your submissions</a></strong> · <strong><a href="${SUBMIT_NEW_DEMO_URL}">Submit new content</a></strong></p>` +
+      `<p>Thanks,<br>Interactive Experiences Team</p>`;
 
     const plainBody = `Hi ${displayName},\n\n` +
       `Your Interactive Demo, "${title}", has been retired.\n\n` +
-      (context.creationLink ? `Creation Link: ${context.creationLink}\n\n` : '') +
-      `You can track your submission in the Status Tracker: ${STATUS_TRACKER_URL}\n\n` +
-      `Thanks,\nInteractive Experience Team`;
+      (context.productionLink ? `**View submission details**\n${context.productionLink}\n\n` : '') +
+      `Questions or changes? Contact the Interactive Experiences Team: interactive-experiences@redhat.com\n\n` +
+      `**Explore the Interact Hub** · **Check your submissions** · **Submit new content**\n\n` +
+      `${INTERACT_HUB_URL}\n\n${STATUS_TRACKER_URL}\n\n${SUBMIT_NEW_DEMO_URL}\n\n` +
+      `Thanks,\nInteractive Experiences Team`;
 
     GmailApp.sendEmail(creatorEmail, subject, plainBody, {
-      name: 'Interactive Experience Team',
+      name: 'Interactive Experiences Team',
       noReply: true,
       htmlBody: htmlBody
     });

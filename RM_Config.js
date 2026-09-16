@@ -34,7 +34,9 @@ const ENHANCED_CONFIG = {
     USER_IDS: {
       ROHAN: "U02UWAPRMM5",
       BRANDON: "U08SXER0D9T",
-      LANDING_PAGE_ADMIN: "U054Q340C9Z" // Ruby Yang
+      RICARDO: "U05HB3S1EHF",
+      RUBY: "U054Q340C9Z",
+      LANDING_PAGE_ADMIN: "U054Q340C9Z" // Ruby Yang (deprecated, use RUBY)
     },
     MESSAGE_TEMPLATES: {
       REQUEST_OPEN: "🆕 *New Demo Request Open*",
@@ -125,6 +127,8 @@ const ENHANCED_CONFIG = {
     SUGGESTED_TITLE: "Suggested Demo Title",
     PRIMARY_PRODUCT: "Primary Product",
     PRODUCT: "Product",
+    PRIMARY_TOPIC: "Primary Topic",
+    TOPIC: "Topic",
     CONTENT_TYPE: "Content Type",
     PRIORITY: "Priority",
     DEADLINE: "Deadline",

@@ -2,9 +2,9 @@
  * Targeted Verification: Retired Email Templates
  *
  * Verifies:
- * 1. Interactive Demo CONTENT_RETIRED dispatches email with Creation Link and Status Tracker
- * 2. YouTube CONTENT_RETIRED dispatches email with YouTube URL and Status Tracker
- * 3. HTML escaping prevents injection in displayName, title, and URLs
+ * 1. Interactive Demo CONTENT_RETIRED dispatches email with simplified body and CTAs
+ * 2. Video Demo CONTENT_RETIRED dispatches email with simplified body and CTAs
+ * 3. HTML escaping prevents injection in displayName and title
  */
 
 const realConsole = console;
@@ -103,6 +103,9 @@ const ENHANCED_CONFIG = {
 };
 
 const STATUS_TRACKER_URL = 'https://script.google.com/a/redhat.com/macros/s/AKfycbzh7a4vsJ0TECMRUFqAazGP8bCQkJuoRv0bhIJlBFHEWj0a4kposd5uKRABmz4QOYej/exec?page=status';
+const INTERACT_HUB_URL = 'https://script.google.com/a/macros/redhat.com/s/AKfycbw-i5dNh9DOHOyGuo9-pbfrQCazwImd48wfxTDD8wecsg4tk5h6yXGy25OJFx1F5COgsw/exec';
+const SUBMIT_NEW_DEMO_URL = 'https://script.google.com/a/macros/redhat.com/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec';
+const TEAM_EMAIL = 'interactive-experiences@redhat.com';
 
 function escapeHtml_(text) {
   return String(text || '')
@@ -167,40 +170,46 @@ function sendRetiredEmail_(creatorEmail, creatorName, title, context) {
   const assetType = context.assetType;
 
   if (assetType === 'YOUTUBE') {
-    const subject = `Your YouTube content has been retired: ${title}`;
+    const subject = `Video Demo retired: ${title}`;
     const htmlBody = `<p>Hi ${escapeHtml_(displayName)},</p>` +
-      `<p>Your YouTube content, "${escapeHtml_(title)}", has been retired.</p>` +
-      (context.youtubeUrl ? `<p><a href="${escapeHtml_(context.youtubeUrl)}">YouTube URL</a></p>` : '') +
-      `<p>You can track your submission in the <a href="${STATUS_TRACKER_URL}">Status Tracker</a>.</p>` +
-      `<p>Thanks,<br>Interactive Experience Team</p>`;
+      `<p>Your Video Demo, "${escapeHtml_(title)}", has been retired.</p>` +
+      (context.youtubeUrl ? `<p><strong><a href="${escapeHtml_(context.youtubeUrl)}">View video</a></strong></p>` : '') +
+      `<p>Questions or changes? <a href="mailto:interactive-experiences@redhat.com">Contact the Interactive Experiences Team</a>.</p>` +
+      `<p><strong><a href="${INTERACT_HUB_URL}">Explore the Interact Hub</a></strong> · <strong><a href="${STATUS_TRACKER_URL}">Check your submissions</a></strong> · <strong><a href="${SUBMIT_NEW_DEMO_URL}">Submit new content</a></strong></p>` +
+      `<p>Thanks,<br>Interactive Experiences Team</p>`;
 
     const plainBody = `Hi ${displayName},\n\n` +
-      `Your YouTube content, "${title}", has been retired.\n\n` +
-      (context.youtubeUrl ? `YouTube URL: ${context.youtubeUrl}\n\n` : '') +
-      `You can track your submission in the Status Tracker: ${STATUS_TRACKER_URL}\n\n` +
-      `Thanks,\nInteractive Experience Team`;
+      `Your Video Demo, "${title}", has been retired.\n\n` +
+      (context.youtubeUrl ? `**View video**\n${context.youtubeUrl}\n\n` : '') +
+      `Questions or changes? Contact the Interactive Experiences Team: interactive-experiences@redhat.com\n\n` +
+      `**Explore the Interact Hub** · **Check your submissions** · **Submit new content**\n\n` +
+      `${INTERACT_HUB_URL}\n\n${STATUS_TRACKER_URL}\n\n${SUBMIT_NEW_DEMO_URL}\n\n` +
+      `Thanks,\nInteractive Experiences Team`;
 
     GmailApp.sendEmail(creatorEmail, subject, plainBody, {
-      name: 'Interactive Experience Team',
+      name: 'Interactive Experiences Team',
       noReply: true,
       htmlBody: htmlBody
     });
   } else {
-    const subject = `Your Interactive Demo has been retired: ${title}`;
+    const subject = `Interactive Demo retired: ${title}`;
     const htmlBody = `<p>Hi ${escapeHtml_(displayName)},</p>` +
       `<p>Your Interactive Demo, "${escapeHtml_(title)}", has been retired.</p>` +
-      (context.creationLink ? `<p><a href="${escapeHtml_(context.creationLink)}">Creation Link</a></p>` : '') +
-      `<p>You can track your submission in the <a href="${STATUS_TRACKER_URL}">Status Tracker</a>.</p>` +
-      `<p>Thanks,<br>Interactive Experience Team</p>`;
+      (context.productionLink ? `<p><strong><a href="${escapeHtml_(context.productionLink)}">View submission details</a></strong></p>` : '') +
+      `<p>Questions or changes? <a href="mailto:interactive-experiences@redhat.com">Contact the Interactive Experiences Team</a>.</p>` +
+      `<p><strong><a href="${INTERACT_HUB_URL}">Explore the Interact Hub</a></strong> · <strong><a href="${STATUS_TRACKER_URL}">Check your submissions</a></strong> · <strong><a href="${SUBMIT_NEW_DEMO_URL}">Submit new content</a></strong></p>` +
+      `<p>Thanks,<br>Interactive Experiences Team</p>`;
 
     const plainBody = `Hi ${displayName},\n\n` +
       `Your Interactive Demo, "${title}", has been retired.\n\n` +
-      (context.creationLink ? `Creation Link: ${context.creationLink}\n\n` : '') +
-      `You can track your submission in the Status Tracker: ${STATUS_TRACKER_URL}\n\n` +
-      `Thanks,\nInteractive Experience Team`;
+      (context.productionLink ? `**View submission details**\n${context.productionLink}\n\n` : '') +
+      `Questions or changes? Contact the Interactive Experiences Team: interactive-experiences@redhat.com\n\n` +
+      `**Explore the Interact Hub** · **Check your submissions** · **Submit new content**\n\n` +
+      `${INTERACT_HUB_URL}\n\n${STATUS_TRACKER_URL}\n\n${SUBMIT_NEW_DEMO_URL}\n\n` +
+      `Thanks,\nInteractive Experiences Team`;
 
     GmailApp.sendEmail(creatorEmail, subject, plainBody, {
-      name: 'Interactive Experience Team',
+      name: 'Interactive Experiences Team',
       noReply: true,
       htmlBody: htmlBody
     });
@@ -332,8 +341,8 @@ function runTests() {
     assertEqual(emailsSent[0].to, 'alice@redhat.com', "Email to correct recipient");
   });
 
-  // Test 2: Interactive Demo Retired uses Creation Link and Status Tracker
-  test("Interactive Demo Retired uses Creation Link and Status Tracker", () => {
+  // Test 2: Interactive Demo Retired has simplified body with CTAs only
+  test("Interactive Demo Retired has simplified body with CTAs", () => {
     const sheet = getMockSheet('Request_Master');
     const headers = sheet.getRange(1, 1, 1, 11).getValues()[0];
     const headerMap = {};
@@ -345,8 +354,11 @@ function runTests() {
     dispatchCreatorLifecycleNotification(context);
 
     const email = emailsSent[0];
-    assertIncludes(email.htmlBody, 'https://arcade.example.com/create/1?test=a&amp;b=2', "Should include escaped Creation Link");
-    assertIncludes(email.htmlBody, STATUS_TRACKER_URL, "Should include Status Tracker");
+    assertEqual(email.htmlBody.includes('https://redhat.com/demo/test'), false, "Should NOT include drupalPageUrl");
+    assertEqual(email.htmlBody.includes('https://arcade.example.com/create/1'), false, "Should NOT include creationLink");
+    assertEqual(email.htmlBody.includes(TEAM_EMAIL), false, "Should NOT include team email");
+    assertIncludes(email.htmlBody, INTERACT_HUB_URL, "Should include Interact Hub CTA");
+    assertIncludes(email.htmlBody, SUBMIT_NEW_DEMO_URL, "Should include Submit new demo CTA");
   });
 
   // Test 3: Interactive Demo Retired marks sent flag
@@ -381,8 +393,8 @@ function runTests() {
     assertEqual(emailsSent[0].to, 'dan@redhat.com', "Email to correct recipient");
   });
 
-  // Test 5: YouTube Retired uses YouTube URL and Status Tracker
-  test("YouTube Retired uses YouTube URL and Status Tracker", () => {
+  // Test 5: Video Demo Retired has simplified body with CTAs only
+  test("Video Demo Retired has simplified body with CTAs", () => {
     const sheet = getMockSheet('YouTube_Responses');
     const headers = sheet.getRange(1, 1, 1, 9).getValues()[0];
     const headerMap = {};
@@ -394,8 +406,10 @@ function runTests() {
     dispatchCreatorLifecycleNotification(context);
 
     const email = emailsSent[0];
-    assertIncludes(email.htmlBody, 'https://youtube.com/watch?v=abc&amp;t=123', "Should include escaped YouTube URL");
-    assertIncludes(email.htmlBody, STATUS_TRACKER_URL, "Should include Status Tracker");
+    assertEqual(email.htmlBody.includes('https://youtube.com/watch?v=abc'), false, "Should NOT include YouTube URL");
+    assertEqual(email.htmlBody.includes(TEAM_EMAIL), false, "Should NOT include team email");
+    assertIncludes(email.htmlBody, INTERACT_HUB_URL, "Should include Interact Hub CTA");
+    assertIncludes(email.htmlBody, SUBMIT_NEW_DEMO_URL, "Should include Submit new demo CTA");
   });
 
   // Test 6: YouTube Retired marks sent flag
@@ -462,8 +476,8 @@ function runTests() {
 
     const email = emailsSent[0];
     assertIncludes(email.body, 'Alice & Bob', "Plain-text should contain original text");
-    assertIncludes(email.body, 'https://arcade.example.com/create/1?test=a&b=2', "Plain-text URL should not be escaped");
-    assertIncludes(email.body, STATUS_TRACKER_URL, "Plain-text should include Status Tracker");
+    assertIncludes(email.body, INTERACT_HUB_URL, "Plain-text should include Interact Hub URL");
+    assertIncludes(email.body, SUBMIT_NEW_DEMO_URL, "Plain-text should include Submit URL");
   });
 
   realConsole.log(`\n✅ ${passed} passed, ${failed > 0 ? '❌ ' + failed + ' failed' : 'all tests passed'}`);
