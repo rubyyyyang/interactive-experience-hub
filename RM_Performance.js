@@ -166,6 +166,27 @@ function parseDate_(val) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Normalize Action Status to canonical values.
+ * Identical to Intake version - shared contract.
+ */
+function normalizeActionStatus_(status) {
+  var s = String(status || '').trim();
+  if (!s) return '';
+
+  if (s === 'Open' || s === 'Pending Review' || s === 'Completed' || s === 'Resubmit') {
+    return s;
+  }
+
+  var lower = s.toLowerCase();
+  if (lower === 'pending review') return 'Pending Review';
+  if (lower === 'complete' || lower === 'completed') return 'Completed';
+  if (lower === 'resubmit' || lower === 'resubmit required') return 'Resubmit';
+  if (lower === 'open') return 'Open';
+
+  return s;
+}
+
 function getLatestCompletedMonth_(allData, headerMap) {
   var famIdx = headerMap[PERF_METRIC_COLUMNS.FIRST_ACTIVITY_MONTH];
   var receivedIdx = headerMap[ENHANCED_CONFIG.COLUMNS.STATUS_RECEIVED_TS];
@@ -972,7 +993,7 @@ function runPerformanceLabels() {
 
       var assigned = '';
       var actionStatus = '';
-      var currentStatus = String(currentActionStatusValues[i][0] || '').trim();
+      var currentStatus = normalizeActionStatus_(String(currentActionStatusValues[i][0] || '').trim());
 
       if (c.action && c.action !== 'No action needed') {
         if (CREATOR_ACTIONS_.indexOf(c.action) !== -1) {
