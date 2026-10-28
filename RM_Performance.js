@@ -40,8 +40,8 @@ var PERF_LABEL_COLUMNS = {
   RESPONSE: 'Response'
 };
 
-var CREATOR_ACTIONS_ = ['Improve completion', 'Boost sales impact', 'Consider retirement'];
-var ADMIN_ACTIONS_ = ['Create page', 'Increase visibility', 'Review data linkage', 'Needs review'];
+var CREATOR_ACTIONS_ = ['Improve completion', 'Consider retirement'];
+var ADMIN_ACTIONS_ = ['Create page', 'Increase visibility', 'Review data linkage', 'Needs review', 'Boost sales impact'];
 
 var PERF_METRIC_COLUMNS = {
   ACTIVE_MONTHS: 'Active Months',
