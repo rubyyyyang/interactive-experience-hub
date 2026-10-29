@@ -174,15 +174,22 @@ function normalizeActionStatus_(status) {
   var s = String(status || '').trim();
   if (!s) return '';
 
-  if (s === 'Open' || s === 'Pending Review' || s === 'Completed' || s === 'Resubmit') {
+  // Sheet-native canonical values pass through unchanged
+  if (s === 'Action needed' || s === 'Assignee notified' || s === 'Assignee responded' ||
+      s === 'Pending review' || s === 'Complete' || s === 'Resubmit required') {
     return s;
   }
 
+  // Normalize aliases to Sheet-native values
   var lower = s.toLowerCase();
-  if (lower === 'pending review') return 'Pending Review';
-  if (lower === 'complete' || lower === 'completed') return 'Completed';
-  if (lower === 'resubmit' || lower === 'resubmit required') return 'Resubmit';
-  if (lower === 'open') return 'Open';
+  if (lower === 'open') return 'Action needed';
+  if (lower === 'pending review') return 'Pending review';
+  if (lower === 'completed' || lower === 'complete') return 'Complete';
+  if (lower === 'resubmit') return 'Resubmit required';
+  if (lower === 'action needed') return 'Action needed';
+  if (lower === 'assignee notified') return 'Assignee notified';
+  if (lower === 'assignee responded') return 'Assignee responded';
+  if (lower === 'resubmit required') return 'Resubmit required';
 
   return s;
 }
@@ -1002,23 +1009,23 @@ function runPerformanceLabels() {
           assigned = 'Admin';
         }
 
-        if (currentStatus === 'Pending Review' || currentStatus === 'Resubmit') {
+        if (currentStatus === 'Pending review' || currentStatus === 'Resubmit required') {
           actionStatus = currentStatus;
-        } else if (currentStatus === 'Completed') {
+        } else if (currentStatus === 'Complete') {
           var completedDate = currentCompletedDateValues[i][0];
           if (completedDate) {
             var parsed = parseDate_(completedDate);
             var sixMonthsAgo = new Date();
             sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-            actionStatus = (parsed && parsed > sixMonthsAgo) ? 'Completed' : 'Open';
+            actionStatus = (parsed && parsed > sixMonthsAgo) ? 'Complete' : 'Action needed';
           } else {
-            actionStatus = 'Open';
+            actionStatus = 'Action needed';
           }
         } else if (assigned) {
-          actionStatus = 'Open';
+          actionStatus = 'Action needed';
         }
       } else {
-        if (currentStatus === 'Pending Review' || currentStatus === 'Resubmit') {
+        if (currentStatus === 'Pending review' || currentStatus === 'Resubmit required') {
           actionStatus = currentStatus;
         }
       }
@@ -1368,7 +1375,7 @@ function applyApprovedResponses() {
 
       var creatorResponse = String(entry.data[responseIdx] || '').trim();
       if (creatorResponse && actionStatusColIdx != null) {
-        masterSheet.getRange(masterRow, actionStatusColIdx + 1).setValue('Completed');
+        masterSheet.getRange(masterRow, actionStatusColIdx + 1).setValue('Complete');
       }
 
       var notes = String(entry.data[notesIdx] || '').trim();
