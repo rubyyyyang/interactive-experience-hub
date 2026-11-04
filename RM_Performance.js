@@ -966,7 +966,6 @@ function runPerformanceLabels() {
   var outActionStatus = [];
 
   var currentActionStatusValues = sheet.getRange(startRow, cols.actionStatusCol, dataRows, 1).getValues();
-  var currentCompletedDateValues = sheet.getRange(startRow, cols.actionCompletedDateCol, dataRows, 1).getValues();
 
   for (var i = 0; i < allData.length; i++) {
     var row = allData[i];
@@ -1009,23 +1008,17 @@ function runPerformanceLabels() {
           assigned = 'Admin';
         }
 
-        if (currentStatus === 'Pending review' || currentStatus === 'Resubmit required') {
+        // Preserve lifecycle workflow states - never overwrite due to age or missing date
+        if (currentStatus === 'Pending review' || currentStatus === 'Follow-up needed' ||
+            currentStatus === 'Complete' || currentStatus === 'Resubmit required') {
           actionStatus = currentStatus;
-        } else if (currentStatus === 'Complete') {
-          var completedDate = currentCompletedDateValues[i][0];
-          if (completedDate) {
-            var parsed = parseDate_(completedDate);
-            var sixMonthsAgo = new Date();
-            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-            actionStatus = (parsed && parsed > sixMonthsAgo) ? 'Complete' : 'Action needed';
-          } else {
-            actionStatus = 'Action needed';
-          }
         } else if (assigned) {
           actionStatus = 'Action needed';
         }
       } else {
-        if (currentStatus === 'Pending review' || currentStatus === 'Resubmit required') {
+        // No recommendation - preserve workflow states
+        if (currentStatus === 'Pending review' || currentStatus === 'Follow-up needed' ||
+            currentStatus === 'Complete' || currentStatus === 'Resubmit required') {
           actionStatus = currentStatus;
         }
       }
@@ -1085,7 +1078,9 @@ function runPerformanceLabels() {
       outAge.push(['']);
       outResult.push(['Error — ' + String(e.message || e).substring(0, 100)]);
       outAssigned.push(['']);
-      outActionStatus.push(['']);
+      // Preserve existing Action Status on error - do not clear lifecycle states
+      var currentStatus = normalizeActionStatus_(String(currentActionStatusValues[i][0] || '').trim());
+      outActionStatus.push([currentStatus]);
       Logger.log('ERROR: ' + rowLabel + ' — ' + (e.message || e));
       counts.errors++;
     }
