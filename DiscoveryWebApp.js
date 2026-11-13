@@ -174,14 +174,14 @@ function getDiscoveryRecord(recordId) {
     const ytItem = buildDiscoveryRecordFromRow_(row, ytRowNumber, ytHeaderMap, { linkOverrides: {} });
     ytItem.recordId = id;
 
-    // Ensure YouTube records have production link from creation link if needed
+    // For YouTube records, fall back to creation link as production link if needed
+    // BUT do not override isDiscoverable - that's already correctly computed based on status
     if (!ytItem.productionLink && ytItem.creationLink) {
       ytItem.productionLink = ytItem.creationLink;
-      ytItem.isReadyToUse = true;
-      ytItem.isDiscoverable = true;
     }
 
     // Only return discoverable records - prevents access to unpublished/retired content
+    // This respects the status-based discoverability already computed by buildDiscoveryRecordFromRow_
     if (!ytItem.isDiscoverable) {
       throw new Error("Record not found.");
     }
@@ -204,7 +204,14 @@ function getDiscoveryRecord(recordId) {
   }
 
   const row = sh.getRange(rowNumber, 1, 1, sh.getLastColumn()).getValues()[0];
-  return buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sh);
+  const item = buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sh);
+
+  // Only return discoverable records - prevents access to unpublished/retired content
+  if (!item.isDiscoverable) {
+    throw new Error("Record not found.");
+  }
+
+  return item;
 }
 
 function listDiscoveryPage_(params) {
