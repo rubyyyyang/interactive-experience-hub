@@ -175,13 +175,27 @@ function getDiscoveryRecord(recordId) {
     ytItem.recordId = id;
 
     // For YouTube records, fall back to creation link as production link if needed
-    // BUT do not override isDiscoverable - that's already correctly computed based on status
+    // This matches the index-building behavior and allows Published YouTube records
+    // with only creation links to be discoverable
     if (!ytItem.productionLink && ytItem.creationLink) {
       ytItem.productionLink = ytItem.creationLink;
+      // Recompute readiness with the fallback production link
+      ytItem.isReadyToUse = computeIsReadyToUse_(
+        normalizeStatusCanonical(row[ytHeaderMap[ENHANCED_CONFIG.COLUMNS.STATUS]] || ''),
+        ytItem.productionLink,
+        ytItem.drupalPageUrl || '',
+        ytItem.rhacPage || ''
+      );
+      // Recompute discoverability based on status and updated readiness
+      ytItem.isDiscoverable = computeIsDiscoverable_(
+        normalizeStatusCanonical(row[ytHeaderMap[ENHANCED_CONFIG.COLUMNS.STATUS]] || ''),
+        ytItem.isReadyToUse
+      );
     }
 
     // Only return discoverable records - prevents access to unpublished/retired content
-    // This respects the status-based discoverability already computed by buildDiscoveryRecordFromRow_
+    // A Published YouTube with creation link will be discoverable (correct)
+    // A Retired YouTube with creation link will NOT be discoverable (correct - status check prevents it)
     if (!ytItem.isDiscoverable) {
       throw new Error("Record not found.");
     }
