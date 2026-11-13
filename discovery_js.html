@@ -778,8 +778,8 @@ function getSortPriority(item) {
                 </button>
               </div>
               <div style="display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-                ${primaryUrl ? `<a class="btn small launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="trackIndividualArcade('launch_demo', '${escapeAttr(record.recordId)}');" style="text-decoration:none;">${isYouTubeItem(record) ? 'Watch Video' : 'Launch Demo'}</a>` : ''}
-                ${!isYouTubeItem(record) && getEditLink(record) ? `<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText('${escapeAttr(getEditLink(record))}')" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>` : ''}
+                ${primaryUrl ? `<a class="btn small launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="trackIndividualArcade('launch_demo', '${escapeAttr(record.recordId)}');" style="text-decoration:none;">${getLaunchButtonLabel(record)}</a>` : ''}
+                ${getEditLink(record) ? `<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText('${escapeAttr(getEditLink(record))}')" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>` : ''}
               </div>
 
             </div>
@@ -1031,6 +1031,10 @@ Shared via The Interact Hub`;
       function getEditLink(item){
         var link = item.creationLink || "";
         if (!link) return "";
+
+        // Skip /share/videos/ URLs - these are Video Demo content, not editable Arcade flows
+        if (link.indexOf('/share/videos/') !== -1) return "";
+
         var match = link.match(/interact\.redhat\.com\/share\/([A-Za-z0-9_-]+)/);
         if (match) return "https://app.arcade.software/flows/" + match[1] + "/edit";
         match = link.match(/app\.arcade\.software\/share\/([A-Za-z0-9_-]+)/);
@@ -1040,7 +1044,21 @@ Shared via The Interact Hub`;
       }
 
       function isYouTubeItem(item) {
+        return item && item.format === 'YouTube';
+      }
+
+      function isVideoDemo(item) {
         return item && item.format === 'Video Demo';
+      }
+
+      function hasEditableSource(item) {
+        // Only Interactive Demo content has editable Arcade source
+        return item && item.format === 'Interactive Demo';
+      }
+
+      function getLaunchButtonLabel(item) {
+        // YouTube and Video Demo both use "Watch Video"
+        return (isYouTubeItem(item) || isVideoDemo(item)) ? 'Watch Video' : 'Launch Demo';
       }
 
       function getPrimaryLink(item){
@@ -1751,8 +1769,8 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           </div>
           <a class="more-info-link" onclick="event.stopPropagation(); openMore(\'' + escapeAttr(item.recordId) + '\')" style="pointer-events:auto;">More Info &rarr;</a>
           <div class="cardActions">
-            ${primaryUrl ? '<a class="btn small launch" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade(\'launch_demo\', \'' + escapeAttr(item.recordId) + '\');" style="pointer-events:auto; text-decoration:none;">' + (isYouTubeItem(item) ? 'Watch Video' : 'Launch Demo') + '</a>' : ''}
-            ${!isYouTubeItem(item) && getEditLink(item) ? '<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText(\'' + escapeAttr(getEditLink(item)) + '\')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>' : ''}
+            ${primaryUrl ? '<a class="btn small launch" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade(\'launch_demo\', \'' + escapeAttr(item.recordId) + '\');" style="pointer-events:auto; text-decoration:none;">' + getLaunchButtonLabel(item) + '</a>' : ''}
+            ${getEditLink(item) ? '<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText(\'' + escapeAttr(getEditLink(item)) + '\')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>' : ''}
 
             <button class="btn small icon-only' + (isSaved ? ' saved' : '') + '" onclick="event.stopPropagation(); toggleSavedArcade(\'' + escapeAttr(item.recordId) + '\'); this.classList.toggle(\'saved\', SAVED_ARCADES.has(\'' + escapeAttr(item.recordId) + '\'));" style="pointer-events:auto;" title="' + (isSaved ? 'Saved' : 'Save Demo') + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="' + (isSaved ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg></button>
           </div>
@@ -1841,8 +1859,8 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;">More Info &rarr;</a>
 
             <div class="cardActions">
-              ${primaryUrl ? `<a class="btn small launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto; text-decoration:none;">${isYouTubeItem(item) ? 'Watch Video' : 'Launch Demo'}</a>` : ''}
-              ${!isYouTubeItem(item) && getEditLink(item) ? `<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText('${escapeAttr(getEditLink(item))}')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>` : ''}
+              ${primaryUrl ? `<a class="btn small launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto; text-decoration:none;">${getLaunchButtonLabel(item)}</a>` : ''}
+              ${getEditLink(item) ? `<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText('${escapeAttr(getEditLink(item))}')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>` : ''}
 
               <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}'));" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
@@ -2197,7 +2215,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
 
           <div class="drawerSection">
             <div class="drawerKicker">Links</div>
-            ${isYouTubeItem(rec)
+            ${(isYouTubeItem(rec) || isVideoDemo(rec))
               ? (rec.productionLink ? renderDrawerLink("Video Demo", rec.productionLink, "Watch Video", rec.recordId) : '')
                 + (rec.productionLink ? '<p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">The published video demo.</p>' : '')
               : (getLaunchLink(rec) ? renderDrawerLink("Demo Page", getLaunchLink(rec), "Launch Demo", rec.recordId) : '')

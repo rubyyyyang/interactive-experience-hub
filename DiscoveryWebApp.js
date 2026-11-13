@@ -21,7 +21,7 @@
 // Increment this when cached Discovery payload semantics or dependencies change
 // (e.g., changes to filter detection, record normalization, facet structure, or bundle shape)
 // to intentionally invalidate existing cache entries.
-const DISCOVERY_CACHE_SCHEMA_VERSION = 2;
+const DISCOVERY_CACHE_SCHEMA_VERSION = 3;
 
 const DISCOVERY_WEBAPP_CONFIG = {
   MASTER_SHEET: "Request_Master",
@@ -155,11 +155,46 @@ function listDiscoveryPage(params) {
 }
 
 function getDiscoveryRecord(recordId) {
+  const id = String(recordId || "");
+
+  // Handle YouTube records (format: "yt-{rowNumber}")
+  if (id.indexOf("yt-") === 0) {
+    const ytRowNumber = Number(id.slice(3));
+    if (!ytRowNumber || ytRowNumber < 2) {
+      throw new Error("Record not found.");
+    }
+
+    const ytSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("YouTube_Responses");
+    if (!ytSheet || ytRowNumber > ytSheet.getLastRow()) {
+      throw new Error("Record not found.");
+    }
+
+    const ytHeaderMap = getHeaderMapFromSheet(ytSheet, 1);
+    const row = ytSheet.getRange(ytRowNumber, 1, 1, ytSheet.getLastColumn()).getValues()[0];
+    const ytItem = buildDiscoveryRecordFromRow_(row, ytRowNumber, ytHeaderMap, { linkOverrides: {} });
+    ytItem.recordId = id;
+
+    // Ensure YouTube records have production link from creation link if needed
+    if (!ytItem.productionLink && ytItem.creationLink) {
+      ytItem.productionLink = ytItem.creationLink;
+      ytItem.isReadyToUse = true;
+      ytItem.isDiscoverable = true;
+    }
+
+    // Only return discoverable records - prevents access to unpublished/retired content
+    if (!ytItem.isDiscoverable) {
+      throw new Error("Record not found.");
+    }
+
+    return ytItem;
+  }
+
+  // Handle Request_Master records (numeric row number)
   const sh = getMasterSheet_();
   const headerMap = getHeaderMapFromSheet(sh, DISCOVERY_WEBAPP_CONFIG.HEADER_ROW);
   validateRequiredHeaders_(headerMap);
 
-  const rowNumber = Number(recordId);
+  const rowNumber = Number(id);
   if (
     !rowNumber ||
     rowNumber <= DISCOVERY_WEBAPP_CONFIG.HEADER_ROW ||
@@ -765,7 +800,8 @@ function buildDiscoveryRecordFromRow_(row, rowNumber, headerMap, sheetOrLinkCont
   const creationLink = ensureHttps_(extractLastLine_(get(COL.CREATION_LINK))) || (get("YouTube Video ID") ? 'https://www.youtube.com/watch?v=' + get("YouTube Video ID") : '');
 
   const _linkBlob = (productionLink + ' ' + creationLink).toLowerCase();
-  const format = /youtu\.be|youtube\.com/.test(_linkBlob) ? 'Video Demo'
+  const format = /youtu\.be|youtube\.com/.test(_linkBlob) ? 'YouTube'
+    : /interact\.redhat\.com\/share\/videos\//.test(_linkBlob) ? 'Video Demo'
     : /interact\.redhat\.com|app\.arcade\.software/.test(_linkBlob) ? 'Interactive Demo'
     : /interactive[\-\s]?lab|demo\.redhat\.com/.test(_linkBlob) ? 'Lab'
     : '';
