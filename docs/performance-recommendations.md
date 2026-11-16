@@ -406,7 +406,7 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 - Players per Month: 12 (BELOW baseline)
 - Completion Rate: 55% (HIGH)
 - Completions: 53
-- MT Opportunity: $15K (BASELINE)
+- MT Opportunity: $15K (BELOW)
 - MT Won: $0 (BELOW)
 - Has Page: Yes
 - L90 Players: 0 (no L90 data)
@@ -415,7 +415,7 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 **Signals**:
 - Usage: BELOW (12 ppm)
 - CR: HIGH (55%)
-- MT: BASELINE ($15K)
+- MT: BELOW ($15K)
 - Signal count: 1/3 (CR only, HIGH count = 1)
 - Maturity: ESTABLISHED
 - Trend: Unknown (no L90 data)
