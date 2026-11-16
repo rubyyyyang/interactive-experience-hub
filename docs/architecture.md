@@ -135,6 +135,8 @@ graph TB
 
 The Hub supports periodic performance review by combining metrics data, generating recommendations, and facilitating creator update-plan responses.
 
+See [Performance Recommendations](performance-recommendations.md) for detailed explanation of how recommendations are generated and what they mean.
+
 ```mermaid
 graph TB
     DB[Databricks]

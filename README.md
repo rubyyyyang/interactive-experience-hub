@@ -62,6 +62,7 @@ Production deployment is currently performed manually in Google Apps Script afte
 - [Architecture](docs/architecture.md) — System structure, data flows, and major workflows
 - [Code Map](docs/code-map.md) — Current source files and their responsibilities
 - [Runbook](docs/runbook.md) — Testing, deployment, triggers, and troubleshooting
+- [Performance Recommendations](docs/performance-recommendations.md) — How performance recommendations work and what they mean
 
 ## Internal Resources
 
