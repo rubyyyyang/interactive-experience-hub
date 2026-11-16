@@ -60,7 +60,7 @@
             <path d="M2 3l3 3 3-3"/>
           </svg>
         </button>
-        <div class="navDropdownMenu" id="createDropdown" role="menu">
+        <div class="navDropdownMenu" id="createDropdown" role="menu" data-section="Create & Submit">
           <a href="https://docs.google.com/forms/d/e/1FAIpQLSeT5z2JaseXC54hLtlhbJ4ONw6PPEXzsQwoko4ExKkCYR6fhA/viewform" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
             Request a New Demo
           </a>
@@ -86,7 +86,7 @@
             <path d="M2 3l3 3 3-3"/>
           </svg>
         </button>
-        <div class="navDropdownMenu" id="docsDropdown" role="menu">
+        <div class="navDropdownMenu" id="docsDropdown" role="menu" data-section="Documentation">
           <a href="https://docs.google.com/document/d/13njLj4SYUbvaUwd0zoyt1Racpz8vR4Zz8H43IqkalLU/edit?tab=t.0#heading=h.66y4kqbj468a" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
             User Guide
           </a>
@@ -103,6 +103,21 @@
         </div>
       </div>
 
+      <!-- More Resources (Mobile Only) -->
+      <div class="navItem navDropdown mobileOnly">
+        <div class="navDropdownMenu" role="menu" data-section="More Resources">
+          <button onclick="window.open('https://lookerstudio.google.com/reporting/your-dashboard-url', '_blank');" class="navDropdownItem navDropdownButton" role="menuitem">
+            Analytics Dashboard
+          </button>
+          <a href="https://interact.redhat.com" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Public Interactive Experiences
+          </a>
+          <a href="https://redhat.enterprise.slack.com/archives/C06U6F8DN7F" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Send Feedback
+          </a>
+        </div>
+      </div>
+
       <!-- Account Dropdown -->
       <div class="navItem navDropdown">
         <button class="navButton navAccount" id="accountDropdownBtn" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown('accountDropdown')">
@@ -114,7 +129,7 @@
             <path d="M2 3l3 3 3-3"/>
           </svg>
         </button>
-        <div class="navDropdownMenu navDropdownMenuRight" id="accountDropdown" role="menu">
+        <div class="navDropdownMenu navDropdownMenuRight" id="accountDropdown" role="menu" data-section="Account">
           <button onclick="openSavedArcadesModal(); closeAllDropdowns();" class="navDropdownItem navDropdownButton" role="menuitem">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-right:8px;">
               <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>

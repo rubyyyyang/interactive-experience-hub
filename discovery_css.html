@@ -413,6 +413,10 @@
         outline-offset: 2px;
       }
 
+      .mobileOnly {
+        display: none;
+      }
+
       .pageSubtitle {
         padding: 16px 20px;
         max-width: 1400px;
@@ -445,6 +449,10 @@
           display: flex;
           align-items: center;
           justify-content: center;
+        }
+
+        .mobileOnly {
+          display: block;
         }
 
         .headerNav {
@@ -484,25 +492,57 @@
           border-radius: 6px;
         }
 
-        .navItem.navDropdown .navButton {
-          justify-content: space-between;
+        /* Hide dropdown toggle buttons in mobile - show sections directly */
+        .navItem.navDropdown > .navButton {
+          display: none;
         }
 
         .navDropdownMenu {
           position: static;
           width: 100%;
-          margin-top: 4px;
-          margin-bottom: 8px;
+          opacity: 1;
+          visibility: visible;
+          transform: none;
+          margin-bottom: 12px;
           box-shadow: none;
-          border: 1px solid var(--border);
+          border: none;
+          border-radius: 0;
+          padding: 0;
         }
 
-        .navAccount {
-          margin-left: 0;
-          padding: 12px;
+        /* Section headers for mobile */
+        .navDropdownMenu::before {
+          content: attr(data-section);
+          display: block;
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          color: var(--muted);
+          padding: 8px 0 4px 0;
+          letter-spacing: 0.5px;
+        }
+
+        .navDropdownItem {
+          padding: 10px 12px;
           border-radius: 6px;
-          background: var(--border);
-          margin-top: auto;
+          margin-bottom: 2px;
+        }
+
+        /* Account section - hide dropdown button, show user info as header */
+        .navItem.navDropdown > .navButton.navAccount {
+          display: flex;
+          background: transparent;
+          padding: 12px 0;
+          margin: 0;
+          border: none;
+          border-top: 1px solid var(--border);
+          margin-top: 12px;
+          padding-top: 12px;
+          pointer-events: none;
+        }
+
+        .navItem.navDropdown > .navButton.navAccount .navChevron {
+          display: none;
         }
 
         .accountEmail {
