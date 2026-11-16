@@ -26,6 +26,8 @@ Central installable trigger routing layer for form submissions and spreadsheet e
 
 Current performance analysis engine that computes performance signals, flags, recommended actions, priorities, scores, tiers, and trends.
 
+See [Performance Recommendations](performance-recommendations.md) for detailed explanation of the recommendation logic and review guidelines.
+
 **RM_Metrics.js**
 
 Databricks metrics workflow that retrieves YTD engagement and sales metrics and writes the resulting metrics to `Request_Master`.
