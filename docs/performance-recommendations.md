@@ -167,7 +167,7 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 - **INACTIVE**: 0 active months
 
 **Why it matters**: Low usage alone does not mean retirement. Context matters:
-- **New content** (1-3 months, recent): Growing audience, not actionable yet
+- **New content** (1-3 months, recent): May receive actionable recommendations (Improve completion, etc.) but Priority is always Low
 - **Niche content** (low ppm, high MT): High business value justifies lower traffic
 - **Stalled content** (1-3 months, old): Never gained traction, may need updating or retirement
 
@@ -212,7 +212,7 @@ MT values are still parsed and used in signal classification and recommendations
 
 ### Content Maturity
 
-**Content Age**: Months since first lifecycle timestamp (Status Received or Status Published)
+**Content Age**: Months since earliest available timestamp (Status Received Timestamp OR Status Published Timestamp, Status Received checked first)
 
 **Thresholds**:
 - MATURE content: >12 months
@@ -220,9 +220,9 @@ MT values are still parsed and used in signal classification and recommendations
 - NEW content: ≤3 months
 
 **Why it matters**:
-- NEW content with zero activity → No action needed (early days)
-- MATURE content with zero activity → Consider retirement (never gained traction)
-- MATURE content with low signals but actionable recommendation → Medium priority (age bump)
+- NEW content (≤3 months) with zero activity and MT = $0 → No action needed
+- MATURE content (>12 months) with zero activity and MT = $0 → Consider retirement
+- MATURE content with actionable recommendation → May receive Medium priority (age bump)
 
 ### Recent Performance Trends and Recovery
 
@@ -440,8 +440,10 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 - Completion Rate: 35% (BELOW baseline)
 - Completions: 34
 - MT Opportunity: $120K (HIGH)
+- MT Won: $5K (BELOW)
 - Has Page: Yes
 - L90 Players: 0 (no L90 data)
+- Metrics Mapping Status: "Shared display-key" (valid)
 
 **Signals**:
 - Usage: BELOW (8 ppm)
@@ -451,7 +453,7 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 - Maturity: ESTABLISHED
 - Trend: Unknown (no L90 data)
 
-**Flags**: `High business impact`, `High-value niche`
+**Flags**: `High business impact`, `High-value niche`, `Low completion`
 
 **Recommendation**: **Increase visibility**
 - **Why**: Good content, low visibility — needs distribution
@@ -468,31 +470,35 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 
 **Metrics**:
 - Active Months: 6
+- Content Age: 18 months (MATURE)
 - Total Players: 48
 - Players per Month: 8 (BELOW baseline)
-- Completion Rate: 22% (BELOW baseline)
-- Completions: 11 (below flag threshold)
+- Completion Rate: 23% (BELOW baseline)
+- Completions: 11
 - MT Opportunity: $3K (BELOW)
+- MT Won: $0 (BELOW)
 - Has Page: No
 - L90 Players: 0 (no L90 data)
+- Last activity: >90 days ago
+- Metrics Mapping Status: "Shared display-key" (valid)
 
 **Signals**:
 - Usage: BELOW (8 ppm)
-- CR: BELOW (22%)
+- CR: BELOW (23%)
 - MT: BELOW ($3K)
 - Signal count: 0/3 (no BASE or HIGH, HIGH count = 0)
-- Maturity: ESTABLISHED
+- Maturity: MATURE (18 months)
 - Recovery: Not active
-- Trend: Unknown (no L90 data, last activity not specified)
+- Trend: Unknown (no L90 data, last activity >90 days ago)
 
-**Flags**: None (no High/Low completion flags due to sample size)
+**Flags**: `Low completion`
 
 **Recommendation**: **Consider retirement**
 - **Why**: This demo is flagged for retirement — review the demo page and consider updating or confirming retirement
-- **Priority**: Low (0 HIGH signals, no declining trend)
+- **Priority**: Low (0 HIGH signals, MATURE age, but no declining trend)
 - **Assigned**: Creator
 
-**What matters**: No positive signals (0/3), no recovery, ESTABLISHED maturity. Flagged for review, but **retirement is not automatic**.
+**What matters**: No positive signals (0/3), no recovery, MATURE age. Flagged for review, but **retirement is not automatic**.
 
 ---
 
@@ -507,9 +513,11 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 - Completion Rate: 30% (BELOW baseline)
 - Completions: 36
 - MT Opportunity: $2K (BELOW)
+- MT Won: $0 (BELOW)
 - Has Page: No
 - **L90 Players**: 60 (L90 ppm = 20, above 15 baseline)
 - L90 Completions: 18
+- Metrics Mapping Status: "Missing redhat.com page mapping" (valid, but Low opportunity value flag blocked)
 
 **Signals**:
 - Usage: BELOW (12 ppm)
@@ -520,7 +528,7 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 - **Recovery: Active** (L90 ppm = 20 ≥ 15 baseline)
 - Trend: Growing (L90 rate 167% of all-time rate, L90 ppm ≥ 7.5)
 
-**Flags**: None
+**Flags**: `Low completion` (≥25 players, CR <40%)
 
 **Recommendation**: **No action needed**
 - **Why**: No action needed (recovery active)
@@ -537,14 +545,17 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 
 **Creator actions** (`Improve completion`, `Consider retirement`):
 - Review recommendation in Status Tracker
-- Select response: `Updated`, `Keep active`, `Retire`, `Need help`
+- Select response:
+  - **Improve completion**: `Updated`, `Need help`
+  - **Consider retirement**: `Updated`, `Keep active`, `Retire`, `Need help`
 - Optionally provide new Creation Link or notes
 - Submit response → **Action Status** → `Pending review`
 
 **Admin actions** (`Create page`, `Increase visibility`, `Review data linkage`, `Boost sales impact`, `Needs review`):
-- Review recommendation in Request_Master or Admin Review panel
+- Review recommendation in Request_Master
 - Decide on next steps (create page, update visibility, investigate data linkage)
-- Manually update **Action Status** or process through Status Tracker workflow
+- Manually update **Action Status** through direct sheet edit or other workflows
+- Admin-owned recommendations are NOT managed through Status Tracker Admin Review panel (that panel is for creator-actionable recommendations only)
 
 **Admin review of creator responses**:
 - View pending responses in Admin Review panel
@@ -635,21 +646,21 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 - First Activity Month (only required if Active Months is 1-3)
 
 **Eligible status values**:
-- Demo Published
-- Demo Reviewed
-- Demo Received
+- "Published"
+- "Demo Reviewed"
+- "Demo Received"
 - Blank (empty Status column)
 
-Any other status value (except Demo Retired and Closed, which are skipped) triggers a "Needs review" outcome.
+Any other status value (except "Retired" and "Closed", which are skipped) triggers a "Needs review" outcome.
 
 **Missing data outcomes**:
 - **Row is blank** (all non-output columns empty) → **Skipped** — Blank row
-- **Status = Demo Retired** → **Skipped** — Status = Demo Retired
-- **Status = Closed** → **Skipped** — Status = Closed
-- **Note = Delete row** → **Skipped** — Note = Delete row
-- **Status not eligible** → **Needs review** — Row has status "[value]", which is not eligible for performance labeling
+- **Status = "Retired"** → **Skipped** — Status = Retired
+- **Status = "Closed"** → **Skipped** — Status = Closed
+- **Note = "Delete row"** → **Skipped** — Note = Delete row
+- **Status not eligible** → **Needs review** — Row has status "[value]", which is not eligible for performance labeling (only Published, Demo Reviewed, Demo Received, or blank)
 - **Number column blank** → **Needs review** — The Number column is blank, so this row cannot be matched to metrics data
-- **Metrics Mapping Status = Unlinked request** → **Needs review** — The intake request is not linked to a demo record, so reliable performance metrics are unavailable
+- **Metrics Mapping Status = "Unlinked request"** → **Needs review** — The intake request is not linked to a demo record, so reliable performance metrics are unavailable
 - **Required metrics missing** → **Needs review** — One or more required performance metrics are missing: [list]
 
 **Special case: Zero Players + Blank Completion Rate**:
@@ -700,9 +711,9 @@ Any other status value (except Demo Retired and Closed, which are skipped) trigg
 - Arcade URLs excluded: `arcade.redhat.com`
 
 **Metrics Mapping Status edge cases**:
-- **Missing redhat.com page mapping**: Valid row, but MT-based flags blocked
-- **Shared display-key**: Valid mapping
-- **Unlinked request**: Row marked "Needs review"
+- **"Missing redhat.com page mapping"**: Valid row, but Low opportunity value flag blocked
+- **"Shared display-key"**: Valid mapping
+- **"Unlinked request"**: Row marked "Needs review"
 
 **Priority cap**: Low-tier demos (score <40) cap High priority → Medium (coherence rule)
 
@@ -717,13 +728,16 @@ Any other status value (except Demo Retired and Closed, which are skipped) trigg
 4. Update this guide to reflect new thresholds or rules
 
 **Safe validation workflow**:
-1. **Test rule logic** with pure functions (`testPerformanceRules()`, `testProcessingAudit()`)
-2. **Test on isolated sample data** — Create a temporary test sheet with 10-20 representative rows, run `runPerformanceLabels()`, verify output
-3. **Review proposed changes** — Before touching production Request_Master, inspect the test output for unexpected recommendations
-4. **Production recalculation** — Run `runPerformanceLabels()` on production Request_Master (preserves workflow states: Pending review, Complete, Follow-up needed)
+1. **Test rule logic** with deterministic unit tests (`testPerformanceRules()`, `testProcessingAudit()` in Apps Script editor)
+2. **Validate individual functions** — Call `computePerformanceSignals_()`, `computePerformanceAction_()`, etc. with sample metrics objects to verify expected outputs (read-only)
+3. **Review proposed rule changes** — Manually inspect changed logic before any production writes
+4. **Production recalculation** (explicit approval required) — `runPerformanceLabels()` calls `getMasterSheet()` to resolve the configured MASTER_SHEET_ID and writes recommendations, Assigned, and Action Status to production Request_Master. Preserves workflow states: Pending review, Complete, Follow-up needed.
 5. **Post-recalculation audit** — Review Logs for processed count, action distribution, and unexpected "Needs review" outcomes
 
-**Important**: `clearPerformanceLabels()` is **destructive** — it clears operational workflow fields including Action Status, Assigned, and Response. Use only when intentionally resetting all workflow state, not as a routine validation step. Recalculation via `runPerformanceLabels()` preserves workflow states and is the safe default.
+**Important**:
+- `runPerformanceLabels()` writes to production Request_Master via `getMasterSheet()`. Do not run on production data without explicit approval.
+- `clearPerformanceLabels()` is **destructive** — clears Action Status, Assigned, and Response. Use only when intentionally resetting all workflow state.
+- For read-only validation, use unit test functions or manual function calls with sample data.
 
 **Test coverage**: `testPerformanceRules()` and `testProcessingAudit()` provide deterministic unit test coverage for thresholds, signals, flags, actions, priority, score, tier, and classification logic.
 
