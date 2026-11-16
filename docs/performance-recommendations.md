@@ -71,7 +71,7 @@ See [Hub Runbook](runbook.md#manual-metrics-refresh) for refresh procedures.
 
 ### Processing Flow
 
-**Step 1: Parse metrics** — Active Months, Players, ppm, Completions, CR, MT values, L90 data, Page URL, Metrics Mapping Status
+**Step 1: Parse metrics** — Active Months, Players, ppm (players per month), Completions, CR (completion rate), MT values (All-time MT Opportunity Value and MT Won Value), L90 data (last 90 days), Page URL, Metrics Mapping Status
 
 **Step 2: Compute signals** — Usage level (HIGH/BASE/BELOW), CR level (HIGH/BASE/BELOW/LOW), MT level (HIGH/BASE/BELOW/NONE), Active Months level (ESTABLISHED/NEW/STALLED/INACTIVE), Recovery check
 
@@ -102,7 +102,7 @@ See [Hub Runbook](runbook.md#manual-metrics-refresh) for refresh procedures.
 
 **Usage thresholds**:
 - HIGH: ≥25 ppm
-- BASELINE: 15-24 ppm
+- BASE: 15-24 ppm
 - BELOW: <15 ppm
 
 **Active Months level** (`activeMonth.level` in signals):
@@ -119,7 +119,7 @@ NEW content is **excluded** from `Improve completion` action and always receives
 
 **CR thresholds**:
 - HIGH: ≥50%
-- BASELINE: 40-49%
+- BASE: 40-49%
 - BELOW: 20-39%
 - LOW: <20%
 
@@ -133,7 +133,7 @@ NEW content is **excluded** from `Improve completion` action and always receives
 
 **MT thresholds**:
 - HIGH: ≥$100K opportunity OR ≥$25K won
-- BASELINE: $50K-$99K opportunity OR $10K-$24K won
+- BASE: $50K-$99K opportunity OR $10K-$24K won
 - BELOW: >$0 but below thresholds
 - NONE: $0 opportunity AND $0 won
 
@@ -197,26 +197,26 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 **Rule order**:
 1. **Review data linkage** — No activity + MT value >$0
-2. **Boost sales impact** — ESTABLISHED + page + valid mapping + (High usage OR High CR) + selected MT value <$10K
-3. **Improve completion** — (High usage + Low CR OR Base usage + page + Low CR) AND NOT NEW
-4. **Create page** — (High usage OR High CR OR High MT OR Niche) + no page
-5. **Increase visibility** — Niche + page OR Low usage + (High/Base CR) OR 3/3 signals + declining/stale
-6. **Consider retirement** — Low activity (0/3 signals, no recovery) OR No activity (Content Age >3 mo, MT=$0) OR STALLED + low usage + low MT
+2. **Boost sales impact** — ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR) + selected MT value <$10K
+3. **Improve completion** — (HIGH usage + LOW/BELOW CR OR BASE usage + page + LOW/BELOW CR) AND NOT NEW
+4. **Create page** — (HIGH usage OR HIGH CR OR HIGH MT OR High-value niche flag) + no page
+5. **Increase visibility** — High-value niche flag + page OR BELOW usage + (HIGH/BASE CR) OR 3/3 signals + declining/stale trend
+6. **Consider retirement** — ESTABLISHED + 0/3 signals + no recovery OR INACTIVE + Content Age >3 mo + MT=$0 OR STALLED + BELOW usage + BELOW/NONE MT
 7. **Needs review** — Validation failure OR (no activity + Content Age unavailable)
-8. **No action needed** — Default (strong performance, NEW content, or recovery active)
+8. **No action needed** — Default (all other cases)
 
 ### Recommendation Table
 
 | Recommendation | Assigned | Conditions | Notes |
 |----------------|----------|------------|-------|
 | **Review data linkage** | Admin | No activity + MT >$0 | Data integrity check |
-| **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (High usage OR High CR) + selected MT value <$10K | Requires mtMappingValid; mt.value is opp or won |
-| **Improve completion** | Creator | (High usage + Low CR OR Base usage + page + Low CR) AND NOT NEW | NEW excluded |
-| **Create page** | Admin | (High usage OR High CR OR High MT OR Niche) + no page | Performing content needs page |
-| **Increase visibility** | Admin | Niche + page OR Low usage + good CR OR 3/3 + declining/stale | Good content, needs distribution |
-| **Consider retirement** | Creator | (1) ESTABLISHED + 0/3 + no recovery OR (2) Content Age >3 + no activity + MT=$0 OR (3) STALLED + low usage + low MT | Flagged for review |
+| **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR) + selected MT value <$10K | Requires mtMappingValid; mt.value is opp or won |
+| **Improve completion** | Creator | (HIGH usage + LOW/BELOW CR OR BASE usage + page + LOW/BELOW CR) AND NOT NEW | NEW excluded |
+| **Create page** | Admin | (HIGH usage OR HIGH CR OR HIGH MT OR High-value niche flag) + no page | Performing content needs page |
+| **Increase visibility** | Admin | High-value niche flag + page OR BELOW usage + (HIGH/BASE CR) OR 3/3 signals + declining/stale trend | Increase distribution |
+| **Consider retirement** | Creator | (1) ESTABLISHED + 0/3 signals + no recovery OR (2) INACTIVE + Content Age >3 mo + MT=$0 OR (3) STALLED + BELOW usage + BELOW/NONE MT | Flagged for review |
 | **Needs review** | Admin | Validation failure OR (no activity + Content Age unavailable) | classifyRow_() failures + computePerformanceAction_() edge case |
-| **No action needed** | — | All other cases | Strong performance, NEW, or recovery |
+| **No action needed** | — | All other cases | Does not imply content passed quality review |
 
 **Assigned field**:
 - Creator actions: `Improve completion`, `Consider retirement`
@@ -234,7 +234,7 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 - Declining/stale trend (no meaningful signals) → `Medium`
 - MATURE Content Age (>12 months) → `Medium`
 - Default → `Low`
-- **Priority cap**: Low-tier demos (score <40) cap High → Medium
+- **Priority cap**: Performance Tier = Low caps High priority → Medium
 
 ---
 
@@ -253,7 +253,7 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 **Recommendation**: **Improve completion** (Priority: Medium, Assigned: Creator)
 
-**Why**: High traffic signals value. Fix completion, don't retire.
+**Why**: HIGH usage with LOW CR. Fix completion, not retirement.
 
 ---
 
@@ -271,7 +271,7 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 **Recommendation**: **Increase visibility** (Priority: Medium, Assigned: Admin)
 
-**Why**: HIGH CR signals quality. Low usage does NOT mean retirement when engagement is strong.
+**Why**: HIGH CR with BELOW usage. Increase distribution, not retirement.
 
 ---
 
@@ -404,13 +404,13 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 **Retirement conditions**:
 - ESTABLISHED (≥4 active months) + 0/3 signals + no recovery → `Consider retirement`
 - Content Age >3 months (not NEW) + no activity + MT = $0 → `Consider retirement`
-- STALLED + low usage + low MT → `Consider retirement`
+- STALLED + BELOW usage + BELOW/NONE MT → `Consider retirement`
 
 **Recovery overrides retirement**: ESTABLISHED content with 0/3 all-time signals but L90 recovery → `No action needed`
 
 **Missing page mapping**: Blocks Low opportunity value flag AND Boost sales impact action (both require `mtMappingValid`)
 
-**Priority cap**: Low-tier demos (score <40) cap High → Medium
+**Priority cap**: Performance Tier = Low caps High priority → Medium
 
 ### Validation Workflow
 
