@@ -99,30 +99,6 @@
               The Source
             </a>
           </div>
-          <div class="navDropdownSection desktopOnly">
-            <div class="navDropdownSectionLabel">EXPLORE & ANALYZE</div>
-            <a href="https://www.redhat.com/en/interactive-experiences" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-              Public Interactive Experiences
-            </a>
-            <a href="https://analytics.infra.demo.redhat.com/superset/dashboard/101/" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-              Analytics Dashboard
-            </a>
-          </div>
-          <div class="navDropdownSection">
-            <div class="navDropdownSectionLabel desktopOnly">HELP & FEEDBACK</div>
-            <a href="https://redhat.enterprise.slack.com/archives/C07HQMHFWQG" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-              Ask in Slack
-            </a>
-            <button onclick="openFeedbackModal(); closeAllDropdowns();" class="navDropdownItem navDropdownButton desktopOnly" role="menuitem">
-              Send Feedback
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- More Resources (Mobile Only) -->
-      <div class="navItem navDropdown mobileOnly">
-        <div class="navDropdownMenu" role="menu" data-section="More Resources">
           <div class="navDropdownSection">
             <div class="navDropdownSectionLabel">EXPLORE & ANALYZE</div>
             <a href="https://www.redhat.com/en/interactive-experiences" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
@@ -134,7 +110,10 @@
           </div>
           <div class="navDropdownSection">
             <div class="navDropdownSectionLabel">HELP & FEEDBACK</div>
-            <button onclick="openFeedbackModal(); closeAllDropdowns(); toggleMobileMenu();" class="navDropdownItem navDropdownButton" role="menuitem">
+            <a href="https://redhat.enterprise.slack.com/archives/C07HQMHFWQG" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+              Ask in Slack
+            </a>
+            <button onclick="openFeedbackModal(); closeAllDropdowns(); if (window.innerWidth <= 768) toggleMobileMenu();" class="navDropdownItem navDropdownButton" role="menuitem">
               Send Feedback
             </button>
           </div>
