@@ -27,42 +27,119 @@
     <div id="notificationContainer" class="notification-container"></div>
     
     <div class="wrap">
-<img class="brand-logo" src="https://coolstuff.redhat.com/assets/stores/REDHAT/branding/site-logo.png" alt="Red Hat" title="Red Hat">
-<div class="topbar">
-  <div class="brand">
-    <div class="brand-content">
-      <h1>The Interact Hub</h1>
+<!-- Global Header -->
+<header class="globalHeader">
+  <div class="headerContainer">
+    <!-- Left: Branding -->
+    <div class="headerBrand">
+      <a href="#" onclick="goHome(event)" class="brandLink" title="Return to Hub home">
+        <img src="https://coolstuff.redhat.com/assets/stores/REDHAT/branding/site-logo.png" alt="Red Hat" class="brandLogo">
+        <div class="brandText">
+          <span class="brandDivider">/</span>
+          <span class="brandTitle">The Interact Hub</span>
+        </div>
+      </a>
     </div>
-  </div>
-  <div class="headerButtonGroup">
-    <button class="resourcesHeaderBtn" id="themeToggleBtn" onclick="cycleTheme()" title="Toggle theme">
-      <span id="themeIcon">&#9788;</span>
-    </button>
-    <button class="resourcesHeaderBtn" id="debugBtn" onclick="toggleDebugPanel()" title="Debug Controls" style="display: none;">
-      🐛
-      Debug
-    </button>
-    <button class="resourcesHeaderBtn" id="aiAssistantHeaderBtn" onclick="window.open('https://notebooklm.google.com/notebook/26663614-ab4e-4ae0-ae75-1360c149438f', '_blank')">
-      ✨
-      AI Demo Assistant
-    </button>
-    <button class="resourcesHeaderBtn" id="savedArcadesHeaderBtn" onclick="openSavedArcadesModal()">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+
+    <!-- Mobile Menu Toggle -->
+    <button class="mobileMenuToggle" id="mobileMenuToggle" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu" aria-expanded="false">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
       </svg>
-      Saved Demos
-      <span class="savedArcadesCounter" id="savedArcadesCounter" style="display: none;">0</span>
     </button>
-    <button class="resourcesHeaderBtn" id="resourcesHeaderBtn" onclick="toggleResourcesSidebar()">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811V2.828zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492V2.687zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/>
-      </svg>
-      Home Menu
-    </button>
+
+    <!-- Right: Navigation -->
+    <nav class="headerNav" id="headerNav">
+      <!-- Create & Submit Dropdown -->
+      <div class="navItem navDropdown">
+        <button class="navButton" id="createDropdownBtn" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown('createDropdown')">
+          Create & Submit
+          <svg class="navChevron" width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+            <path d="M2 3l3 3 3-3"/>
+          </svg>
+        </button>
+        <div class="navDropdownMenu" id="createDropdown" role="menu">
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLSeT5z2JaseXC54hLtlhbJ4ONw6PPEXzsQwoko4ExKkCYR6fhA/viewform" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Request a New Demo
+          </a>
+          <a href="https://script.google.com/a/macros/redhat.com/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Submit a Demo for Review
+          </a>
+          <a href="https://script.google.com/a/redhat.com/macros/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec?page=status" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Check My Submissions
+          </a>
+        </div>
+      </div>
+
+      <!-- AI Assistant Link -->
+      <a href="https://notebooklm.google.com/notebook/26663614-ab4e-4ae0-ae75-1360c149438f" target="_blank" rel="noopener" class="navButton navLink">
+        AI Assistant
+      </a>
+
+      <!-- Docs Dropdown -->
+      <div class="navItem navDropdown">
+        <button class="navButton" id="docsDropdownBtn" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown('docsDropdown')">
+          Docs
+          <svg class="navChevron" width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+            <path d="M2 3l3 3 3-3"/>
+          </svg>
+        </button>
+        <div class="navDropdownMenu" id="docsDropdown" role="menu">
+          <a href="https://docs.google.com/document/d/13njLj4SYUbvaUwd0zoyt1Racpz8vR4Zz8H43IqkalLU/edit?tab=t.0#heading=h.66y4kqbj468a" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            User Guide
+          </a>
+          <a href="https://docs.google.com/document/d/13njLj4SYUbvaUwd0zoyt1Racpz8vR4Zz8H43IqkalLU/edit?tab=t.0#heading=h.66y4kqbj468a" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Best Practices Guide
+          </a>
+          <a href="https://source.redhat.com/groups/private/arcade_demo_platform" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Interactive Experience Source
+          </a>
+          <div class="navDropdownDivider"></div>
+          <a href="https://redhat.enterprise.slack.com/archives/C06U6F8DN7F" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Need Help? (Slack)
+          </a>
+        </div>
+      </div>
+
+      <!-- Account Dropdown -->
+      <div class="navItem navDropdown">
+        <button class="navButton navAccount" id="accountDropdownBtn" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown('accountDropdown')">
+          <div class="accountAvatar" id="accountAvatar">
+            <span id="accountInitial">?</span>
+          </div>
+          <span class="accountEmail" id="accountEmail">Loading...</span>
+          <svg class="navChevron" width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+            <path d="M2 3l3 3 3-3"/>
+          </svg>
+        </button>
+        <div class="navDropdownMenu navDropdownMenuRight" id="accountDropdown" role="menu">
+          <button onclick="openSavedArcadesModal(); closeAllDropdowns();" class="navDropdownItem navDropdownButton" role="menuitem">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-right:8px;">
+              <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+            </svg>
+            Saved Demos
+            <span class="savedArcadesCounter" id="savedArcadesCounter" style="display:none;margin-left:auto;">0</span>
+          </button>
+          <div class="navDropdownDivider"></div>
+          <button onclick="cycleTheme(); event.stopPropagation();" class="navDropdownItem navDropdownButton" role="menuitem">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-right:8px;">
+              <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>
+            </svg>
+            Theme: <span id="themeLabel">System</span>
+          </button>
+        </div>
+      </div>
+    </nav>
   </div>
+</header>
+
+<!-- Page Subtitle -->
+<div class="pageSubtitle">
+  <p class="brand-subtitle">Demo it! Find your Interactive Experiences; from the video demos, to the Interactive Demos. From Livestreams to your Interactive Labs.</p>
+  <div class="brand-sub-subtitle">For public facing material, access: <a href="https://interact.redhat.com" target="_blank" rel="noopener">interact.redhat.com &rarr;</a></div>
 </div>
-<p class="brand-subtitle">Demo it! Find your Interactive Experiences; from the video demos, to the Interactive Demos. From Livestreams to your Interactive Labs.</p>
-<div class="brand-sub-subtitle">For public facing material, access: <a href="https://interact.redhat.com" target="_blank" rel="noopener">interact.redhat.com &rarr;</a></div>
 
       <div class="discover-strip">
         <div class="discover-heading">Find the demo that suits you&hellip;</div>
