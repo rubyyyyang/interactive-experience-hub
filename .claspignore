@@ -9,7 +9,6 @@ playwright/**
 playwright-report/**
 test-results/**
 playwright.config.ts
-playwright.config.js
 package.json
 package-lock.json
 .clasp.json
