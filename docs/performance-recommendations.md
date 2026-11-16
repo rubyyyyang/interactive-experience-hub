@@ -198,10 +198,10 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 **Rule order**:
 1. **Review data linkage** — No activity + MT value >$0
 2. **Boost sales impact** — ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR) + selected MT value <$10K
-3. **Improve completion** — (HIGH usage + LOW/BELOW CR OR BASE usage + page + LOW/BELOW CR) AND NOT NEW
+3. **Improve completion** — (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR)
 4. **Create page** — (HIGH usage OR HIGH CR OR HIGH MT OR High-value niche flag) + no page
 5. **Increase visibility** — High-value niche flag + page OR BELOW usage + (HIGH/BASE CR) OR 3/3 signals + declining/stale trend
-6. **Consider retirement** — ESTABLISHED + 0/3 signals + no recovery OR INACTIVE + Content Age >3 mo + MT=$0 OR STALLED + BELOW usage + BELOW/NONE MT
+6. **Consider retirement** — ESTABLISHED + 0/3 signals + no recovery OR (Active Months = 0 AND Total Players = 0 AND Content Age >3 mo AND MT = $0) OR STALLED + BELOW usage + BELOW/NONE MT
 7. **Needs review** — Validation failure OR (no activity + Content Age unavailable)
 8. **No action needed** — Default (all other cases)
 
@@ -211,10 +211,10 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 |----------------|----------|------------|-------|
 | **Review data linkage** | Admin | No activity + MT >$0 | Data integrity check |
 | **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR) + selected MT value <$10K | Requires mtMappingValid; mt.value is opp or won |
-| **Improve completion** | Creator | (HIGH usage + LOW/BELOW CR OR BASE usage + page + LOW/BELOW CR) AND NOT NEW | NEW excluded |
+| **Improve completion** | Creator | (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR) | NEW excluded from HIGH usage branch only |
 | **Create page** | Admin | (HIGH usage OR HIGH CR OR HIGH MT OR High-value niche flag) + no page | Performing content needs page |
 | **Increase visibility** | Admin | High-value niche flag + page OR BELOW usage + (HIGH/BASE CR) OR 3/3 signals + declining/stale trend | Increase distribution |
-| **Consider retirement** | Creator | (1) ESTABLISHED + 0/3 signals + no recovery OR (2) INACTIVE + Content Age >3 mo + MT=$0 OR (3) STALLED + BELOW usage + BELOW/NONE MT | Flagged for review |
+| **Consider retirement** | Creator | (1) ESTABLISHED + 0/3 signals + no recovery OR (2) Active Months = 0 AND Total Players = 0 AND Content Age >3 mo AND MT = $0 OR (3) STALLED + BELOW usage + BELOW/NONE MT | Flagged for review |
 | **Needs review** | Admin | Validation failure OR (no activity + Content Age unavailable) | classifyRow_() failures + computePerformanceAction_() edge case |
 | **No action needed** | — | All other cases | Does not imply content passed quality review |
 
@@ -275,7 +275,7 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 ---
 
-### Example 3: Niche (High MT) → Increase Visibility
+### Example 3: Low Usage + High MT → Increase Visibility
 
 **Metrics**:
 - Active Months: 12 (ESTABLISHED), Total Players: 96, ppm: 8 (BELOW)
@@ -403,7 +403,7 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 
 **Retirement conditions**:
 - ESTABLISHED (≥4 active months) + 0/3 signals + no recovery → `Consider retirement`
-- Content Age >3 months (not NEW) + no activity + MT = $0 → `Consider retirement`
+- Active Months = 0 AND Total Players = 0 AND Content Age >3 months AND MT = $0 → `Consider retirement`
 - STALLED + BELOW usage + BELOW/NONE MT → `Consider retirement`
 
 **Recovery overrides retirement**: ESTABLISHED content with 0/3 all-time signals but L90 recovery → `No action needed`
