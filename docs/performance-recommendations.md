@@ -144,12 +144,13 @@ NEW content is **excluded** from `Improve completion` action and always receives
 
 ### Content Age
 
-**Content Age**: Months since earliest available timestamp
+**Content Age**: Months since first lifecycle timestamp
 
 **Calculation** (line 234 in RM_Performance.js):
 ```javascript
-var originDate = receivedTs || publishedTs;  // Status Received Timestamp checked first
+var originDate = receivedTs || publishedTs;
 ```
+Status Received Timestamp checked first; if unavailable, Status Published Timestamp.
 
 **Content Age thresholds**:
 - NEW: ≤3 months
@@ -171,7 +172,7 @@ var originDate = receivedTs || publishedTs;  // Status Received Timestamp checke
 - **Stable**: L90 ppm ≥ 50% of all-time ppm
 - **Declining**: L90 ppm < 50% of all-time ppm
 - **Stale**: No L90 data AND last activity >6 months ago
-- **Unknown**: No L90 data, last activity within 6 months OR all-time ppm = 0
+- **Unknown**: No L90 data AND (no Last Activity Month OR all-time ppm = 0)
 
 **Recovery signal** (ESTABLISHED content with 0/3 all-time signals):
 - L90 ppm ≥15 OR L90 CR ≥40% (≥5 L90 completions) OR L90 MT ≥$12.5K opp OR ≥$2.5K won
@@ -196,12 +197,12 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 **Rule order**:
 1. **Review data linkage** — No activity + MT value >$0
-2. **Boost sales impact** — (High usage OR High completion) + page + valid mapping + MT Won <$10K
+2. **Boost sales impact** — ESTABLISHED + page + valid mapping + (High usage OR High CR) + MT Won <$10K
 3. **Improve completion** — (High usage + Low CR OR Base usage + page + Low CR) AND NOT NEW
 4. **Create page** — (High usage OR High CR OR High MT OR Niche) + no page
 5. **Increase visibility** — Niche + page OR Low usage + (High/Base CR) OR 3/3 signals + declining/stale
 6. **Consider retirement** — Low activity (0/3 signals, no recovery) OR No activity (Content Age >3 mo, MT=$0) OR STALLED + low usage + low MT
-7. **Needs review** — Missing data or ineligible status
+7. **Needs review** — Pre-validation failure (missing data, ineligible status, Content Age unavailable with no activity)
 8. **No action needed** — Default (strong performance, NEW content, or recovery active)
 
 ### Recommendation Table
@@ -209,12 +210,12 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 | Recommendation | Assigned | Conditions | Notes |
 |----------------|----------|------------|-------|
 | **Review data linkage** | Admin | No activity + MT >$0 | Data integrity check |
-| **Boost sales impact** | Admin | (High usage OR High CR) + page + valid mapping + MT Won <$10K | Requires mtMappingValid |
+| **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (High usage OR High CR) + MT Won <$10K | Requires mtMappingValid |
 | **Improve completion** | Creator | (High usage + Low CR OR Base usage + page + Low CR) AND NOT NEW | NEW excluded |
 | **Create page** | Admin | (High usage OR High CR OR High MT OR Niche) + no page | Performing content needs page |
 | **Increase visibility** | Admin | Niche + page OR Low usage + good CR OR 3/3 + declining/stale | Good content, needs distribution |
 | **Consider retirement** | Creator | (1) ESTABLISHED + 0/3 + no recovery OR (2) Content Age >3 + no activity + MT=$0 OR (3) STALLED + low usage + low MT | Flagged for review |
-| **Needs review** | Admin | Missing data or edge case | System cannot classify |
+| **Needs review** | Admin | Pre-validation failure | Missing required metrics, ineligible status, or Content Age unavailable with no activity |
 | **No action needed** | — | All other cases | Strong performance, NEW, or recovery |
 
 **Assigned field**:
@@ -287,7 +288,7 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 **Recommendation**: **Increase visibility** (Priority: Medium, Assigned: Admin)
 
-**Why**: HIGH MT justifies low traffic. Niche demo, not retirement.
+**Why**: `High-value niche` flag (ESTABLISHED + ppm <15 + MT ≥$50K opp OR ≥$10K won) justifies low traffic.
 
 ---
 
