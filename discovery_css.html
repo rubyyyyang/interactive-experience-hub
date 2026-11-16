@@ -547,8 +547,8 @@
           padding: 0;
         }
 
-        /* Section headers for mobile */
-        .navDropdownMenu::before {
+        /* Section headers for mobile (exclude Resources which has explicit labels) */
+        .navDropdownMenu:not(#resourcesDropdown)::before {
           content: attr(data-section);
           display: block;
           font-size: 11px;
