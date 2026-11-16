@@ -87,7 +87,7 @@
           </svg>
         </button>
         <div class="navDropdownMenu" id="docsDropdown" role="menu" data-section="Documentation">
-          <a href="https://docs.google.com/document/d/13njLj4SYUbvaUwd0zoyt1Racpz8vR4Zz8H43IqkalLU/edit?tab=t.0#heading=h.66y4kqbj468a" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+          <a href="https://github.com/rubyyyyang/interactive-experience-intake/blob/main/docs/user-guide.md" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
             User Guide
           </a>
           <a href="https://docs.google.com/document/d/13njLj4SYUbvaUwd0zoyt1Racpz8vR4Zz8H43IqkalLU/edit?tab=t.0#heading=h.66y4kqbj468a" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
@@ -97,24 +97,38 @@
             The Source
           </a>
           <div class="navDropdownDivider"></div>
-          <a href="https://redhat.enterprise.slack.com/archives/C06U6F8DN7F" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+          <a href="https://analytics.infra.demo.redhat.com/superset/dashboard/101/" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Analytics Dashboard
+          </a>
+          <a href="https://www.redhat.com/en/interactive-experiences" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Public Interactive Experiences
+          </a>
+          <div class="navDropdownDivider"></div>
+          <a href="https://redhat.enterprise.slack.com/archives/C07HQMHFWQG" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
             Need Help? (Slack)
           </a>
+          <button onclick="openFeedbackModal(); closeAllDropdowns();" class="navDropdownItem navDropdownButton" role="menuitem">
+            Send Feedback
+          </button>
         </div>
       </div>
 
       <!-- More Resources (Mobile Only) -->
       <div class="navItem navDropdown mobileOnly">
         <div class="navDropdownMenu" role="menu" data-section="More Resources">
-          <button onclick="window.open('https://lookerstudio.google.com/reporting/your-dashboard-url', '_blank');" class="navDropdownItem navDropdownButton" role="menuitem">
+          <a href="https://analytics.infra.demo.redhat.com/superset/dashboard/101/" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
             Analytics Dashboard
-          </button>
-          <a href="https://interact.redhat.com" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+          </a>
+          <a href="https://www.redhat.com/en/interactive-experiences" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
             Public Interactive Experiences
           </a>
-          <a href="https://redhat.enterprise.slack.com/archives/C06U6F8DN7F" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-            Send Feedback
+          <div class="navDropdownDivider"></div>
+          <a href="https://redhat.enterprise.slack.com/archives/C07HQMHFWQG" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+            Need Help? (Slack)
           </a>
+          <button onclick="openFeedbackModal(); closeAllDropdowns(); toggleMobileMenu();" class="navDropdownItem navDropdownButton" role="menuitem">
+            Send Feedback
+          </button>
         </div>
       </div>
 
@@ -130,7 +144,7 @@
           </svg>
         </button>
         <div class="navDropdownMenu navDropdownMenuRight" id="accountDropdown" role="menu" data-section="Account">
-          <button onclick="openSavedArcadesModal(); closeAllDropdowns();" class="navDropdownItem navDropdownButton" role="menuitem">
+          <button onclick="openSavedArcadesModal(); closeAllDropdowns(); if (window.innerWidth <= 768) toggleMobileMenu();" class="navDropdownItem navDropdownButton" role="menuitem">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-right:8px;">
               <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
             </svg>
