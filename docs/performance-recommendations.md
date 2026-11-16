@@ -24,12 +24,12 @@ This documents **current implementation**, not formally approved business policy
 
 The performance recommendation system analyzes Interactive Experience usage, engagement, and business impact data to suggest actionable next steps for content lifecycle management.
 
-**Output**: For each published demo, the system generates:
+**Output**: For each eligible demo, the system generates:
 - **Performance Signals**: Structured metrics showing usage level, completion rate, business value, and maturity
 - **Performance Flags**: Qualitative characteristics (High usage, Low completion, High business impact, etc.)
 - **Recommended action**: One actionable next step (Improve completion, Increase visibility, Consider retirement, etc.)
 - **Action Priority**: High/Medium/Low urgency based on signals and trends
-- **Performance Score** (0-100): Composite measure of all-time performance
+- **Performance Score** (0-100): Composite measure combining all-time signals, recent trend, and content maturity
 - **Performance Tier**: Top/Mid/Low/Inactive bucketing
 - **Performance L90 Trend**: Growing/Stable/Declining/Stale based on recent activity
 
@@ -125,11 +125,13 @@ See [Hub Runbook](runbook.md#manual-metrics-refresh) for refresh procedures.
 ### How Humans Review and Act on Recommendations
 
 **Creator response workflow** (via Status Tracker):
-1. Creator views recommendation in Status Tracker
-2. Creator selects response (`Updated`, `Keep active`, `Retire`, `Need help`)
+1. Creator views creator-actionable recommendation in Status Tracker (`Improve completion` or `Consider retirement`)
+2. Creator selects response:
+   - **Improve completion**: `Updated`, `Need help`
+   - **Consider retirement**: `Updated`, `Keep active`, `Retire`, `Need help`
 3. Creator optionally provides new link or notes
 4. Creator submits → **Action Status** → `Pending review`
-5. Admin reviews in Admin Review panel
+5. Admin reviews in Admin Review panel (applies to creator-actionable recommendations only)
 6. Admin approves or requests changes
 7. If approved: **Action Status** → `Complete`
 8. If retirement approved: **Status** → `Retired`, **Action Status** → `Complete`
@@ -171,15 +173,19 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 
 ### Completion and Engagement
 
-**Completion Rate**: All-time Completions ÷ All-time Players
+**Completion Rate**: All-time Completions ÷ All-time Players (always parsed as a metric)
 
-**Thresholds**:
+**Signal thresholds**:
 - HIGH engagement: ≥50% completion rate
 - BASELINE engagement: 40-49% completion rate
 - BELOW baseline: 20-39% completion rate
 - LOW engagement: <20% completion rate
 
-**Minimum completions for rate evaluation**: 25 completions
+**Flag-specific requirements**:
+- **High engagement flag**: Requires ≥50% CR **AND** ≥25 completions
+- **Low completion flag**: Requires ≥25 total players **AND** CR <40%
+
+Completion rate is always parsed and used in signal classification. The minimum sample-size checks apply only to specific performance flags, not to the completion rate metric itself or to recommendation logic that uses CR signals.
 
 **Why it matters**: High traffic with low completion signals content quality or flow issues, not retirement. Recommendations prioritize fixing completion over retiring well-trafficked content.
 
@@ -196,9 +202,11 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 - NONE: $0 opportunity AND $0 won
 
 **Metrics Mapping Status**: Validates data linkage between demo and sales metrics
-- **Missing redhat.com page mapping**: Blocks MT-based flags (High business impact, High-value niche, Low opportunity value)
+- **Missing redhat.com page mapping**: Blocks **Low opportunity value** flag only. High business impact and High-value niche flags are NOT blocked.
 - **Shared display-key**: Valid mapping, MT data reliable
 - **Unlinked request**: Demo not linked to metrics, row marked "Needs review"
+
+MT values are still parsed and used in signal classification and recommendations even when mapping status is "Missing redhat.com page mapping". The mapping check only affects the Low opportunity value flag, which requires both a demo-specific page AND valid mapping.
 
 **Why it matters**: Business value can justify lower traffic. High-value niche content (low ppm, high MT) gets different recommendations than low-value low-traffic content.
 
@@ -361,24 +369,27 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 
 **Metrics**:
 - Active Months: 10
+- Total Players: 300
 - Players per Month: 30 (HIGH usage)
 - Completion Rate: 18% (LOW)
-- Completions: 180
+- Completions: 54
 - MT Opportunity: $5K (BELOW)
 - Has Page: No
+- L90 Players: 0 (no L90 data)
 
 **Signals**:
 - Usage: HIGH (30 ppm)
 - CR: LOW (18%)
 - MT: BELOW ($5K)
-- Signal count: 1/3 (usage only)
+- Signal count: 1/3 (usage only, HIGH count = 1)
 - Maturity: ESTABLISHED
+- Trend: Unknown (no L90 data)
 
 **Flags**: `High usage`, `Low completion`
 
 **Recommendation**: **Improve completion**
 - **Why**: Players start but don't finish — review demo flow and content
-- **Priority**: High (1 HIGH signal + LOW CR)
+- **Priority**: Medium (1 HIGH signal)
 - **Assigned**: Creator
 
 **What matters**: High traffic signals value. Fix completion rate, don't retire.
@@ -391,18 +402,21 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 
 **Metrics**:
 - Active Months: 8
+- Total Players: 96
 - Players per Month: 12 (BELOW baseline)
 - Completion Rate: 55% (HIGH)
 - Completions: 53
 - MT Opportunity: $8K (BELOW)
 - Has Page: Yes
+- L90 Players: 0 (no L90 data)
 
 **Signals**:
 - Usage: BELOW (12 ppm)
 - CR: HIGH (55%)
 - MT: BELOW ($8K)
-- Signal count: 1/3 (CR only)
+- Signal count: 1/3 (CR only, HIGH count = 1)
 - Maturity: ESTABLISHED
+- Trend: Unknown (no L90 data)
 
 **Flags**: `High engagement`
 
@@ -421,24 +435,27 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 
 **Metrics**:
 - Active Months: 12
+- Total Players: 96
 - Players per Month: 8 (BELOW baseline)
 - Completion Rate: 35% (BELOW baseline)
 - Completions: 34
 - MT Opportunity: $120K (HIGH)
 - Has Page: Yes
+- L90 Players: 0 (no L90 data)
 
 **Signals**:
 - Usage: BELOW (8 ppm)
 - CR: BELOW (35%)
 - MT: HIGH ($120K)
-- Signal count: 1/3 (MT only)
+- Signal count: 1/3 (MT only, HIGH count = 1)
 - Maturity: ESTABLISHED
+- Trend: Unknown (no L90 data)
 
 **Flags**: `High business impact`, `High-value niche`
 
 **Recommendation**: **Increase visibility**
 - **Why**: Good content, low visibility — needs distribution
-- **Priority**: High (MT HIGH + niche flag)
+- **Priority**: Medium (1 HIGH signal)
 - **Assigned**: Admin
 
 **What matters**: HIGH MT justifies low traffic. This is a **niche** demo, not a retirement candidate.
@@ -451,26 +468,28 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 
 **Metrics**:
 - Active Months: 6
+- Total Players: 48
 - Players per Month: 8 (BELOW baseline)
 - Completion Rate: 22% (BELOW baseline)
-- Completions: 12
+- Completions: 11 (below flag threshold)
 - MT Opportunity: $3K (BELOW)
 - Has Page: No
-- L90 Players: 0 (no recovery)
+- L90 Players: 0 (no L90 data)
 
 **Signals**:
 - Usage: BELOW (8 ppm)
 - CR: BELOW (22%)
 - MT: BELOW ($3K)
-- Signal count: 0/3 (no BASE or HIGH)
+- Signal count: 0/3 (no BASE or HIGH, HIGH count = 0)
 - Maturity: ESTABLISHED
 - Recovery: Not active
+- Trend: Unknown (no L90 data, last activity not specified)
 
-**Flags**: None
+**Flags**: None (no High/Low completion flags due to sample size)
 
 **Recommendation**: **Consider retirement**
 - **Why**: This demo is flagged for retirement — review the demo page and consider updating or confirming retirement
-- **Priority**: Medium (declining trend, 0 signals)
+- **Priority**: Low (0 HIGH signals, no declining trend)
 - **Assigned**: Creator
 
 **What matters**: No positive signals (0/3), no recovery, ESTABLISHED maturity. Flagged for review, but **retirement is not automatic**.
@@ -483,20 +502,23 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 
 **Metrics**:
 - Active Months: 10
+- Total Players: 120
 - Players per Month: 12 (BELOW baseline)
 - Completion Rate: 30% (BELOW baseline)
-- Completions: 25
+- Completions: 36
 - MT Opportunity: $2K (BELOW)
 - Has Page: No
 - **L90 Players**: 60 (L90 ppm = 20, above 15 baseline)
+- L90 Completions: 18
 
 **Signals**:
 - Usage: BELOW (12 ppm)
 - CR: BELOW (30%)
 - MT: BELOW ($2K)
-- Signal count: 0/3 (no BASE or HIGH all-time)
+- Signal count: 0/3 (no BASE or HIGH all-time, HIGH count = 0)
 - Maturity: ESTABLISHED
 - **Recovery: Active** (L90 ppm = 20 ≥ 15 baseline)
+- Trend: Growing (L90 rate 167% of all-time rate, L90 ppm ≥ 7.5)
 
 **Flags**: None
 
@@ -569,10 +591,10 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 **Hub's `email_gen.js` workflow**:
 - Older form-based performance response workflow
 - Uses `lifecycle_raw_updates` sheet for creator responses
-- Relationship to Status Tracker workflow is not verified
-- May be retired or deprecated (documentation does not confirm)
+- Relationship to Status Tracker workflow is not documented here
+- Current operational status (active, deprecated, or retired) is not verified
 
-**Current documentation scope**: This guide describes the Status Tracker `submitCreatorResponse()` workflow only. If legacy workflows coexist, consult current operational procedures.
+**Current documentation scope**: This guide describes the Status Tracker `submitCreatorResponse()` workflow only. For Hub email generation and form-based response workflows, consult Hub operational documentation.
 
 ---
 
@@ -612,11 +634,20 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 - Completion Rate (only required if Total Players >0)
 - First Activity Month (only required if Active Months is 1-3)
 
+**Eligible status values**:
+- Demo Published
+- Demo Reviewed
+- Demo Received
+- Blank (empty Status column)
+
+Any other status value (except Demo Retired and Closed, which are skipped) triggers a "Needs review" outcome.
+
 **Missing data outcomes**:
 - **Row is blank** (all non-output columns empty) → **Skipped** — Blank row
 - **Status = Demo Retired** → **Skipped** — Status = Demo Retired
 - **Status = Closed** → **Skipped** — Status = Closed
 - **Note = Delete row** → **Skipped** — Note = Delete row
+- **Status not eligible** → **Needs review** — Row has status "[value]", which is not eligible for performance labeling
 - **Number column blank** → **Needs review** — The Number column is blank, so this row cannot be matched to metrics data
 - **Metrics Mapping Status = Unlinked request** → **Needs review** — The intake request is not linked to a demo record, so reliable performance metrics are unavailable
 - **Required metrics missing** → **Needs review** — One or more required performance metrics are missing: [list]
@@ -629,7 +660,8 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 
 **When recalculation runs** (Admin menu → "Run Performance Labels"):
 - All Request_Master rows are reprocessed
-- Performance Signals, Flags, Recommended action, Priority, Score, Tier, Trend, and Processing Result are recalculated
+- **Performance-only fields** recalculated: Performance Signals, Flags, Recommended action, Recommended action reason, Priority, Score, Tier, Trend, Content Age, Processing Result
+- **Workflow fields** also written: Assigned, Action Status (with preservation rules below)
 - **Action Status is preserved** for workflow states: `Pending review`, `Follow-up needed`, `Complete`, `Resubmit required`
 
 **Preserved workflow states**:
@@ -684,21 +716,16 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 3. Document threshold change rationale (business justification, not implementation convenience)
 4. Update this guide to reflect new thresholds or rules
 
-**After modifying rules**:
-1. Run `clearPerformanceLabels()` to wipe existing labels
-2. Run `runPerformanceLabels()` to reprocess all rows
-3. Review audit summary in Logs (processed count, skip reasons, action counts, tier distribution)
-4. Spot-check 5-10 demos with known signals to verify expected recommendations
-5. Check for unexpected "Needs review" outcomes
+**Safe validation workflow**:
+1. **Test rule logic** with pure functions (`testPerformanceRules()`, `testProcessingAudit()`)
+2. **Test on isolated sample data** — Create a temporary test sheet with 10-20 representative rows, run `runPerformanceLabels()`, verify output
+3. **Review proposed changes** — Before touching production Request_Master, inspect the test output for unexpected recommendations
+4. **Production recalculation** — Run `runPerformanceLabels()` on production Request_Master (preserves workflow states: Pending review, Complete, Follow-up needed)
+5. **Post-recalculation audit** — Review Logs for processed count, action distribution, and unexpected "Needs review" outcomes
 
-**Test coverage**:
-- 300+ assertions in `testPerformanceRules()` covering thresholds, signals, flags, actions, priority, score, tier
-- 100+ assertions in `testProcessingAudit()` covering row classification, skipped/needs review scenarios, workflow state preservation
+**Important**: `clearPerformanceLabels()` is **destructive** — it clears operational workflow fields including Action Status, Assigned, and Response. Use only when intentionally resetting all workflow state, not as a routine validation step. Recalculation via `runPerformanceLabels()` preserves workflow states and is the safe default.
 
-**Validation on production data**:
-- Run performance labels on a copy of Request_Master before deploying to production
-- Review distribution of recommendations (action counts, tier counts, trend counts)
-- Flag unexpected spikes in "Consider retirement" or "Needs review" outcomes
+**Test coverage**: `testPerformanceRules()` and `testProcessingAudit()` provide deterministic unit test coverage for thresholds, signals, flags, actions, priority, score, tier, and classification logic.
 
 ---
 
