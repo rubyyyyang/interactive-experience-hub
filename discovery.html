@@ -78,54 +78,66 @@
         AI Assistant
       </a>
 
-      <!-- Docs Dropdown -->
+      <!-- Resources Dropdown -->
       <div class="navItem navDropdown">
-        <button class="navButton" id="docsDropdownBtn" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown('docsDropdown')">
-          Docs
+        <button class="navButton" id="resourcesDropdownBtn" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown('resourcesDropdown')">
+          Resources
           <svg class="navChevron" width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
             <path d="M2 3l3 3 3-3"/>
           </svg>
         </button>
-        <div class="navDropdownMenu" id="docsDropdown" role="menu" data-section="Documentation">
-          <a href="https://github.com/rubyyyyang/interactive-experience-intake/blob/main/docs/user-guide.md" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-            User Guide
-          </a>
-          <a href="https://docs.google.com/document/d/13njLj4SYUbvaUwd0zoyt1Racpz8vR4Zz8H43IqkalLU/edit?tab=t.0#heading=h.66y4kqbj468a" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-            Best Practices Guide
-          </a>
-          <a href="https://source.redhat.com/groups/private/arcade_demo_platform" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-            The Source
-          </a>
-          <div class="navDropdownDivider desktopOnly"></div>
-          <a href="https://analytics.infra.demo.redhat.com/superset/dashboard/101/" target="_blank" rel="noopener" class="navDropdownItem desktopOnly" role="menuitem">
-            Analytics Dashboard
-          </a>
-          <a href="https://www.redhat.com/en/interactive-experiences" target="_blank" rel="noopener" class="navDropdownItem desktopOnly" role="menuitem">
-            Public Interactive Experiences
-          </a>
-          <div class="navDropdownDivider desktopOnly"></div>
-          <button onclick="openFeedbackModal(); closeAllDropdowns();" class="navDropdownItem navDropdownButton desktopOnly" role="menuitem">
-            Send Feedback
-          </button>
-          <div class="navDropdownDivider"></div>
-          <a href="https://redhat.enterprise.slack.com/archives/C07HQMHFWQG" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-            Need Help? (Slack)
-          </a>
+        <div class="navDropdownMenu" id="resourcesDropdown" role="menu" data-section="Resources">
+          <div class="navDropdownSection">
+            <div class="navDropdownSectionLabel">GUIDES & DOCUMENTATION</div>
+            <a href="https://github.com/rubyyyyang/interactive-experience-intake/blob/main/docs/user-guide.md" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+              User Guide
+            </a>
+            <a href="https://docs.google.com/document/d/13njLj4SYUbvaUwd0zoyt1Racpz8vR4Zz8H43IqkalLU/edit?tab=t.0#heading=h.66y4kqbj468a" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+              Best Practices Guide
+            </a>
+            <a href="https://source.redhat.com/groups/private/arcade_demo_platform" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+              The Source
+            </a>
+          </div>
+          <div class="navDropdownSection desktopOnly">
+            <div class="navDropdownSectionLabel">EXPLORE & ANALYZE</div>
+            <a href="https://www.redhat.com/en/interactive-experiences" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+              Public Interactive Experiences
+            </a>
+            <a href="https://analytics.infra.demo.redhat.com/superset/dashboard/101/" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+              Analytics Dashboard
+            </a>
+          </div>
+          <div class="navDropdownSection">
+            <div class="navDropdownSectionLabel desktopOnly">HELP & FEEDBACK</div>
+            <a href="https://redhat.enterprise.slack.com/archives/C07HQMHFWQG" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+              Ask in Slack
+            </a>
+            <button onclick="openFeedbackModal(); closeAllDropdowns();" class="navDropdownItem navDropdownButton desktopOnly" role="menuitem">
+              Send Feedback
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- More Resources (Mobile Only) -->
       <div class="navItem navDropdown mobileOnly">
         <div class="navDropdownMenu" role="menu" data-section="More Resources">
-          <a href="https://analytics.infra.demo.redhat.com/superset/dashboard/101/" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-            Analytics Dashboard
-          </a>
-          <a href="https://www.redhat.com/en/interactive-experiences" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-            Public Interactive Experiences
-          </a>
-          <button onclick="openFeedbackModal(); closeAllDropdowns(); toggleMobileMenu();" class="navDropdownItem navDropdownButton" role="menuitem">
-            Send Feedback
-          </button>
+          <div class="navDropdownSection">
+            <div class="navDropdownSectionLabel">EXPLORE & ANALYZE</div>
+            <a href="https://www.redhat.com/en/interactive-experiences" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+              Public Interactive Experiences
+            </a>
+            <a href="https://analytics.infra.demo.redhat.com/superset/dashboard/101/" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+              Analytics Dashboard
+            </a>
+          </div>
+          <div class="navDropdownSection">
+            <div class="navDropdownSectionLabel">HELP & FEEDBACK</div>
+            <button onclick="openFeedbackModal(); closeAllDropdowns(); toggleMobileMenu();" class="navDropdownItem navDropdownButton" role="menuitem">
+              Send Feedback
+            </button>
+          </div>
         </div>
       </div>
 
