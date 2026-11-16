@@ -260,7 +260,7 @@ MT values are still parsed and used in signal classification and recommendations
 
 **Data quality flags**:
 - **Unlinked request**: Demo not linked to metrics → Row marked "Needs review"
-- **Missing redhat.com page mapping**: Blocks MT-based flags
+- **Missing redhat.com page mapping**: Blocks Low opportunity value flag only (mtMappingValid check)
 - **No activity + MT value >$0**: Data doesn't add up → **Review data linkage**
 
 ---
@@ -273,7 +273,7 @@ Recommendations are assigned using **first-match precedence**. Rules are checked
 
 **Rule order** (simplified):
 1. **Review data linkage** — No activity but MT value >$0
-2. **Boost sales impact** — Strong completion, page present, but low sales impact
+2. **Boost sales impact** — Strong usage or completion, page present, but low sales impact
 3. **Improve completion** — High usage + Low CR (players start but don't finish)
 4. **Create page** — Performing well but no demo-specific page
 5. **Increase visibility** — Good content, low visibility
@@ -288,7 +288,7 @@ Recommendations are assigned using **first-match precedence**. Rules are checked
 | Recommendation | Assigned To | When It Appears | Key Signals |
 |----------------|-------------|-----------------|-------------|
 | **Review data linkage** | Admin | No activity + MT value >$0 | Data integrity check |
-| **Boost sales impact** | Admin | High completion + page + MT <$10K won | Page has traffic but low pipeline |
+| **Boost sales impact** | Admin | (High usage OR High completion) + page + MT <$10K won | Page has traffic but low pipeline |
 | **Improve completion** | Creator | High usage + Low CR OR Base usage + page + Low CR | Players start, don't finish |
 | **Create page** | Admin | (High usage OR High CR OR High MT OR Niche) + no page | Performing content needs visibility |
 | **Increase visibility** | Admin | Niche + page OR Low usage + good CR OR 3/3 signals + declining/stale trend | Good content, needs distribution |
@@ -304,7 +304,7 @@ Recommendations are assigned using **first-match precedence**. Rules are checked
 ### Why Low Traffic Does Not Automatically Mean Retirement
 
 **Context matters**:
-- **NEW content** (≤3 months): Early days, audience building, not actionable
+- **NEW content** (≤3 months): May receive actionable recommendations, but Priority is always Low
 - **Recovery active**: Recent L90 improvement overrides poor all-time performance
 - **Niche content**: Low ppm + high MT → **Increase visibility**, not retirement
 - **Moderate usage + good CR**: Content quality is fine → **Increase visibility**, not retirement
@@ -406,14 +406,16 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 - Players per Month: 12 (BELOW baseline)
 - Completion Rate: 55% (HIGH)
 - Completions: 53
-- MT Opportunity: $8K (BELOW)
+- MT Opportunity: $15K (BASELINE)
+- MT Won: $0 (BELOW)
 - Has Page: Yes
 - L90 Players: 0 (no L90 data)
+- Metrics Mapping Status: "Shared display-key" (valid)
 
 **Signals**:
 - Usage: BELOW (12 ppm)
 - CR: HIGH (55%)
-- MT: BELOW ($8K)
+- MT: BASELINE ($15K)
 - Signal count: 1/3 (CR only, HIGH count = 1)
 - Maturity: ESTABLISHED
 - Trend: Unknown (no L90 data)
@@ -469,8 +471,8 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 **Scenario**: Underperforming content with no strong signals
 
 **Metrics**:
-- Active Months: 6
-- Content Age: 18 months (MATURE)
+- Active Months: 6 (ESTABLISHED activity maturity)
+- Content Age: 18 months (MATURE content age)
 - Total Players: 48
 - Players per Month: 8 (BELOW baseline)
 - Completion Rate: 23% (BELOW baseline)
@@ -479,7 +481,7 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 - MT Won: $0 (BELOW)
 - Has Page: No
 - L90 Players: 0 (no L90 data)
-- Last activity: >90 days ago
+- Last Activity Month: (unavailable)
 - Metrics Mapping Status: "Shared display-key" (valid)
 
 **Signals**:
@@ -487,18 +489,19 @@ Even then, retirement is **recommended**, not automatic. Human review decides fi
 - CR: BELOW (23%)
 - MT: BELOW ($3K)
 - Signal count: 0/3 (no BASE or HIGH, HIGH count = 0)
-- Maturity: MATURE (18 months)
+- Activity maturity: ESTABLISHED (6 active months)
+- Content age: MATURE (18 months since lifecycle start)
 - Recovery: Not active
-- Trend: Unknown (no L90 data, last activity >90 days ago)
+- Trend: Unknown (no L90 data, Last Activity Month unavailable)
 
 **Flags**: `Low completion`
 
 **Recommendation**: **Consider retirement**
 - **Why**: This demo is flagged for retirement — review the demo page and consider updating or confirming retirement
-- **Priority**: Low (0 HIGH signals, MATURE age, but no declining trend)
+- **Priority**: Medium (0 HIGH signals, but MATURE content age bumps Low → Medium)
 - **Assigned**: Creator
 
-**What matters**: No positive signals (0/3), no recovery, MATURE age. Flagged for review, but **retirement is not automatic**.
+**What matters**: No positive signals (0/3), no recovery, MATURE content age triggers Medium priority. Flagged for review, but **retirement is not automatic**.
 
 ---
 
@@ -631,7 +634,7 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 - `ADMIN_ACTIONS_` (line 44) — `Create page`, `Increase visibility`, etc.
 
 **Test harness**:
-- `testPerformanceRules()` — Rule logic unit tests (300+ assertions)
+- `testPerformanceRules()` — Rule logic unit tests
 - `testProcessingAudit()` — Row classification and audit tests
 
 ### Missing-Data Handling
