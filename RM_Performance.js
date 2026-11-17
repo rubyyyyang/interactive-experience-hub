@@ -444,7 +444,8 @@ function computePerformanceSignals_(metrics, referenceDate) {
     recovery: { active: recoveryActive, ppm: recoveryPpm, cr: recoveryCr, mt: recoveryMt },
     hasAnyActivity: hasAnyActivity,
     count: count,
-    highCount: highCount
+    highCount: highCount,
+    totalPlayers: metrics.totalPlayers
   };
 }
 
@@ -543,18 +544,18 @@ function computePerformanceAction_(signals) {
   var hasLowCR = signals.cr.level === 'LOW' || signals.cr.level === 'BELOW';
   var hasHighMT = signals.mt.level === 'HIGH';
   var isNiche = signals.activeMonth.level === 'ESTABLISHED' && signals.usage.level === 'BELOW' && (signals.mt.level === 'HIGH' || signals.mt.level === 'BASE');
-  var isLowOpp = signals.hasPage && signals.hasMapping && signals.activeMonth.level === 'ESTABLISHED' && (hasHighUsage || hasHighCR) && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_OPP;
 
-  // A. Review data linkage / Boost sales impact
+  // Guard CR-dependent conditions with sample-size check
+  var hasSufficientPlayers = signals.totalPlayers >= PERF_THRESHOLDS.MIN_PLAYERS_FOR_RATE;
+  var hasReliableHighCR = hasHighCR && hasSufficientPlayers;
+
+  var isLowOpp = signals.hasPage && signals.hasMapping && signals.activeMonth.level === 'ESTABLISHED' && (hasHighUsage || hasReliableHighCR) && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_OPP;
+
+  // A. Review data linkage
   if (isNoActivity && signals.mt.level !== 'NONE') {
     return {
       action: 'Review data linkage',
       reason: 'Metrics don\'t add up — check the data linkage. ' + formatSignalFields_(signals, ['usage', 'mt'])    };
-  }
-  if (isLowOpp && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_WON) {
-    return {
-      action: 'Boost sales impact',
-      reason: 'Strong completion but low sales impact — review the demo page linking, CTAs, or sales alignment.' + formatSignalFields_(signals, ['usage', 'cr', 'mt'])    };
   }
 
   // B. Improve completion
@@ -572,30 +573,38 @@ function computePerformanceAction_(signals) {
       reason: 'Players start but don\'t finish — review the demo page flow and content.' + formatSignalFields_(signals, ['usage', 'cr'])    };
   }
 
-  // C. Create page
+  // C. Boost sales impact
+  if (isLowOpp && signals.mt.value < PERF_THRESHOLDS.BASELINE_MT_WON) {
+    return {
+      action: 'Boost sales impact',
+      reason: 'High engagement but low sales impact — review the demo page linking, CTAs, or sales alignment.' + formatSignalFields_(signals, ['usage', 'cr', 'mt'])    };
+  }
+
+  // D. Create page
   if (!signals.hasPage) {
     if (hasHighUsage || hasHighMT || isNiche ||
-        (hasHighCR && !isLowActivity)) {
+        (hasReliableHighCR && !isLowActivity)) {
       return {
         action: 'Create page',
         reason: 'This demo is performing well but has no page — create a redhat.com page. ' + formatSignalFields_(signals, ['usage', 'cr', 'mt', 'page'])      };
     }
   }
 
-  // D. Increase visibility
+  // E. Increase visibility
   if (isNiche && signals.hasPage) {
     return {
       action: 'Increase visibility',
       reason: 'Good content, low visibility — needs distribution. ' + formatSignalFields_(signals, ['usage', 'mt', 'activeMonth'])    };
   }
   if (!isNoActivity && !isNewContent && signals.usage.level === 'BELOW' &&
+      hasSufficientPlayers &&
       (signals.cr.level === 'HIGH' || signals.cr.level === 'BASE')) {
     return {
       action: 'Increase visibility',
       reason: 'Good content, low visibility — needs distribution. ' + formatSignalFields_(signals, ['usage', 'cr'])    };
   }
 
-  // D2. Increase visibility — 3/3 all-time signals but declining or stale
+  // E2. Increase visibility — 3/3 all-time signals but declining or stale
   if ((signals.trend === 'declining' || signals.trend === 'stale') && !isLowActivity && !isNoActivity && !isNewContent) {
     if (signals.count === 3) {
       return {
@@ -604,7 +613,7 @@ function computePerformanceAction_(signals) {
     }
   }
 
-  // E. Consider retirement
+  // F. Consider retirement
   if (isLowActivity && !hasHighCR && !hasHighMT && !isNiche) {
     return {
       action: 'Consider retirement',
@@ -627,14 +636,14 @@ function computePerformanceAction_(signals) {
       reason: 'This demo is flagged for retirement — review the demo page and consider updating or confirming retirement.' + formatSignalFields_(signals, ['activeMonth', 'usage', 'mt'])    };
   }
 
-  // F. Needs review
+  // G. Needs review
   if (isNoActivity && signals.contentAge && !signals.contentAge.available) {
     return {
       action: 'Needs review',
       reason: 'System can\'t classify — needs manual review. ' + formatSignalFields_(signals, ['usage', 'contentAge'])    };
   }
 
-  // G. No action needed
+  // H. No action needed
   if (isNoActivity && signals.contentAge && signals.contentAge.level === 'NEW' &&
       signals.mt.level === 'NONE') {
     return {
@@ -1688,15 +1697,21 @@ function testPerformanceRules() {
   assert('Action: Review data linkage (no activity + MT)', arResult1.action, 'Review data linkage');
   assertHasReason('Reason: Review data linkage (no activity + MT)', arResult1);
 
+  // Test case updated: HIGH usage + LOW CR should trigger Improve completion, not Boost sales impact
   var arSig2 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 9000, mtWon: 2000, hasContentSpecificPage: true }, { trend: 'stable', contentAge: noActCA });
   var arResult2 = computePerformanceAction_(arSig2);
-  assert('Action: Boost sales impact (High usage + page + low MT)', arResult2.action, 'Boost sales impact');
+  assert('Action: Improve completion wins over Boost sales impact (High usage + Low CR + page + low MT)', arResult2.action, 'Improve completion');
 
-  var arSig3 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: false }, { trend: 'stable' });
+  // Boost sales impact requires healthy CR
+  var arSig2b = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 9000, mtWon: 2000, hasContentSpecificPage: true }, { trend: 'stable', contentAge: noActCA });
+  var arResult2b = computePerformanceAction_(arSig2b);
+  assert('Action: Boost sales impact (High usage + healthy CR + page + low MT)', arResult2b.action, 'Boost sales impact');
+
+  var arSig3 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 10000, mtWon: 2000, hasContentSpecificPage: true, mtMappingValid: false }, { trend: 'stable' });
   var arResult3 = computePerformanceAction_(arSig3);
   assert('Action: No Boost sales impact (no mapping)', arResult3.action !== 'Boost sales impact', true);
 
-  var arSig4 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'stable' });
+  var arSig4 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 10000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'stable' });
   var arResult4 = computePerformanceAction_(arSig4);
   assert('Action: No Boost sales impact (MT won >= $10K)', arResult4.action !== 'Boost sales impact', true);
 
@@ -1714,11 +1729,40 @@ function testPerformanceRules() {
   var rcResult3 = computePerformanceAction_(rcSig3);
   assert('Action: New content skips Improve completion despite High usage + Low CR', rcResult3.action, 'No action needed');
 
-  // C. Create page
+  // Regression: HIGH usage + LOW CR + no page → Improve completion wins over Create page
+  var rcSig4 = testSignals_({ playersPerMonth: 25, completions: 10, completionRate: 0.20, mtOpp: 10000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var rcResult4 = computePerformanceAction_(rcSig4);
+  assert('Action: Improve completion wins over Create page (High usage + Low CR + no page)', rcResult4.action, 'Improve completion');
+
+  // C. Boost sales impact (now after Improve completion)
+  var bsSig1 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 9000, mtWon: 2000, hasContentSpecificPage: true }, { trend: 'stable' });
+  var bsResult1 = computePerformanceAction_(bsSig1);
+  assert('Action: Boost sales impact (High usage + BASE CR + page + low MT)', bsResult1.action, 'Boost sales impact');
+
+  var bsSig2 = testSignals_({ playersPerMonth: 22, completions: 100, completionRate: 0.55, mtOpp: 9000, mtWon: 2000, hasContentSpecificPage: true }, { trend: 'stable' });
+  var bsResult2 = computePerformanceAction_(bsSig2);
+  assert('Action: Boost sales impact (BASE usage + HIGH CR + page + low MT)', bsResult2.action, 'Boost sales impact');
+
+  // D. Create page
   var cpSig1 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
   var cpResult1 = computePerformanceAction_(cpSig1);
   assert('Action: Create page (High usage, no page)', cpResult1.action, 'Create page');
   assertHasReason('Reason: Create page', cpResult1);
+
+  // Sample-size guard: 24 Players + HIGH CR + no page + BELOW usage → insufficient sample
+  var cpSig1b = testSignals_({ playersPerMonth: 10, totalPlayers: 24, completions: 13, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var cpResult1b = computePerformanceAction_(cpSig1b);
+  assert('Action: 24 Players + High CR + no page + BELOW usage → No action needed (insufficient sample)', cpResult1b.action, 'No action needed');
+
+  // Sample-size guard: 25 Players + HIGH CR + no page + BELOW usage → Create page (sufficient sample)
+  var cpSig1c = testSignals_({ playersPerMonth: 10, totalPlayers: 25, completions: 14, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var cpResult1c = computePerformanceAction_(cpSig1c);
+  assert('Action: 25 Players + High CR + no page + BELOW usage → Create page', cpResult1c.action, 'Create page');
+
+  // Sample-size guard: 24 Players + HIGH CR + page + BELOW usage → insufficient sample for CR-dependent Increase visibility
+  var cpSig1d = testSignals_({ playersPerMonth: 10, totalPlayers: 24, completions: 13, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true }, { trend: 'stable' });
+  var cpResult1d = computePerformanceAction_(cpSig1d);
+  assert('Action: 24 Players + High CR + page + BELOW usage → No action needed (insufficient sample)', cpResult1d.action, 'No action needed');
 
   var cpSig2 = testSignals_({ playersPerMonth: 10, completions: 40, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
   var cpResult2 = computePerformanceAction_(cpSig2);
@@ -1736,7 +1780,7 @@ function testPerformanceRules() {
   var cpResult5 = computePerformanceAction_(cpSig5);
   assert('Action: BASE usage + no page → No action needed (not Create page)', cpResult5.action, 'No action needed');
 
-  // D. Increase visibility
+  // E. Increase visibility
   var npSig1 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 60000, mtWon: 500, hasContentSpecificPage: true }, { trend: 'stable' });
   var npResult1 = computePerformanceAction_(npSig1);
   assert('Action: Increase visibility (niche, has page)', npResult1.action, 'Increase visibility');
@@ -1745,6 +1789,11 @@ function testPerformanceRules() {
   var npSig2 = testSignals_({ playersPerMonth: 10, completions: 30, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
   var npResult2 = computePerformanceAction_(npSig2);
   assert('Action: Increase visibility (Low activity + baseline CR)', npResult2.action, 'Increase visibility');
+
+  // Sample-size guard: 60 Players + BASE CR + BELOW usage → Increase visibility (sufficient sample)
+  var npSig2b = testSignals_({ playersPerMonth: 10, totalPlayers: 60, completions: 27, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var npResult2b = computePerformanceAction_(npSig2b);
+  assert('Action: 60 Players + BASE CR + BELOW usage → Increase visibility', npResult2b.action, 'Increase visibility');
 
   // D2. Increase visibility — 3/3 all-time signals + declining/stale
   var d2Sig = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'declining' });
@@ -1771,7 +1820,7 @@ function testPerformanceRules() {
   var d2FixableWins = computePerformanceAction_(d2SigFixable);
   assert('Action: 3/3 + declining + High usage + Low CR → Improve completion wins', d2FixableWins.action, 'Improve completion');
 
-  // E. Consider retirement
+  // F. Consider retirement
   var retSig1 = testSignals_({ playersPerMonth: 10, completions: 5, completionRate: 0.20, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
   var retResult1 = computePerformanceAction_(retSig1);
   assert('Action: Consider retirement (Low activity, no positive signals)', retResult1.action, 'Consider retirement');
@@ -1785,13 +1834,13 @@ function testPerformanceRules() {
   var retResult3 = computePerformanceAction_(retSig3);
   assert('Action: Consider retirement (No activity + age >3 + no page + MT=0)', retResult3.action, 'Consider retirement');
 
-  // F. Needs review
+  // G. Needs review
   var nhrSig = testSignals_({ activeMonths: 0, totalPlayers: 0, playersPerMonth: 0, completions: 0, completionRate: 0, mtOpp: 0, mtWon: 0, hasContentSpecificPage: false, firstActivityMonth: null, lastActivityMonth: null }, { contentAge: noActCAUnavail });
   var nhrResult2 = computePerformanceAction_(nhrSig);
   assert('Action: Needs review (age unavailable)', nhrResult2.action, 'Needs review');
   assert('Reason: age unavailable mentions manual review', nhrResult2.reason.indexOf('manual review') !== -1, true);
 
-  // G. No action needed
+  // H. No action needed
   var keepSig1 = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'stable' });
   var keepResult1 = computePerformanceAction_(keepSig1);
   assert('Action: No action needed (strong signals)', keepResult1.action, 'No action needed');
@@ -2028,7 +2077,7 @@ function testProcessingAudit() {
   function makeFullDataRow(overrides) {
     var base = {};
     base[ENHANCED_CONFIG.COLUMNS.NUMBER] = '100';
-    base[ENHANCED_CONFIG.COLUMNS.STATUS] = 'Demo Published';
+    base[ENHANCED_CONFIG.COLUMNS.STATUS] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
     base[ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE] = 'Test Demo';
     base[PERF_METRIC_COLUMNS.ACTIVE_MONTHS] = 6;
     base[PERF_METRIC_COLUMNS.TOTAL_PLAYERS] = 150;
@@ -2115,7 +2164,7 @@ function testProcessingAudit() {
   // --- Demo Retired → Skipped ---
   var retiredRow = makeRow({});
   retiredRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '60';
-  retiredRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Retired';
+  retiredRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_RETIRED;
   var rRetired = classifyRow_(retiredRow, hm, {}, referenceDate);
   assert('Audit: Demo Retired → Skipped', rRetired.result, 'Skipped — Status = Demo Retired');
   assert('Audit: Demo Retired clears Signals', rRetired.signals, '');
@@ -2124,13 +2173,13 @@ function testProcessingAudit() {
   // --- Closed → Skipped ---
   var closedRow = makeRow({});
   closedRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '64';
-  closedRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Closed';
+  closedRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.CLOSED;
   assert('Audit: Closed → Skipped', classifyRow_(closedRow, hm, {}, referenceDate).result, 'Skipped — Status = Closed');
 
   // --- Note = Delete row → Skipped ---
   var deleteRow = makeRow({});
   deleteRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '99';
-  deleteRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  deleteRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   deleteRow[hm[ENHANCED_CONFIG.COLUMNS.NOTE]] = 'Delete row';
   var rDelete = classifyRow_(deleteRow, hm, {}, referenceDate);
   assert('Audit: Note = Delete row → Skipped', rDelete.result, 'Skipped — Note = Delete row');
@@ -2142,7 +2191,7 @@ function testProcessingAudit() {
 
   // --- Missing identifier → Needs review ---
   var noIdRow = makeRow({});
-  noIdRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noIdRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noIdRow[hm[ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE]] = 'No Number';
   noIdRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 6;
   noIdRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 100;
@@ -2212,7 +2261,7 @@ function testProcessingAudit() {
   // --- No activity tests ---
   var noActMTRow = makeRow({});
   noActMTRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '300';
-  noActMTRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActMTRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActMTRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActMTRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActMTRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2224,7 +2273,7 @@ function testProcessingAudit() {
 
   var noActScoreRow = makeRow({});
   noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '310';
-  noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActScoreRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActScoreRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActScoreRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2238,7 +2287,7 @@ function testProcessingAudit() {
 
   var noActYoungRow = makeRow({});
   noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '301';
-  noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActYoungRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActYoungRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActYoungRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2251,7 +2300,7 @@ function testProcessingAudit() {
 
   var noActOldPageRow = makeRow({});
   noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '302';
-  noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2265,7 +2314,7 @@ function testProcessingAudit() {
 
   var noActOldNoPageRow = makeRow({});
   noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '303';
-  noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2278,7 +2327,7 @@ function testProcessingAudit() {
 
   var noActNoAge = makeRow({});
   noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '304';
-  noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActNoAge[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActNoAge[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActNoAge[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2293,7 +2342,7 @@ function testProcessingAudit() {
   // --- Stale activity → Retire ---
   var staleRow = makeRow({});
   staleRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '350';
-  staleRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  staleRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   staleRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 2;
   staleRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 20;
   staleRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 10;
@@ -2308,6 +2357,7 @@ function testProcessingAudit() {
   assert('Audit: Stale activity → reason mentions retirement', rStale.reason.indexOf('flagged for retirement') !== -1, true);
 
   // --- Low opp value end-to-end ---
+  // HIGH usage (25 ppm) + LOW CR (20%) + page → Improve completion (precedence fix)
   var lowOppRow = makeFullDataRow({});
   lowOppRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '95';
   lowOppRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 9000;
@@ -2316,7 +2366,7 @@ function testProcessingAudit() {
   lowOppRow[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.20;
   lowOppRow[hm[PERF_METRIC_COLUMNS.DRUPAL_PAGE_URL]] = 'https://www.redhat.com/en/interactive-experiences/my-demo';
   var rLowOpp = classifyRow_(lowOppRow, hm, {}, referenceDate);
-  assert('Audit: Low opp + low MT won → Boost sales impact', rLowOpp.action, 'Boost sales impact');
+  assert('Audit: HIGH usage + LOW CR + page → Improve completion', rLowOpp.action, 'Improve completion');
   assert('Audit: Low opp flag present', rLowOpp.flags.indexOf('Low opportunity value') !== -1, true);
 
   var lowOppHighWon = makeFullDataRow({});
@@ -2395,7 +2445,7 @@ function testProcessingAudit() {
   // --- No activity + blank rate ---
   var noActBlankRateOld = makeRow({});
   noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '305';
-  noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 0;
@@ -2408,7 +2458,7 @@ function testProcessingAudit() {
 
   var noActBlankRateNew = makeRow({});
   noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '306';
-  noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 0;
@@ -2422,7 +2472,7 @@ function testProcessingAudit() {
   // --- Low activity + blank rate ---
   var lowActBlankRate = makeRow({});
   lowActBlankRate[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '307';
-  lowActBlankRate[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  lowActBlankRate[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 5;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 0;
