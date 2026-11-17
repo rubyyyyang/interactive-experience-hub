@@ -197,23 +197,25 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 **Rule order**:
 1. **Review data linkage** — No activity + MT value >$0
-2. **Boost sales impact** — ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR) + selected MT value <$10K
-3. **Improve completion** — (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR)
-4. **Create page** — (HIGH usage OR HIGH CR OR HIGH MT OR High-value niche flag) + no page
-5. **Increase visibility** — High-value niche flag + page OR BELOW usage + (HIGH/BASE CR) OR 3/3 signals + declining/stale trend
+2. **Improve completion** — (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR)
+3. **Boost sales impact** — ESTABLISHED + page + valid mapping + (HIGH usage OR reliable HIGH CR) + selected MT value <$10K
+4. **Create page** — (HIGH usage OR reliable HIGH CR OR HIGH MT OR High-value niche flag) + no page
+5. **Increase visibility** — High-value niche flag + page OR (BELOW usage + reliable HIGH/BASE CR) OR 3/3 signals + declining/stale trend
 6. **Consider retirement** — ESTABLISHED + 0/3 signals + no recovery OR (Active Months = 0 AND Total Players = 0 AND Content Age >3 mo AND MT = $0) OR STALLED + BELOW usage + BELOW/NONE MT
 7. **Needs review** — Validation failure OR (no activity + Content Age unavailable)
 8. **No action needed** — Default (all other cases)
+
+**Key change**: `Improve completion` (#2) now evaluates before `Boost sales impact` (#3). Content with HIGH usage + LOW CR receives completion recommendations before sales optimization.
 
 ### Recommendation Table
 
 | Recommendation | Assigned | Conditions | Notes |
 |----------------|----------|------------|-------|
 | **Review data linkage** | Admin | No activity + MT >$0 | Data integrity check |
-| **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR) + selected MT value <$10K | Requires mtMappingValid; mt.value is opp or won |
-| **Improve completion** | Creator | (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR) | NEW excluded from HIGH usage branch only |
-| **Create page** | Admin | (HIGH usage OR HIGH CR OR HIGH MT OR High-value niche flag) + no page | Performing content needs page |
-| **Increase visibility** | Admin | High-value niche flag + page OR BELOW usage + (HIGH/BASE CR) OR 3/3 signals + declining/stale trend | Increase distribution |
+| **Improve completion** | Creator | (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR) | **Precedence**: Evaluates before Boost sales impact. NEW excluded from HIGH usage branch only |
+| **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (HIGH usage OR reliable HIGH CR) + selected MT value <$10K | Requires mtMappingValid; mt.value is opp or won. **Reliable HIGH CR**: Total Players ≥25 |
+| **Create page** | Admin | (HIGH usage OR reliable HIGH CR OR HIGH MT OR High-value niche flag) + no page | Performing content needs page. **Reliable HIGH CR**: Total Players ≥25. Independent paths (HIGH usage, HIGH MT, niche) do not require CR guard |
+| **Increase visibility** | Admin | High-value niche flag + page OR (BELOW usage + reliable HIGH/BASE CR) OR 3/3 signals + declining/stale trend | Increase distribution. **Reliable CR**: Total Players ≥25 for BELOW usage path. Niche path is independent |
 | **Consider retirement** | Creator | (1) ESTABLISHED + 0/3 signals + no recovery OR (2) Active Months = 0 AND Total Players = 0 AND Content Age >3 mo AND MT = $0 OR (3) STALLED + BELOW usage + BELOW/NONE MT | Flagged for review |
 | **Needs review** | Admin | Validation failure OR (no activity + Content Age unavailable) | classifyRow_() failures + computePerformanceAction_() edge case |
 | **No action needed** | — | All other cases | Does not imply content passed quality review |
@@ -222,6 +224,35 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 - Creator actions: `Improve completion`, `Consider retirement`
 - Admin actions: `Create page`, `Increase visibility`, `Review data linkage`, `Boost sales impact`, `Needs review`
 - No action needed: Assigned field empty
+
+### CR Sample-Size Guard (25-Player Minimum)
+
+**Requirement**: CR-dependent recommendation paths require **Total Players ≥25** to prevent unreliable HIGH CR signals from triggering actions.
+
+**Applies to**:
+1. **Boost sales impact** — Requires reliable HIGH CR when no HIGH usage present
+   - `(HIGH usage OR reliable HIGH CR) + page + low MT` → Boost sales impact
+   - If Total Players <25, HIGH CR is not considered reliable for this path
+   
+2. **Create page** (HIGH CR path only) — Requires reliable HIGH CR when no other qualifying signals
+   - `reliable HIGH CR + no page` → Create page
+   - Independent paths (HIGH usage, HIGH MT, niche) do NOT require CR guard
+   
+3. **Increase visibility** (BELOW usage path) — Requires sufficient players for CR-dependent path
+   - `BELOW usage + (HIGH/BASE CR) + Total Players ≥25` → Increase visibility
+   - Niche path (`ESTABLISHED + BELOW usage + HIGH/BASE MT + page`) is independent, no CR guard
+
+**Does NOT apply to** (independent paths):
+- **HIGH usage** → Always qualifies for Create page, Boost sales impact (no CR requirement)
+- **HIGH MT** → Always qualifies for Create page (no CR requirement)
+- **High-value niche** → Always qualifies for Create page, Increase visibility (no CR requirement)
+
+**Example boundary behavior**:
+- 24 Total Players + CR 55% (HIGH) + no page + BELOW usage → `No action needed` (insufficient sample)
+- 25 Total Players + CR 55% (HIGH) + no page + BELOW usage → `Create page` (reliable HIGH CR)
+- 10 Total Players + 30 ppm (HIGH usage) + no page → `Create page` (independent HIGH usage path, no CR guard)
+
+**Threshold**: `MIN_PLAYERS_FOR_RATE = 25` (line 66 in RM_Performance.js)
 
 ### Priority Calculation
 
@@ -309,7 +340,29 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 ---
 
-### Example 5: Recovery Active → No Action Needed
+### Example 5: Precedence Fix — Improve Completion Before Boost Sales Impact
+
+**Metrics**:
+- Active Months: 6 (ESTABLISHED), Total Players: 150, ppm: 25 (HIGH)
+- CR: 20% (LOW), Completions: 30
+- MT Opportunity: $9K (BELOW), MT Won: $2K (BELOW)
+- Has Page: Yes, Metrics Mapping Status: Valid
+
+**Signals**: Usage HIGH, CR LOW, MT BELOW → 1/3 (usage only, HIGH count = 1)
+
+**Flags**: `High usage`, `Low completion`, `Low opportunity value`
+
+**Recommendation**: **Improve completion** (Priority: Medium, Assigned: Creator)
+
+**Why**: Despite having a page with low MT (which triggers "Low opportunity value" flag), **Improve completion evaluates first** (#2 in precedence) and wins over Boost sales impact (#3). Fix completion issues before optimizing sales impact.
+
+**Before precedence fix**: This scenario would have returned `Boost sales impact` because it was checked before `Improve completion`.
+
+**After precedence fix**: `Improve completion` now correctly takes priority. LOW CR issues must be fixed before attempting sales optimization.
+
+---
+
+### Example 6: Recovery Active → No Action Needed
 
 **Scenario**: ESTABLISHED content (10 active months) with 0/3 all-time signals but recent L90 improvement.
 
