@@ -2077,7 +2077,7 @@ function testProcessingAudit() {
   function makeFullDataRow(overrides) {
     var base = {};
     base[ENHANCED_CONFIG.COLUMNS.NUMBER] = '100';
-    base[ENHANCED_CONFIG.COLUMNS.STATUS] = 'Demo Published';
+    base[ENHANCED_CONFIG.COLUMNS.STATUS] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
     base[ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE] = 'Test Demo';
     base[PERF_METRIC_COLUMNS.ACTIVE_MONTHS] = 6;
     base[PERF_METRIC_COLUMNS.TOTAL_PLAYERS] = 150;
@@ -2164,7 +2164,7 @@ function testProcessingAudit() {
   // --- Demo Retired → Skipped ---
   var retiredRow = makeRow({});
   retiredRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '60';
-  retiredRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Retired';
+  retiredRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_RETIRED;
   var rRetired = classifyRow_(retiredRow, hm, {}, referenceDate);
   assert('Audit: Demo Retired → Skipped', rRetired.result, 'Skipped — Status = Demo Retired');
   assert('Audit: Demo Retired clears Signals', rRetired.signals, '');
@@ -2173,13 +2173,13 @@ function testProcessingAudit() {
   // --- Closed → Skipped ---
   var closedRow = makeRow({});
   closedRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '64';
-  closedRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Closed';
+  closedRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.CLOSED;
   assert('Audit: Closed → Skipped', classifyRow_(closedRow, hm, {}, referenceDate).result, 'Skipped — Status = Closed');
 
   // --- Note = Delete row → Skipped ---
   var deleteRow = makeRow({});
   deleteRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '99';
-  deleteRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  deleteRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   deleteRow[hm[ENHANCED_CONFIG.COLUMNS.NOTE]] = 'Delete row';
   var rDelete = classifyRow_(deleteRow, hm, {}, referenceDate);
   assert('Audit: Note = Delete row → Skipped', rDelete.result, 'Skipped — Note = Delete row');
@@ -2191,7 +2191,7 @@ function testProcessingAudit() {
 
   // --- Missing identifier → Needs review ---
   var noIdRow = makeRow({});
-  noIdRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noIdRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noIdRow[hm[ENHANCED_CONFIG.COLUMNS.FINAL_DEMO_TITLE]] = 'No Number';
   noIdRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 6;
   noIdRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 100;
@@ -2261,7 +2261,7 @@ function testProcessingAudit() {
   // --- No activity tests ---
   var noActMTRow = makeRow({});
   noActMTRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '300';
-  noActMTRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActMTRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActMTRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActMTRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActMTRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2273,7 +2273,7 @@ function testProcessingAudit() {
 
   var noActScoreRow = makeRow({});
   noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '310';
-  noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActScoreRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActScoreRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActScoreRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActScoreRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2287,7 +2287,7 @@ function testProcessingAudit() {
 
   var noActYoungRow = makeRow({});
   noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '301';
-  noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActYoungRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActYoungRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActYoungRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActYoungRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2300,7 +2300,7 @@ function testProcessingAudit() {
 
   var noActOldPageRow = makeRow({});
   noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '302';
-  noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActOldPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActOldPageRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2314,7 +2314,7 @@ function testProcessingAudit() {
 
   var noActOldNoPageRow = makeRow({});
   noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '303';
-  noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActOldNoPageRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActOldNoPageRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2327,7 +2327,7 @@ function testProcessingAudit() {
 
   var noActNoAge = makeRow({});
   noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '304';
-  noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActNoAge[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActNoAge[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActNoAge[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActNoAge[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = '';
@@ -2342,7 +2342,7 @@ function testProcessingAudit() {
   // --- Stale activity → Retire ---
   var staleRow = makeRow({});
   staleRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '350';
-  staleRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  staleRow[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   staleRow[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 2;
   staleRow[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 20;
   staleRow[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 10;
@@ -2357,6 +2357,7 @@ function testProcessingAudit() {
   assert('Audit: Stale activity → reason mentions retirement', rStale.reason.indexOf('flagged for retirement') !== -1, true);
 
   // --- Low opp value end-to-end ---
+  // HIGH usage (25 ppm) + LOW CR (20%) + page → Improve completion (precedence fix)
   var lowOppRow = makeFullDataRow({});
   lowOppRow[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '95';
   lowOppRow[hm[PERF_METRIC_COLUMNS.MT_OPP_VALUE]] = 9000;
@@ -2365,7 +2366,7 @@ function testProcessingAudit() {
   lowOppRow[hm[PERF_METRIC_COLUMNS.COMPLETION_RATE]] = 0.20;
   lowOppRow[hm[PERF_METRIC_COLUMNS.DRUPAL_PAGE_URL]] = 'https://www.redhat.com/en/interactive-experiences/my-demo';
   var rLowOpp = classifyRow_(lowOppRow, hm, {}, referenceDate);
-  assert('Audit: Low opp + low MT won → Boost sales impact', rLowOpp.action, 'Boost sales impact');
+  assert('Audit: HIGH usage + LOW CR + page → Improve completion', rLowOpp.action, 'Improve completion');
   assert('Audit: Low opp flag present', rLowOpp.flags.indexOf('Low opportunity value') !== -1, true);
 
   var lowOppHighWon = makeFullDataRow({});
@@ -2444,7 +2445,7 @@ function testProcessingAudit() {
   // --- No activity + blank rate ---
   var noActBlankRateOld = makeRow({});
   noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '305';
-  noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActBlankRateOld[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActBlankRateOld[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 0;
@@ -2457,7 +2458,7 @@ function testProcessingAudit() {
 
   var noActBlankRateNew = makeRow({});
   noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '306';
-  noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  noActBlankRateNew[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 0;
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   noActBlankRateNew[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 0;
@@ -2471,7 +2472,7 @@ function testProcessingAudit() {
   // --- Low activity + blank rate ---
   var lowActBlankRate = makeRow({});
   lowActBlankRate[hm[ENHANCED_CONFIG.COLUMNS.NUMBER]] = '307';
-  lowActBlankRate[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = 'Demo Published';
+  lowActBlankRate[hm[ENHANCED_CONFIG.COLUMNS.STATUS]] = ENHANCED_CONFIG.STATUS.DEMO_PUBLISHED;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.ACTIVE_MONTHS]] = 5;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.TOTAL_PLAYERS]] = 0;
   lowActBlankRate[hm[PERF_METRIC_COLUMNS.PLAYERS_PER_MONTH]] = 0;
