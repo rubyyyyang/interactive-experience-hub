@@ -597,6 +597,7 @@ function computePerformanceAction_(signals) {
       reason: 'Good content, low visibility — needs distribution. ' + formatSignalFields_(signals, ['usage', 'mt', 'activeMonth'])    };
   }
   if (!isNoActivity && !isNewContent && signals.usage.level === 'BELOW' &&
+      hasSufficientPlayers &&
       (signals.cr.level === 'HIGH' || signals.cr.level === 'BASE')) {
     return {
       action: 'Increase visibility',
@@ -1748,19 +1749,24 @@ function testPerformanceRules() {
   assert('Action: Create page (High usage, no page)', cpResult1.action, 'Create page');
   assertHasReason('Reason: Create page', cpResult1);
 
-  // Sample-size guard: 24 Players + HIGH CR → insufficient sample, no CR-dependent action
-  var cpSig1b = testSignals_({ playersPerMonth: 10, totalPlayers: 24, completions: 20, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  // Sample-size guard: 24 Players + HIGH CR + no page + BELOW usage → insufficient sample
+  var cpSig1b = testSignals_({ playersPerMonth: 10, totalPlayers: 24, completions: 13, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
   var cpResult1b = computePerformanceAction_(cpSig1b);
-  assert('Action: 24 Players + High CR + no page → No action needed (insufficient sample)', cpResult1b.action, 'No action needed');
+  assert('Action: 24 Players + High CR + no page + BELOW usage → No action needed (insufficient sample)', cpResult1b.action, 'No action needed');
+
+  // Sample-size guard: 25 Players + HIGH CR + no page + BELOW usage → Create page (sufficient sample)
+  var cpSig1c = testSignals_({ playersPerMonth: 10, totalPlayers: 25, completions: 14, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  var cpResult1c = computePerformanceAction_(cpSig1c);
+  assert('Action: 25 Players + High CR + no page + BELOW usage → Create page', cpResult1c.action, 'Create page');
+
+  // Sample-size guard: 24 Players + HIGH CR + page + BELOW usage → insufficient sample for CR-dependent Increase visibility
+  var cpSig1d = testSignals_({ playersPerMonth: 10, totalPlayers: 24, completions: 13, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: true }, { trend: 'stable' });
+  var cpResult1d = computePerformanceAction_(cpSig1d);
+  assert('Action: 24 Players + High CR + page + BELOW usage → No action needed (insufficient sample)', cpResult1d.action, 'No action needed');
 
   var cpSig2 = testSignals_({ playersPerMonth: 10, completions: 40, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
   var cpResult2 = computePerformanceAction_(cpSig2);
   assert('Action: Create page (High CR, no page)', cpResult2.action, 'Create page');
-
-  // Sample-size guard: 25 Players + HIGH CR + no page + BELOW usage → Create page (sufficient sample)
-  var cpSig2b = testSignals_({ playersPerMonth: 10, totalPlayers: 25, completions: 20, completionRate: 0.55, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
-  var cpResult2b = computePerformanceAction_(cpSig2b);
-  assert('Action: 25 Players + High CR + no page + BELOW usage → Create page', cpResult2b.action, 'Create page');
 
   var cpSig3 = testSignals_({ playersPerMonth: 10, completions: 10, completionRate: 0.50, mtOpp: 150000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
   var cpResult3 = computePerformanceAction_(cpSig3);
@@ -1784,10 +1790,10 @@ function testPerformanceRules() {
   var npResult2 = computePerformanceAction_(npSig2);
   assert('Action: Increase visibility (Low activity + baseline CR)', npResult2.action, 'Increase visibility');
 
-  // BELOW usage + BASE CR path does NOT require sample-size guard (existing behavior)
-  var npSig2b = testSignals_({ playersPerMonth: 10, totalPlayers: 60, completions: 30, completionRate: 0.35, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
+  // Sample-size guard: 60 Players + BASE CR + BELOW usage → Increase visibility (sufficient sample)
+  var npSig2b = testSignals_({ playersPerMonth: 10, totalPlayers: 60, completions: 27, completionRate: 0.45, mtOpp: 1000, mtWon: 500, hasContentSpecificPage: false }, { trend: 'stable' });
   var npResult2b = computePerformanceAction_(npSig2b);
-  assert('Action: 60 Players + BASE CR + BELOW usage + no page → Increase visibility', npResult2b.action, 'Increase visibility');
+  assert('Action: 60 Players + BASE CR + BELOW usage → Increase visibility', npResult2b.action, 'Increase visibility');
 
   // D2. Increase visibility — 3/3 all-time signals + declining/stale
   var d2Sig = testSignals_({ playersPerMonth: 25, completions: 50, completionRate: 0.45, mtOpp: 60000, mtWon: 15000, hasContentSpecificPage: true }, { trend: 'declining' });
