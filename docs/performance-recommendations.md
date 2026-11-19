@@ -137,12 +137,13 @@ NEW content is **excluded** from `Improve completion` action and always receives
 - BELOW: 20-39%
 - LOW: <20%
 
-**Minimum sample size for CR-dependent recommendations**:
-- **25 Total Players** required for:
-  - `Improve completion` paths that check for HIGH CR
+**Minimum sample size for HIGH CR-dependent recommendations**:
+- **25 Total Players** guard (`hasReliableHighCR`) required for:
   - `Boost sales impact` condition using HIGH CR
-  - `Increase visibility` path checking HIGH/BASE CR
-- Without 25+ players, CR-based conditions are skipped even if rate meets threshold
+  - `Create page` condition using HIGH CR
+  - `Increase visibility` BELOW-usage path checking HIGH/BASE CR
+- **Not guarded**: `Improve completion` uses LOW/BELOW CR without sample size check
+- Without 25+ players, guarded HIGH CR conditions are skipped even if rate meets threshold
 
 **Flag-specific requirements** (diagnostic, not used in recommendation rules):
 - **High engagement flag**: ≥50% CR AND ≥25 completions
@@ -242,10 +243,10 @@ Recommendations use **first-match precedence**. Rules are checked in order, firs
 | Recommendation | Assigned | Conditions | Notes |
 |----------------|----------|------------|-------|
 | **Review data linkage** | Admin | No activity + MT >$0 | Data integrity check |
-| **Improve completion** | Creator | (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR) | NEW excluded from HIGH usage branch only; no sample size check for HIGH usage path |
-| **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR with 25+ players) + selected MT value <$10K | Requires mtMappingValid; HIGH CR path requires 25+ Total Players |
-| **Create page** | Admin | (HIGH usage OR HIGH MT OR High-value niche OR (HIGH CR with 25+ players AND NOT low activity)) + no page | HIGH CR path requires 25+ Total Players |
-| **Increase visibility** | Admin | (High-value niche + page) OR (BELOW usage + (HIGH/BASE CR with 25+ players)) OR (3/3 signals + declining/stale trend) | CR path requires 25+ Total Players |
+| **Improve completion** | Creator | (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR) | Uses LOW/BELOW CR without sample size guard |
+| **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (HIGH usage OR hasReliableHighCR) + selected MT value <$10K | Requires mtMappingValid; hasReliableHighCR = HIGH CR + 25+ Total Players |
+| **Create page** | Admin | (HIGH usage OR HIGH MT OR High-value niche OR (hasReliableHighCR AND NOT low activity)) + no page | hasReliableHighCR = HIGH CR + 25+ Total Players |
+| **Increase visibility** | Admin | (High-value niche + page) OR (BELOW usage + hasSufficientPlayers + (HIGH/BASE CR)) OR (3/3 signals + declining/stale trend) | BELOW-usage CR path requires 25+ Total Players |
 | **Consider retirement** | Creator | (1) ESTABLISHED + 0/3 signals + no recovery AND NOT HIGH CR AND NOT HIGH MT AND NOT niche OR (2) no activity + Content Age >3 mo + MT = $0 OR (3) STALLED + BELOW usage + BELOW/NONE MT | Flagged for review; HIGH CR/MT/niche exemptions apply to path 1 only |
 | **Needs review** | Admin | Validation failure OR (no activity + Content Age unavailable) | classifyRow_() failures + computePerformanceAction_() edge case |
 | **No action needed** | — | All other cases | Does not imply content passed quality review |
@@ -404,15 +405,16 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 
 **Performance analysis engine**: [`RM_Performance.js`](../RM_Performance.js)
 - `runPerformanceLabels()` — Main entry point
-- `classifyRow_()` — Row classification (skipped/needs review/processed)
+- `classifyRow_()` — Row classification (skipped/needs review/processed) and applies Tier-based priority cap
 - `parseMetrics_()` — Parses metrics from row data, including page detection from both Drupal Page URL and RHAC page
-- `computePerformanceSignals_()` — Computes usage/CR/MT levels, Active Months level, page/mapping signals, recovery, trend, content age
+- `computePerformanceSignals_()` — Computes core signals: usage/CR/MT levels, Active Months level, page/mapping signals, recovery
+- `computeContentAge_()` — Calculates content age (months since Received or Published timestamp)
+- `computePerformanceTrend_()` — L90 trend (growing/stable/declining/stale/unknown) from L90 vs all-time comparison
 - `computePerformanceFlags_()` — Generates diagnostic performance flags independently from source metrics
-- `computePerformanceAction_()` — First-match rule precedence (evaluates Signals, not Flags)
-- `computePerformancePriority_()` — Priority assignment combining signals, trend, content age, and tier cap
+- `computePerformanceAction_()` — First-match rule precedence (evaluates Signals including contentAge and trend, not Flags)
+- `computePerformancePriority_()` — Initial priority assignment from signals, trend, content age
 - `computePerformanceScore_()` — Score (0-100) from signals, trend, maturity
 - `computePerformanceTier_()` — Tier (Top/Mid/Low/Inactive) from score
-- `computePerformanceTrend_()` — L90 trend (growing/stable/declining/stale/unknown)
 
 **Configuration**:
 - `PERF_THRESHOLDS` — Usage, CR, MT, trend, content age thresholds
