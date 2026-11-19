@@ -9,7 +9,7 @@ function test(name, cond) { if(cond){console.log(`✓ ${name}`);passed++;}else{c
 
 test('Best Practices → Google Doc', html.includes('13njLj4SYUbvaUwd0zoyt1Racpz8vR4Zz8H43IqkalLU'));
 test('The Source → source.redhat.com', html.includes('source.redhat.com/groups/private/arcade_demo_platform'));
-test('Analytics → Superset', html.includes('analytics.infra.demo.redhat.com/superset/dashboard/101'));
+test('Analytics → Superset dashboard 144', html.includes('analytics.infra.demo.redhat.com/superset/dashboard/144'));
 test('Public IE → redhat.com', html.includes('www.redhat.com/en/interactive-experiences'));
 test('Slack → C07HQMHFWQG (renamed to "Ask in Slack")', html.includes('slack.com/archives/C07HQMHFWQG') && html.includes('Ask in Slack'));
 test('Send Feedback → openFeedbackModal()', html.includes('openFeedbackModal(); closeAllDropdowns();'));
