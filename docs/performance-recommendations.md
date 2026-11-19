@@ -6,6 +6,14 @@ This documents **current implementation**, not formally approved business policy
 
 ---
 
+## Architecture Diagram
+
+![Performance Recommendation Engine Architecture](assets/performance-engine-diagram.svg)
+
+The diagram shows how source data flows through validation, signal computation, first-match recommendation rules, and produces both recommendation outputs (action, priority, assigned) and diagnostic outputs (flags, score, tier).
+
+---
+
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -71,13 +79,19 @@ See [Hub Runbook](runbook.md#manual-metrics-refresh) for refresh procedures.
 
 ### Processing Flow
 
-**Step 1: Parse metrics** — Active Months, Players, ppm (players per month), Completions, CR (completion rate), MT values (All-time MT Opportunity Value and MT Won Value), L90 data (last 90 days), Page URL, Metrics Mapping Status
+**Step 1: Row validation** — Skip ineligible rows (Retired, Closed, blank, Note="Delete row"). Check for required metrics presence.
 
-**Step 2: Compute signals** — Usage level (HIGH/BASE/BELOW), CR level (HIGH/BASE/BELOW/LOW), MT level (HIGH/BASE/BELOW/NONE), Active Months level (ESTABLISHED/NEW/STALLED/INACTIVE), Recovery check
+**Step 2: Parse metrics** — Active Months, Players, ppm (players per month), Completions, CR (completion rate), MT values (All-time MT Opportunity Value and MT Won Value), L90 data (last 90 days), Page URL (Drupal Page URL + RHAC page), Metrics Mapping Status
 
-**Step 3: Apply first-match recommendation rules** — First matching rule wins, one recommendation per demo
+**Step 3: Compute Performance Signals** — Usage level (HIGH/BASE/BELOW), CR level (HIGH/BASE/BELOW/LOW), MT level (HIGH/BASE/BELOW/NONE), Active Months level (ESTABLISHED/NEW/STALLED/INACTIVE), Page detection, MT mapping validity, Recovery check, L90 Trend, Content Age
 
-**Step 4: Write results** — Performance Signals, Flags, Recommended action, Priority, Score, Tier, Trend, Content Age, Action Status
+**Step 4: Apply first-match recommendation rules** — Recommendation rules evaluate **Performance Signals** (not Flags) using first-match precedence. First matching rule wins, one recommendation per demo.
+
+**Step 5: Calculate diagnostic outputs** — Performance Flags (independent calculation from source metrics), Performance Score → Performance Tier
+
+**Step 6: Calculate Action Priority** — Combines Signals, L90 Trend, and Content Age, with optional Tier-based priority cap
+
+**Step 7: Write results** — Performance Signals, Flags, Recommended action, Recommended action reason, Action Priority, Performance Score, Performance Tier, Performance L90 Trend, Content Age, Assigned, Action Status, Processing Result
 
 ### Output Columns
 
@@ -123,7 +137,14 @@ NEW content is **excluded** from `Improve completion` action and always receives
 - BELOW: 20-39%
 - LOW: <20%
 
-**Flag-specific requirements**:
+**Minimum sample size for CR-dependent recommendations**:
+- **25 Total Players** required for:
+  - `Improve completion` paths that check for HIGH CR
+  - `Boost sales impact` condition using HIGH CR
+  - `Increase visibility` path checking HIGH/BASE CR
+- Without 25+ players, CR-based conditions are skipped even if rate meets threshold
+
+**Flag-specific requirements** (diagnostic, not used in recommendation rules):
 - **High engagement flag**: ≥50% CR AND ≥25 completions
 - **Low completion flag**: ≥25 total players AND CR <40%
 
@@ -157,6 +178,12 @@ Status Received Timestamp checked first; if unavailable, Status Published Timest
 - RECENT: 4-12 months
 - MATURE: >12 months
 
+**Calculation**:
+```javascript
+var originDate = receivedTs || publishedTs;
+```
+Status Received Timestamp checked first; if unavailable, Status Published Timestamp.
+
 **Used for**:
 - Retirement condition: Content Age >3 months (not NEW) with zero activity and MT = $0 → `Consider retirement`
 - Priority bump: MATURE content (>12 months) with actionable recommendation → Medium priority
@@ -180,12 +207,15 @@ Status Received Timestamp checked first; if unavailable, Status Published Timest
 
 ### Page Availability
 
-**Has demo-specific page**: Drupal Page URL is a demo-specific redhat.com page (not generic listing, not arcade.redhat.com)
+**Has demo-specific page**: Either **Drupal Page URL** OR **RHAC page** contains a demo-specific redhat.com page (not generic listing, not arcade.redhat.com)
 
-**Page detection**:
+**Page detection** (`hasDemoSpecificPage_()` applied to both columns):
 - Demo-specific: `redhat.com/en/interactive-experiences/my-demo` → TRUE
+- Demo-specific RHAC: `redhat.com/architect/portfolio/detail/57-...` → TRUE
 - Generic listing: `redhat.com/en/interactive-experiences` → FALSE
 - Arcade URL: `arcade.redhat.com/...` → FALSE
+
+Page detection checks **both** `Drupal Page URL` and `RHAC page` columns. If either contains a valid demo-specific page, `hasContentSpecificPage` is TRUE.
 
 ---
 
@@ -193,15 +223,17 @@ Status Received Timestamp checked first; if unavailable, Status Published Timest
 
 ### First-Match Rule Precedence
 
-Recommendations use **first-match precedence**. Rules checked in order, first match wins.
+Recommendations use **first-match precedence**. Rules are checked in order, first match wins, producing one recommendation per demo.
 
-**Rule order**:
+**Rule evaluation uses Performance Signals**, not Performance Flags. Flags are diagnostic outputs calculated independently from source metrics.
+
+**Rule order** (`computePerformanceAction_()`):
 1. **Review data linkage** — No activity + MT value >$0
-2. **Boost sales impact** — ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR) + selected MT value <$10K
-3. **Improve completion** — (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR)
-4. **Create page** — (HIGH usage OR HIGH CR OR HIGH MT OR High-value niche flag) + no page
-5. **Increase visibility** — High-value niche flag + page OR BELOW usage + (HIGH/BASE CR) OR 3/3 signals + declining/stale trend
-6. **Consider retirement** — ESTABLISHED + 0/3 signals + no recovery OR (Active Months = 0 AND Total Players = 0 AND Content Age >3 mo AND MT = $0) OR STALLED + BELOW usage + BELOW/NONE MT
+2. **Improve completion** — (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR)
+3. **Boost sales impact** — ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR with 25+ players) + selected MT value <$10K
+4. **Create page** — (HIGH usage OR HIGH MT OR High-value niche OR (HIGH CR with 25+ players AND NOT low activity)) + no page
+5. **Increase visibility** — (High-value niche + page) OR (BELOW usage + (HIGH/BASE CR with 25+ players)) OR (3/3 signals + declining/stale trend)
+6. **Consider retirement** — (ESTABLISHED + 0/3 signals + no recovery AND NOT HIGH CR AND NOT HIGH MT AND NOT niche) OR (no activity + Content Age >3 mo + MT = $0) OR (STALLED + BELOW usage + BELOW/NONE MT)
 7. **Needs review** — Validation failure OR (no activity + Content Age unavailable)
 8. **No action needed** — Default (all other cases)
 
@@ -210,11 +242,11 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 | Recommendation | Assigned | Conditions | Notes |
 |----------------|----------|------------|-------|
 | **Review data linkage** | Admin | No activity + MT >$0 | Data integrity check |
-| **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR) + selected MT value <$10K | Requires mtMappingValid; mt.value is opp or won |
-| **Improve completion** | Creator | (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR) | NEW excluded from HIGH usage branch only |
-| **Create page** | Admin | (HIGH usage OR HIGH CR OR HIGH MT OR High-value niche flag) + no page | Performing content needs page |
-| **Increase visibility** | Admin | High-value niche flag + page OR BELOW usage + (HIGH/BASE CR) OR 3/3 signals + declining/stale trend | Increase distribution |
-| **Consider retirement** | Creator | (1) ESTABLISHED + 0/3 signals + no recovery OR (2) Active Months = 0 AND Total Players = 0 AND Content Age >3 mo AND MT = $0 OR (3) STALLED + BELOW usage + BELOW/NONE MT | Flagged for review |
+| **Improve completion** | Creator | (HIGH usage + LOW/BELOW CR AND NOT NEW) OR (ESTABLISHED + BASE usage + page + LOW/BELOW CR) | NEW excluded from HIGH usage branch only; no sample size check for HIGH usage path |
+| **Boost sales impact** | Admin | ESTABLISHED + page + valid mapping + (HIGH usage OR HIGH CR with 25+ players) + selected MT value <$10K | Requires mtMappingValid; HIGH CR path requires 25+ Total Players |
+| **Create page** | Admin | (HIGH usage OR HIGH MT OR High-value niche OR (HIGH CR with 25+ players AND NOT low activity)) + no page | HIGH CR path requires 25+ Total Players |
+| **Increase visibility** | Admin | (High-value niche + page) OR (BELOW usage + (HIGH/BASE CR with 25+ players)) OR (3/3 signals + declining/stale trend) | CR path requires 25+ Total Players |
+| **Consider retirement** | Creator | (1) ESTABLISHED + 0/3 signals + no recovery AND NOT HIGH CR AND NOT HIGH MT AND NOT niche OR (2) no activity + Content Age >3 mo + MT = $0 OR (3) STALLED + BELOW usage + BELOW/NONE MT | Flagged for review; HIGH CR/MT/niche exemptions apply to path 1 only |
 | **Needs review** | Admin | Validation failure OR (no activity + Content Age unavailable) | classifyRow_() failures + computePerformanceAction_() edge case |
 | **No action needed** | — | All other cases | Does not imply content passed quality review |
 
@@ -225,7 +257,7 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 ### Priority Calculation
 
-**Priority rules** (line 688-703 in RM_Performance.js):
+**Priority rules** (`computePerformancePriority_()`):
 - NEW content (`activeMonth.level === 'NEW'`) → Always `Low`
 - No action needed → Always `Low`
 - 2+ HIGH signals → `High`
@@ -235,6 +267,13 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 - MATURE Content Age (>12 months) → `Medium`
 - Default → `Low`
 - **Priority cap**: Performance Tier = Low caps High priority → Medium
+
+Priority combines:
+- **Signals** (count and highCount from Usage/CR/MT levels)
+- **L90 Trend** (declining/stale increases priority)
+- **Content Age** (MATURE bumps to Medium)
+- **Recommended action** (No action needed → Low)
+- **Performance Tier cap** (Low tier caps High → Medium)
 
 ---
 
@@ -249,11 +288,11 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 **Signals**: Usage HIGH, CR LOW, MT BELOW → 1/3 (usage only, HIGH count = 1)
 
-**Flags**: `High usage`, `Low completion`
+**Flags** (diagnostic): `High usage`, `Low completion`
 
 **Recommendation**: **Improve completion** (Priority: Medium, Assigned: Creator)
 
-**Why**: HIGH usage with LOW CR. Fix completion, not retirement.
+**Why**: First-match rule hit: HIGH usage + LOW CR + NOT NEW. The recommendation rules evaluate **Signals** (not Flags). Flags are diagnostic outputs showing notable performance patterns.
 
 ---
 
@@ -267,11 +306,11 @@ Recommendations use **first-match precedence**. Rules checked in order, first ma
 
 **Signals**: Usage BELOW, CR HIGH, MT BELOW → 1/3 (CR only, HIGH count = 1)
 
-**Flags**: `High engagement`
+**Flags** (diagnostic): `High engagement`
 
 **Recommendation**: **Increase visibility** (Priority: Medium, Assigned: Admin)
 
-**Why**: HIGH CR with BELOW usage. Increase distribution, not retirement.
+**Why**: First-match rule hit: BELOW usage + HIGH CR with 25+ Total Players. The 25-player sample size requirement is met (96 Total Players), so the HIGH CR signal is considered reliable for this recommendation.
 
 ---
 
@@ -366,14 +405,21 @@ See [Intake Status Tracker Lifecycle Workflow](https://github.com/rubyyyyang/int
 **Performance analysis engine**: [`RM_Performance.js`](../RM_Performance.js)
 - `runPerformanceLabels()` — Main entry point
 - `classifyRow_()` — Row classification (skipped/needs review/processed)
-- `parseMetrics_()` — Parses metrics from row data
-- `computePerformanceSignals_()` — Computes usage/CR/MT levels and Active Months level
-- `computePerformanceFlags_()` — Generates performance flags
-- `computePerformanceAction_()` — First-match rule precedence
-- `computePerformancePriority_()` — Priority assignment
-- `computePerformanceScore_()`, `computePerformanceTier_()`, `computePerformanceTrend_()`
+- `parseMetrics_()` — Parses metrics from row data, including page detection from both Drupal Page URL and RHAC page
+- `computePerformanceSignals_()` — Computes usage/CR/MT levels, Active Months level, page/mapping signals, recovery, trend, content age
+- `computePerformanceFlags_()` — Generates diagnostic performance flags independently from source metrics
+- `computePerformanceAction_()` — First-match rule precedence (evaluates Signals, not Flags)
+- `computePerformancePriority_()` — Priority assignment combining signals, trend, content age, and tier cap
+- `computePerformanceScore_()` — Score (0-100) from signals, trend, maturity
+- `computePerformanceTier_()` — Tier (Top/Mid/Low/Inactive) from score
+- `computePerformanceTrend_()` — L90 trend (growing/stable/declining/stale/unknown)
 
-**Thresholds**: `PERF_THRESHOLDS` (lines 64-79), `CREATOR_ACTIONS_` (line 43), `ADMIN_ACTIONS_` (line 44)
+**Configuration**:
+- `PERF_THRESHOLDS` — Usage, CR, MT, trend, content age thresholds
+- `CREATOR_ACTIONS_` — Actions assigned to creators
+- `ADMIN_ACTIONS_` — Actions assigned to admins
+- `PERF_LABEL_COLUMNS` — Output column names
+- `PERF_METRIC_COLUMNS` — Source metric column names
 
 **Test harness**: `testPerformanceRules()`, `testProcessingAudit()`
 

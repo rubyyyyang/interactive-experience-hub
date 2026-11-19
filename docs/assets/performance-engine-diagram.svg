@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="performance-engine-title performance-engine-desc">
+  <title id="performance-engine-title">Performance Recommendation Engine Architecture</title>
+  <desc id="performance-engine-desc">Flow diagram showing how source data is validated, analyzed into signals, evaluated against recommendation rules, and produces recommended actions and diagnostic outputs.</desc>
+
+  <defs>
+    <style>
+      .box { fill: #f8f9fa; stroke: #495057; stroke-width: 2; rx: 4; }
+      .box-process { fill: #e7f5ff; stroke: #1971c2; stroke-width: 2; rx: 4; }
+      .box-output { fill: #fff3bf; stroke: #f08c00; stroke-width: 2; rx: 4; }
+      .box-diagnostic { fill: #f3f0ff; stroke: #7950f2; stroke-width: 2; rx: 4; }
+      .text-title { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #212529; }
+      .text-detail { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; fill: #495057; }
+      .text-small { font-family: system-ui, -apple-system, sans-serif; font-size: 10px; fill: #6c757d; }
+      .arrow { fill: none; stroke: #495057; stroke-width: 2; marker-end: url(#arrowhead); }
+      .arrow-primary { fill: none; stroke: #1971c2; stroke-width: 2.5; marker-end: url(#arrowhead-primary); }
+      .label-box { fill: #fff; stroke: #adb5bd; stroke-width: 1; rx: 2; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#495057" />
+    </marker>
+    <marker id="arrowhead-primary" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#1971c2" />
+    </marker>
+  </defs>
+
+  <!-- Source Data -->
+  <rect class="box" x="20" y="40" width="140" height="90" />
+  <text class="text-title" x="90" y="65" text-anchor="middle">Source Data</text>
+  <text class="text-detail" x="90" y="85" text-anchor="middle">Request_Master</text>
+  <text class="text-small" x="90" y="100" text-anchor="middle">Metrics columns:</text>
+  <text class="text-small" x="90" y="113" text-anchor="middle">Players, CR, MT,</text>
+  <text class="text-small" x="90" y="124" text-anchor="middle">Active Months, L90</text>
+
+  <!-- Arrow: Source → Validation -->
+  <path class="arrow" d="M 160 85 L 200 85" />
+
+  <!-- Row Validation -->
+  <rect class="box-process" x="200" y="40" width="130" height="90" />
+  <text class="text-title" x="265" y="65" text-anchor="middle">Row Validation</text>
+  <text class="text-small" x="265" y="85" text-anchor="middle">classifyRow_()</text>
+  <text class="text-small" x="265" y="100" text-anchor="middle">Skip: Retired, Closed,</text>
+  <text class="text-small" x="265" y="112" text-anchor="middle">blank rows</text>
+  <text class="text-small" x="265" y="124" text-anchor="middle">Check: metrics presence</text>
+
+  <!-- Arrow: Validation → Signals -->
+  <path class="arrow-primary" d="M 330 85 L 370 85" />
+  <rect class="label-box" x="335" y="68" width="30" height="14" />
+  <text class="text-small" x="350" y="77" text-anchor="middle">Valid</text>
+
+  <!-- Performance Signals Box -->
+  <rect class="box-process" x="370" y="20" width="180" height="130" />
+  <text class="text-title" x="460" y="40" text-anchor="middle">Performance Signals</text>
+  <text class="text-small" x="460" y="58" text-anchor="middle">computePerformanceSignals_()</text>
+  <text class="text-detail" x="460" y="78" text-anchor="middle">Usage: HIGH/BASE/BELOW</text>
+  <text class="text-detail" x="460" y="93" text-anchor="middle">CR: HIGH/BASE/BELOW/LOW</text>
+  <text class="text-detail" x="460" y="108" text-anchor="middle">MT: HIGH/BASE/BELOW/NONE</text>
+  <text class="text-detail" x="460" y="123" text-anchor="middle">Maturity: ESTABLISHED/NEW/</text>
+  <text class="text-detail" x="460" y="138" text-anchor="middle">STALLED/INACTIVE</text>
+
+  <!-- Page/Mapping signals -->
+  <rect class="box-process" x="370" y="160" width="85" height="45" />
+  <text class="text-small" x="412" y="178" text-anchor="middle">Page Detection</text>
+  <text class="text-small" x="412" y="192" text-anchor="middle">Drupal Page URL</text>
+  <text class="text-small" x="412" y="204" text-anchor="middle">+ RHAC page</text>
+
+  <rect class="box-process" x="465" y="160" width="85" height="45" />
+  <text class="text-small" x="507" y="178" text-anchor="middle">MT Mapping</text>
+  <text class="text-small" x="507" y="192" text-anchor="middle">Valid</text>
+
+  <!-- Recovery signal -->
+  <rect class="box-process" x="370" y="215" width="180" height="35" />
+  <text class="text-small" x="460" y="230" text-anchor="middle">Recovery: L90 baseline rescue</text>
+  <text class="text-small" x="460" y="243" text-anchor="middle">(ESTABLISHED + 0/3 signals only)</text>
+
+  <!-- Arrow: Signals → Rules -->
+  <path class="arrow-primary" d="M 550 85 L 590 85" />
+
+  <!-- Recommendation Rules -->
+  <rect class="box-process" x="590" y="20" width="200" height="130" />
+  <text class="text-title" x="690" y="40" text-anchor="middle">Recommendation Rules</text>
+  <text class="text-small" x="690" y="56" text-anchor="middle">computePerformanceAction_()</text>
+  <text class="text-small" x="690" y="71" text-anchor="middle">First-match precedence:</text>
+  <text class="text-detail" x="690" y="87" text-anchor="middle">1. Review data linkage</text>
+  <text class="text-detail" x="690" y="101" text-anchor="middle">2. Improve completion</text>
+  <text class="text-detail" x="690" y="115" text-anchor="middle">3. Boost sales impact</text>
+  <text class="text-detail" x="690" y="129" text-anchor="middle">4. Create page</text>
+  <text class="text-detail" x="690" y="143" text-anchor="middle">5. Increase visibility...</text>
+
+  <!-- Content Age -->
+  <rect class="box-process" x="590" y="160" width="95" height="40" />
+  <text class="text-small" x="637" y="176" text-anchor="middle">Content Age</text>
+  <text class="text-small" x="637" y="190" text-anchor="middle">Received TS →</text>
+  <text class="text-small" x="637" y="202" text-anchor="middle">Published TS</text>
+
+  <!-- L90 Trend -->
+  <rect class="box-process" x="695" y="160" width="95" height="40" />
+  <text class="text-small" x="742" y="176" text-anchor="middle">L90 Trend</text>
+  <text class="text-small" x="742" y="190" text-anchor="middle">growing/stable/</text>
+  <text class="text-small" x="742" y="202" text-anchor="middle">declining/stale</text>
+
+  <!-- Arrow: Rules → Recommended action -->
+  <path class="arrow-primary" d="M 790 55 L 850 55" />
+
+  <!-- Recommended action -->
+  <rect class="box-output" x="850" y="20" width="160" height="50" />
+  <text class="text-title" x="930" y="40" text-anchor="middle">Recommended action</text>
+  <text class="text-small" x="930" y="56" text-anchor="middle">One action per demo</text>
+  <text class="text-small" x="930" y="68" text-anchor="middle">(Request_Master column)</text>
+
+  <!-- Recommended action reason -->
+  <rect class="box-output" x="850" y="80" width="160" height="40" />
+  <text class="text-title" x="930" y="98" text-anchor="middle">Recommended</text>
+  <text class="text-title" x="930" y="112" text-anchor="middle">action reason</text>
+
+  <!-- Assigned and Action Status -->
+  <rect class="box-output" x="850" y="130" width="75" height="35" />
+  <text class="text-small" x="887" y="146" text-anchor="middle">Assigned</text>
+  <text class="text-small" x="887" y="159" text-anchor="middle">Creator/Admin</text>
+
+  <rect class="box-output" x="935" y="130" width="75" height="35" />
+  <text class="text-small" x="972" y="146" text-anchor="middle">Action Status</text>
+  <text class="text-small" x="972" y="159" text-anchor="middle">Workflow state</text>
+
+  <!-- Arrow from Rules to Action Priority -->
+  <path class="arrow" d="M 690 150 L 690 215 L 850 215" />
+
+  <!-- Action Priority -->
+  <rect class="box-output" x="850" y="180" width="160" height="70" />
+  <text class="text-title" x="930" y="200" text-anchor="middle">Action Priority</text>
+  <text class="text-small" x="930" y="216" text-anchor="middle">computePerformancePriority_()</text>
+  <text class="text-small" x="930" y="231" text-anchor="middle">Signals + Trend + Content Age</text>
+  <text class="text-small" x="930" y="244" text-anchor="middle">→ High/Medium/Low</text>
+
+  <!-- Arrow: Signals → Performance Flags (diagnostic) -->
+  <path class="arrow" d="M 460 150 L 460 310 L 200 310" />
+  <text class="text-small" x="340" y="306" text-anchor="middle">diagnostic only</text>
+
+  <!-- Performance Flags -->
+  <rect class="box-diagnostic" x="20" y="270" width="180" height="80" />
+  <text class="text-title" x="110" y="290" text-anchor="middle">Performance Flags</text>
+  <text class="text-small" x="110" y="306" text-anchor="middle">computePerformanceFlags_()</text>
+  <text class="text-small" x="110" y="321" text-anchor="middle">Multiple per demo:</text>
+  <text class="text-small" x="110" y="334" text-anchor="middle">High usage, Low completion,</text>
+  <text class="text-small" x="110" y="347" text-anchor="middle">High business impact, etc.</text>
+
+  <!-- Arrow: Signals → Performance Score -->
+  <path class="arrow" d="M 460 250 L 460 400 L 230 400" />
+
+  <!-- Performance Score -->
+  <rect class="box-diagnostic" x="20" y="360" width="210" height="80" />
+  <text class="text-title" x="125" y="380" text-anchor="middle">Performance Score (0-100)</text>
+  <text class="text-small" x="125" y="396" text-anchor="middle">computePerformanceScore_()</text>
+  <text class="text-small" x="125" y="411" text-anchor="middle">Signals (count + highCount)</text>
+  <text class="text-small" x="125" y="424" text-anchor="middle">+ L90 Trend + Maturity</text>
+  <text class="text-small" x="125" y="437" text-anchor="middle">→ Performance Tier (Top/Mid/Low/Inactive)</text>
+
+  <!-- Arrow: Score → Tier cap adjustment -->
+  <path class="arrow" d="M 230 400 L 930 400 L 930 250" stroke-dasharray="4,4" />
+  <rect class="label-box" x="560" y="393" width="90" height="14" />
+  <text class="text-small" x="605" y="402" text-anchor="middle">Tier cap: Low → Med</text>
+
+  <!-- Processing Result -->
+  <rect class="box-diagnostic" x="20" y="460" width="210" height="50" />
+  <text class="text-title" x="125" y="480" text-anchor="middle">Processing Result</text>
+  <text class="text-small" x="125" y="496" text-anchor="middle">Processed / Skipped / Needs review</text>
+  <text class="text-small" x="125" y="508" text-anchor="middle">(validation and audit trail)</text>
+
+  <!-- Legend -->
+  <text class="text-title" x="20" y="560" text-anchor="start">Legend:</text>
+  <rect class="box" x="20" y="570" width="40" height="20" />
+  <text class="text-small" x="68" y="584" text-anchor="start">Input Data</text>
+
+  <rect class="box-process" x="140" y="570" width="40" height="20" />
+  <text class="text-small" x="188" y="584" text-anchor="start">Process/Calculation</text>
+
+  <rect class="box-output" x="310" y="570" width="40" height="20" />
+  <text class="text-small" x="358" y="584" text-anchor="start">Recommendation Output</text>
+
+  <rect class="box-diagnostic" x="500" y="570" width="40" height="20" />
+  <text class="text-small" x="548" y="584" text-anchor="start">Diagnostic Output</text>
+
+  <!-- Notes -->
+  <text class="text-small" x="20" y="620" text-anchor="start">Notes:</text>
+  <text class="text-small" x="20" y="638" text-anchor="start">• Recommendation Rules evaluate Signals (not Flags) to select one action per demo</text>
+  <text class="text-small" x="20" y="654" text-anchor="start">• Performance Flags are calculated independently from source metrics for diagnostic use</text>
+  <text class="text-small" x="20" y="670" text-anchor="start">• Action Priority combines Signals, L90 Trend, and Content Age, with optional Tier-based cap</text>
+  <text class="text-small" x="20" y="686" text-anchor="start">• Performance Score → Tier calculation is diagnostic only (does not directly drive recommendations)</text>
+
+  <!-- Footer -->
+  <text class="text-small" x="600" y="780" text-anchor="middle" fill="#868e96">Source: RM_Performance.js | Request_Master columns created if missing</text>
+</svg>
