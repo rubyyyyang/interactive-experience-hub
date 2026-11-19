@@ -16,6 +16,9 @@
 
   <body>
     <script>
+      // Environment-aware Intake URLs set by doGet()
+      var intakeBaseUrl = <?!= JSON.stringify(intakeBaseUrl) ?>;
+
       (function() {
         try {
           var t = localStorage.getItem('eventArcadeTheme');
@@ -63,10 +66,10 @@
           <a href="https://docs.google.com/forms/d/e/1FAIpQLSeT5z2JaseXC54hLtlhbJ4ONw6PPEXzsQwoko4ExKkCYR6fhA/viewform" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
             Request a New Demo
           </a>
-          <a href="https://script.google.com/a/macros/redhat.com/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+          <a href="#" onclick="window.open(intakeBaseUrl, '_blank'); return false;" class="navDropdownItem" role="menuitem">
             Submit a Demo for Review
           </a>
-          <a href="https://script.google.com/a/redhat.com/macros/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec?page=status" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
+          <a href="#" onclick="window.open(intakeBaseUrl + '?page=status', '_blank'); return false;" class="navDropdownItem" role="menuitem">
             Check My Submissions
           </a>
         </div>
@@ -579,7 +582,7 @@
             </li>
             
             <li class="resourceItem">
-              <a href="https://script.google.com/a/macros/redhat.com/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec" target="_blank" rel="noopener" class="resourceLink">
+              <a href="#" onclick="window.open(intakeBaseUrl, '_blank'); return false;" class="resourceLink">
                 <svg class="resourceIcon" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
                   <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
@@ -595,7 +598,7 @@
               </a>
             </li>
             <li class="resourceItem">
-              <a href="https://script.google.com/a/redhat.com/macros/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec?page=status" target="_blank" rel="noopener" class="resourceLink">
+              <a href="#" onclick="window.open(intakeBaseUrl + '?page=status', '_blank'); return false;" class="resourceLink">
                 <svg class="resourceIcon" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
                   <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
