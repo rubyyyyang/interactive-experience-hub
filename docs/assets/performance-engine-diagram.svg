@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 650" role="img" aria-labelledby="perf-title perf-desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 640" role="img" aria-labelledby="perf-title perf-desc">
   <title id="perf-title">Performance Recommendation Engine Architecture</title>
   <desc id="perf-desc">Horizontal flow showing source data validation, signal computation, first-match recommendation rules, and output fields</desc>
 
@@ -53,23 +53,23 @@
 
   <!-- Performance Signals -->
   <rect class="box-calc" x="275" y="30" width="120" height="60" />
-  <text class="text-title" x="335" y="48" text-anchor="middle">Performance</text>
-  <text class="text-title" x="335" y="61" text-anchor="middle">Signals</text>
-  <text class="text-small" x="335" y="76" text-anchor="middle">Usage, CR, MT,</text>
-  <text class="text-small" x="335" y="86" text-anchor="middle">Maturity, Page/</text>
-  <text class="text-small" x="335" y="96" text-anchor="middle">Mapping, Recovery</text>
+  <text class="text-title" x="335" y="45" text-anchor="middle">Performance</text>
+  <text class="text-title" x="335" y="57" text-anchor="middle">Signals</text>
+  <text class="text-small" x="335" y="70" text-anchor="middle">Usage, CR, MT,</text>
+  <text class="text-small" x="335" y="80" text-anchor="middle">Maturity, Page/</text>
+  <text class="text-small" x="335" y="90" text-anchor="middle">Mapping, Recovery</text>
 
   <!-- Content Age -->
   <rect class="box-calc" x="275" y="100" width="120" height="35" />
-  <text class="text-title" x="335" y="115" text-anchor="middle">Content Age</text>
-  <text class="text-small" x="335" y="128" text-anchor="middle">Months since</text>
-  <text class="text-small" x="335" y="138" text-anchor="middle">Received/Published</text>
+  <text class="text-title" x="335" y="113" text-anchor="middle">Content Age</text>
+  <text class="text-small" x="335" y="124" text-anchor="middle">Months since</text>
+  <text class="text-small" x="335" y="134" text-anchor="middle">Received/Published</text>
 
   <!-- Performance L90 Trend -->
   <rect class="box-calc" x="275" y="145" width="120" height="35" />
-  <text class="text-title" x="335" y="160" text-anchor="middle">Performance</text>
-  <text class="text-title" x="335" y="171" text-anchor="middle">L90 Trend</text>
-  <text class="text-small" x="335" y="183" text-anchor="middle">growing/stable/declining/stale</text>
+  <text class="text-title" x="335" y="158" text-anchor="middle">Performance</text>
+  <text class="text-title" x="335" y="169" text-anchor="middle">L90 Trend</text>
+  <text class="text-small" x="335" y="180" text-anchor="middle">growing/stable/declining/stale</text>
 
   <!-- Arrows to Rules -->
   <path class="arrow-primary" d="M 395 60 L 430 90" />
@@ -122,12 +122,14 @@
 
   <!-- Processing Result -->
   <rect class="box-source" x="20" y="280" width="130" height="35" />
-  <text class="text-title" x="85" y="296" text-anchor="middle">Processing Result</text>
-  <text class="text-small" x="85" y="308" text-anchor="middle">Processed / Skipped / Needs review</text>
+  <text class="text-title" x="85" y="294" text-anchor="middle">Processing Result</text>
+  <text class="text-small" x="85" y="305" text-anchor="middle">Processed / Skipped / Needs review</text>
 
-  <!-- Signals + Trend → Score → Tier -->
-  <path class="arrow" d="M 335 90 L 335 300 L 380 300" />
-  <path class="arrow" d="M 335 183 L 335 300 L 380 300" />
+  <!-- Signals → Score (rerouted to avoid Content Age and L90 Trend boxes) -->
+  <path class="arrow" d="M 395 60 L 405 60 L 405 300 L 380 300" />
+
+  <!-- L90 Trend → Score -->
+  <path class="arrow" d="M 335 180 L 335 300 L 380 300" />
 
   <!-- Performance Score -->
   <rect class="box-metric" x="380" y="270" width="100" height="60" />
@@ -190,5 +192,5 @@
   <text class="text-small" x="20" y="470" text-anchor="start">• Performance Score and Tier support prioritization and diagnostics</text>
 
   <!-- Footer -->
-  <text class="text-small" x="435" y="630" text-anchor="middle" fill="#868e96">Source: RM_Performance.js | Request_Master columns auto-created</text>
+  <text class="text-small" x="460" y="620" text-anchor="middle" fill="#868e96">Source: RM_Performance.js | Request_Master columns auto-created</text>
 </svg>
