@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 640" role="img" aria-labelledby="perf-title perf-desc">
+  <title id="perf-title">Performance Recommendation Engine Architecture</title>
+  <desc id="perf-desc">Horizontal flow showing source data validation, signal computation, first-match recommendation rules, and output fields</desc>
+
+  <defs>
+    <style>
+      .box-source { fill: #f1f3f5; stroke: #868e96; stroke-width: 2; rx: 4; }
+      .box-calc { fill: #e3fafc; stroke: #0b7285; stroke-width: 2; rx: 4; }
+      .box-decision { fill: #dee2e6; stroke: #343a40; stroke-width: 2.5; rx: 4; }
+      .box-output { fill: #d3f9d8; stroke: #2f9e44; stroke-width: 2; rx: 4; }
+      .box-metric { fill: #ffe8cc; stroke: #d9480f; stroke-width: 2; rx: 4; }
+      .text-title { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600; fill: #212529; }
+      .text-detail { font-family: system-ui, sans-serif; font-size: 10px; fill: #495057; }
+      .text-small { font-family: system-ui, sans-serif; font-size: 9px; fill: #6c757d; }
+      .arrow { fill: none; stroke: #495057; stroke-width: 1.5; marker-end: url(#arrow); }
+      .arrow-primary { fill: none; stroke: #0b7285; stroke-width: 2; marker-end: url(#arrow-primary); }
+      .arrow-secondary { fill: none; stroke: #d9480f; stroke-width: 1.5; marker-end: url(#arrow-sec); stroke-dasharray: 3,2; }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#495057" />
+    </marker>
+    <marker id="arrow-primary" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#0b7285" />
+    </marker>
+    <marker id="arrow-sec" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#d9480f" />
+    </marker>
+  </defs>
+
+  <!-- PRIMARY PATH -->
+
+  <!-- Source Data -->
+  <rect class="box-source" x="20" y="80" width="100" height="70" />
+  <text class="text-title" x="70" y="100" text-anchor="middle">Source Data</text>
+  <text class="text-small" x="70" y="115" text-anchor="middle">Request_Master</text>
+  <text class="text-small" x="70" y="127" text-anchor="middle">Players, CR, MT,</text>
+  <text class="text-small" x="70" y="138" text-anchor="middle">Active Months,</text>
+  <text class="text-small" x="70" y="149" text-anchor="middle">L90, Page URLs</text>
+
+  <!-- Arrow -->
+  <path class="arrow-primary" d="M 120 115 L 150 115" />
+
+  <!-- Row Validation -->
+  <rect class="box-source" x="150" y="80" width="95" height="70" />
+  <text class="text-title" x="197" y="100" text-anchor="middle">Row Validation</text>
+  <text class="text-small" x="197" y="115" text-anchor="middle">Skip: Retired,</text>
+  <text class="text-small" x="197" y="126" text-anchor="middle">Closed, blank</text>
+  <text class="text-small" x="197" y="137" text-anchor="middle">Check: metrics</text>
+  <text class="text-small" x="197" y="148" text-anchor="middle">present</text>
+
+  <!-- Arrow -->
+  <path class="arrow-primary" d="M 245 115 L 275 115" />
+
+  <!-- Performance Signals -->
+  <rect class="box-calc" x="275" y="30" width="120" height="60" />
+  <text class="text-title" x="335" y="45" text-anchor="middle">Performance</text>
+  <text class="text-title" x="335" y="57" text-anchor="middle">Signals</text>
+  <text class="text-small" x="335" y="70" text-anchor="middle">Usage, CR, MT,</text>
+  <text class="text-small" x="335" y="80" text-anchor="middle">Maturity, Page/</text>
+  <text class="text-small" x="335" y="90" text-anchor="middle">Mapping, Recovery</text>
+
+  <!-- Content Age -->
+  <rect class="box-calc" x="275" y="100" width="120" height="35" />
+  <text class="text-title" x="335" y="113" text-anchor="middle">Content Age</text>
+  <text class="text-small" x="335" y="124" text-anchor="middle">Months since</text>
+  <text class="text-small" x="335" y="134" text-anchor="middle">Received/Published</text>
+
+  <!-- Performance L90 Trend -->
+  <rect class="box-calc" x="275" y="145" width="120" height="35" />
+  <text class="text-title" x="335" y="158" text-anchor="middle">Performance</text>
+  <text class="text-title" x="335" y="169" text-anchor="middle">L90 Trend</text>
+  <text class="text-small" x="335" y="180" text-anchor="middle">growing/stable/declining/stale</text>
+
+  <!-- Arrows to Rules -->
+  <path class="arrow-primary" d="M 395 60 L 430 90" />
+  <path class="arrow-primary" d="M 395 117 L 430 107" />
+  <path class="arrow-primary" d="M 395 162 L 430 125" />
+
+  <!-- First-match Rules -->
+  <rect class="box-decision" x="430" y="80" width="150" height="80" />
+  <text class="text-title" x="505" y="97" text-anchor="middle">First-match</text>
+  <text class="text-title" x="505" y="109" text-anchor="middle">Recommendation</text>
+  <text class="text-title" x="505" y="121" text-anchor="middle">Rules</text>
+  <text class="text-small" x="505" y="136" text-anchor="middle">1. Review data linkage</text>
+  <text class="text-small" x="505" y="147" text-anchor="middle">2. Improve completion</text>
+  <text class="text-small" x="505" y="158" text-anchor="middle">3. Boost sales impact...</text>
+
+  <!-- Arrow to Recommended action -->
+  <path class="arrow-primary" d="M 580 120 L 620 120" />
+
+  <!-- Recommended action + reason -->
+  <rect class="box-output" x="620" y="80" width="130" height="45" />
+  <text class="text-title" x="685" y="97" text-anchor="middle">Recommended</text>
+  <text class="text-title" x="685" y="109" text-anchor="middle">action</text>
+  <text class="text-small" x="685" y="121" text-anchor="middle">and reason</text>
+
+  <!-- Arrow to Assigned -->
+  <path class="arrow" d="M 750 102 L 790 102" />
+
+  <!-- Assigned -->
+  <rect class="box-output" x="790" y="80" width="80" height="28" />
+  <text class="text-small" x="830" y="96" text-anchor="middle">Assigned</text>
+  <text class="text-small" x="830" y="106" text-anchor="middle">(Creator/Admin)</text>
+
+  <!-- Action Status -->
+  <rect class="box-output" x="790" y="113" width="80" height="28" />
+  <text class="text-small" x="830" y="129" text-anchor="middle">Action Status</text>
+  <text class="text-small" x="830" y="139" text-anchor="middle">(workflow state)</text>
+
+  <!-- SUPPORTING PATHS -->
+
+  <!-- Source Data → Performance Flags -->
+  <path class="arrow" d="M 70 150 L 70 240 L 150 240" />
+  <text class="text-small" x="100" y="200" fill="#6c757d" style="font-style: italic;">independent</text>
+
+  <!-- Performance Flags -->
+  <rect class="box-metric" x="150" y="210" width="130" height="60" />
+  <text class="text-title" x="215" y="228" text-anchor="middle">Performance Flags</text>
+  <text class="text-small" x="215" y="242" text-anchor="middle">Multiple diagnostic labels:</text>
+  <text class="text-small" x="215" y="253" text-anchor="middle">High usage, Low completion,</text>
+  <text class="text-small" x="215" y="263" text-anchor="middle">High business impact, etc.</text>
+
+  <!-- Processing Result -->
+  <rect class="box-source" x="20" y="280" width="130" height="35" />
+  <text class="text-title" x="85" y="294" text-anchor="middle">Processing Result</text>
+  <text class="text-small" x="85" y="305" text-anchor="middle">Processed / Skipped / Needs review</text>
+
+  <!-- Signals → Score (rerouted to avoid Content Age and L90 Trend boxes) -->
+  <path class="arrow" d="M 395 60 L 405 60 L 405 300 L 380 300" />
+
+  <!-- L90 Trend → Score -->
+  <path class="arrow" d="M 335 180 L 335 300 L 380 300" />
+
+  <!-- Performance Score -->
+  <rect class="box-metric" x="380" y="270" width="100" height="60" />
+  <text class="text-title" x="430" y="288" text-anchor="middle">Performance</text>
+  <text class="text-title" x="430" y="300" text-anchor="middle">Score (0-100)</text>
+  <text class="text-small" x="430" y="314" text-anchor="middle">Signals + Trend</text>
+  <text class="text-small" x="430" y="324" text-anchor="middle">+ Maturity</text>
+
+  <!-- Arrow Score → Tier -->
+  <path class="arrow" d="M 480 300 L 510 300" />
+
+  <!-- Performance Tier -->
+  <rect class="box-metric" x="510" y="270" width="90" height="60" />
+  <text class="text-title" x="555" y="288" text-anchor="middle">Performance</text>
+  <text class="text-title" x="555" y="300" text-anchor="middle">Tier</text>
+  <text class="text-small" x="555" y="314" text-anchor="middle">Top / Mid / Low</text>
+  <text class="text-small" x="555" y="324" text-anchor="middle">/ Inactive</text>
+
+  <!-- Action Priority -->
+  <rect class="box-output" x="620" y="140" width="130" height="80" />
+  <text class="text-title" x="685" y="157" text-anchor="middle">Action Priority</text>
+  <text class="text-small" x="685" y="172" text-anchor="middle">Signals + Age + Trend</text>
+  <text class="text-small" x="685" y="183" text-anchor="middle">+ Recommended action</text>
+  <text class="text-small" x="685" y="194" text-anchor="middle">→ High / Medium / Low</text>
+  <text class="text-small" x="685" y="210" text-anchor="middle" style="font-style: italic; fill: #6c757d;">(Tier cap applied)</text>
+
+  <!-- Arrows feeding Action Priority -->
+  <path class="arrow" d="M 395 60 L 410 60 L 410 180 L 620 180" />
+  <path class="arrow" d="M 395 117 L 415 117 L 415 190 L 620 190" />
+  <path class="arrow" d="M 395 162 L 420 162 L 420 200 L 620 200" />
+  <path class="arrow" d="M 685 125 L 685 140" />
+
+  <!-- Tier cap arrow -->
+  <path class="arrow-secondary" d="M 555 270 L 555 230 L 685 230" />
+  <text class="text-small" x="605" y="226" fill="#d9480f" style="font-style: italic;">cap: Low tier → Med max</text>
+
+  <!-- Legend -->
+  <text class="text-title" x="20" y="360" text-anchor="start">Legend:</text>
+
+  <rect class="box-source" x="20" y="368" width="25" height="16" />
+  <text class="text-small" x="52" y="379" text-anchor="start">Source & Validation</text>
+
+  <rect class="box-calc" x="160" y="368" width="25" height="16" />
+  <text class="text-small" x="192" y="379" text-anchor="start">Calculated Fields</text>
+
+  <rect class="box-decision" x="300" y="368" width="25" height="16" />
+  <text class="text-small" x="332" y="379" text-anchor="start">Decision Logic</text>
+
+  <rect class="box-output" x="430" y="368" width="25" height="16" />
+  <text class="text-small" x="462" y="379" text-anchor="start">Recommendation & Workflow</text>
+
+  <rect class="box-metric" x="610" y="368" width="25" height="16" />
+  <text class="text-small" x="642" y="379" text-anchor="start">Performance Metrics</text>
+
+  <!-- Notes -->
+  <text class="text-small" x="20" y="410" text-anchor="start">Notes:</text>
+  <text class="text-small" x="20" y="425" text-anchor="start">• Rules evaluate Performance Signals, Content Age, and L90 Trend (not Performance Flags)</text>
+  <text class="text-small" x="20" y="440" text-anchor="start">• Performance Flags calculated independently from source metrics for diagnostic use</text>
+  <text class="text-small" x="20" y="455" text-anchor="start">• Action Priority: Signals + Age + Trend + Recommended action, then Tier-based cap applied</text>
+  <text class="text-small" x="20" y="470" text-anchor="start">• Performance Score and Tier support prioritization and diagnostics</text>
+
+  <!-- Footer -->
+  <text class="text-small" x="460" y="620" text-anchor="middle" fill="#868e96">Source: RM_Performance.js | Request_Master columns auto-created</text>
+</svg>

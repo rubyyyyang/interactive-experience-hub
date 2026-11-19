@@ -77,8 +77,18 @@ function include(filename) {
 }
 
 function doGet(e) {
-  return HtmlService.createTemplateFromFile("discovery")
-    .evaluate()
+  const baseUrl = ScriptApp.getService().getUrl() || '';
+  const isDev = baseUrl.indexOf('/dev') > -1;
+
+  // Environment-aware Intake app URLs
+  const intakeBaseUrl = isDev
+    ? 'https://script.google.com/a/macros/redhat.com/s/AKfycbyW_N668oLpaWMzrR1OXlYh9hTZ6Av33nCtegYUJAw/dev'
+    : 'https://script.google.com/a/macros/redhat.com/s/AKfycby41BSoZbpLqdkdRG5B5hvdr7-c1KT-TaCw9_WV3_Q0ag13oe_CjHt-JUIDeHzdSTAg/exec';
+
+  const template = HtmlService.createTemplateFromFile("discovery");
+  template.intakeBaseUrl = intakeBaseUrl;
+
+  return template.evaluate()
     .setTitle("The Interact Hub")
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
