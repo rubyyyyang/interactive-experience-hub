@@ -170,7 +170,7 @@
   <text class="text-title" x="20" y="360" text-anchor="start">Legend:</text>
 
   <rect class="box-source" x="20" y="368" width="25" height="16" />
-  <text class="text-small" x="52" y="379" text-anchor="start">Source & Validation</text>
+  <text class="text-small" x="52" y="379" text-anchor="start">Source &amp; Validation</text>
 
   <rect class="box-calc" x="160" y="368" width="25" height="16" />
   <text class="text-small" x="192" y="379" text-anchor="start">Calculated Fields</text>
@@ -179,7 +179,7 @@
   <text class="text-small" x="332" y="379" text-anchor="start">Decision Logic</text>
 
   <rect class="box-output" x="430" y="368" width="25" height="16" />
-  <text class="text-small" x="462" y="379" text-anchor="start">Recommendation & Workflow</text>
+  <text class="text-small" x="462" y="379" text-anchor="start">Recommendation &amp; Workflow</text>
 
   <rect class="box-metric" x="610" y="368" width="25" height="16" />
   <text class="text-small" x="642" y="379" text-anchor="start">Performance Metrics</text>
