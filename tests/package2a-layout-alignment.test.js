@@ -20,13 +20,13 @@ test('Header container uses 1600px max-width', headerContainerMaxWidth && header
 test('Page subtitle uses 1600px max-width', pageSubtitleMaxWidth && pageSubtitleMaxWidth[1] === '1600');
 test('.wrap uses 1600px max-width', wrapMaxWidth && wrapMaxWidth[1] === '1600');
 
-// Test consistent 16px horizontal padding
+// Test horizontal padding strategy
 const headerContainerPadding = css.match(/\.headerContainer\s*{[^}]*padding:\s*12px\s+16px/);
-const pageSubtitlePadding = css.match(/\.pageSubtitle\s*{[^}]*padding:\s*20px\s+16px\s+16px\s+16px/);
+const pageSubtitlePadding = css.match(/\.pageSubtitle\s*{[^}]*padding:\s*20px\s+0\s+16px\s+0/);
 const wrapPadding = css.match(/\.wrap\s*{[^}]*padding:\s*0\s+16px\s+40px/);
 
 test('Header container uses 16px horizontal padding', headerContainerPadding !== null);
-test('Page subtitle uses 16px horizontal padding', pageSubtitlePadding !== null);
+test('Page subtitle has 0 horizontal padding (inherits 16px from .wrap)', pageSubtitlePadding !== null);
 test('.wrap uses 16px horizontal padding', wrapPadding !== null);
 
 // Test that Header background spans full viewport (no max-width on .globalHeader)
