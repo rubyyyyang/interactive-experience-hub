@@ -89,7 +89,7 @@ See [Hub Runbook](runbook.md#manual-metrics-refresh) for refresh procedures.
 
 **Step 5: Calculate diagnostic outputs** — Performance Flags (independent calculation from source metrics), Performance Score → Performance Tier
 
-**Step 6: Calculate Action Priority** — Combines Signals, L90 Trend, and Content Age, with optional Tier-based priority cap
+**Step 6: Calculate Action Priority** — Combines Signals, L90 Trend, Content Age, and Recommended action, with optional Tier-based priority cap
 
 **Step 7: Write results** — Performance Signals, Flags, Recommended action, Recommended action reason, Action Priority, Performance Score, Performance Tier, Performance L90 Trend, Content Age, Assigned, Action Status, Processing Result
 
