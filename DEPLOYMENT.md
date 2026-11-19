@@ -26,7 +26,7 @@ Package 2A adds a Global Header component with responsive navigation to the Hub 
 ### Resources Dropdown Navigation
 - **Desktop (>768px)**: 330px dropdown menu with 3 sections
 - **Mobile (≤768px)**: Always-expanded drawer section
-- **Items**: User Guide, Documentation, Analytics Dashboard, Slack, Submit Feedback
+- **Items**: Best Practices Guide, Documentation, Public Experiences, Analytics Dashboard, Slack, Submit Feedback (button)
 
 ### Testing
 - **tests/package2a-nav-destinations.test.js**: 19 navigation assertions
