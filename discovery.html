@@ -231,35 +231,37 @@
                 <input id="globalSearch" placeholder="Search by title, product, event, creator, TDP, or description"
                        oninput="handleSearchInput()"
                        onkeydown="handleSearchKeydown(event)"
-                       onblur="hideRecentSearches()" 
+                       onblur="hideRecentSearches()"
                        title="Search across discovery content" />
                 <div id="recentSearchesDropdown" class="recent-searches"></div>
               </div>
             </div>
             <button class="btn primary" id="applySearchBtn" onclick="applySearchNow()">Apply</button>
+            <button class="btn" id="moreFiltersBtn" onclick="toggleMoreFilters()">More filters</button>
             <button class="btn" onclick="resetFilters()">Reset</button>
           </div>
 
           <div class="instant-filters">
             <span class="instant-filter-label">Quick Filters:</span>
-            <div class="instant-pill" onclick="applyInstantFilter('Red Hat Enterprise Linux')">
+            <div class="instant-pill" onclick="toggleQuickFilter('Red Hat Enterprise Linux')">
               RHEL
             </div>
-            <div class="instant-pill" onclick="applyInstantFilter('Red Hat OpenShift')">
+            <div class="instant-pill" onclick="toggleQuickFilter('Red Hat OpenShift')">
               OpenShift
             </div>
-            <div class="instant-pill" onclick="applyInstantFilter('Ansible Automation Platform')">
+            <div class="instant-pill" onclick="toggleQuickFilter('Ansible Automation Platform')">
               Ansible
             </div>
-            <div class="instant-pill" onclick="applyTopicFilter('AI')">
+            <div class="instant-pill" onclick="toggleQuickFilter('AI')">
               AI
             </div>
-            <div class="instant-pill" onclick="applyTopicFilter('Virtualization')">
+            <div class="instant-pill" onclick="toggleQuickFilter('Virtualization')">
               Virtualization
             </div>
           </div>
 
-          <div class="filterRow">
+          <div class="moreFiltersPanel">
+            <div class="filterRow">
             <div class="field" id="filter-slot-formats"></div>
             <div class="field" id="filter-slot-products"></div>
             <div class="field" id="filter-slot-tdps"></div>
@@ -268,6 +270,7 @@
             <div class="field" id="filter-slot-creatorNames"></div>
           </div>
         </div>
+      </div>
       </div>
 
 

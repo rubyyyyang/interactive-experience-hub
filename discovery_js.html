@@ -1488,6 +1488,18 @@ async function copyText(text){
         console.log("🎯 Significant performance improvements while maintaining full compatibility");
       }
 
+      // Manual verification checklist for Package 3A:
+      // 1. Click "More filters" toggles panel visibility
+      // 2. Quick Filter selections persist across More filters collapse/expand
+      // 3. Apply button triggers reloadResults only once
+      // 4. Pending filter changes show visual feedback before Apply
+      // 5. External Browse links open in new tab
+      // 6. Browse by Experience: All Experiences clears format filter
+      // 7. Browse by Experience: Interactive Demos sets format = Interactive Demo
+      // 8. Browse by Experience: External links (Livestreams, Architectures, etc.) open in new tab
+      // 9. Pending filter changes show orange accent on toolbar before Apply
+      // 10. After Apply, pending state clears and results update
+
             function listDiscoveryPage(params) {
         return INITIAL_RESULTS || {
           totalRows: 0,
@@ -1829,6 +1841,80 @@ async function copyText(text){
           pill.classList.remove('active');
         });
       }
+
+      function toggleMoreFilters() {
+        const panel = document.querySelector('.moreFiltersPanel');
+        const btn = getCachedElement('moreFiltersBtn');
+        if (!panel) return;
+        const isCollapsed = panel.classList.contains('collapsed');
+        if (isCollapsed) {
+          panel.classList.remove('collapsed');
+          if (btn) btn.textContent = 'Fewer filters';
+        } else {
+          panel.classList.add('collapsed');
+          if (btn) btn.textContent = 'More filters';
+        }
+      }
+
+      function toggleQuickFilter(filterKey) {
+        // AI and Virtualization map to TDPs, others map to products
+        const topicTdpMap = { 'AI': ['AI Platform'], 'Virtualization': ['Virtualization'] };
+        const isTopic = topicTdpMap.hasOwnProperty(filterKey);
+
+        const stateKey = isTopic ? 'tdps' : 'products';
+        const targetValues = isTopic ? topicTdpMap[filterKey] : getMatchingProducts(filterKey);
+
+        const current = new Set(filterState[stateKey] || []);
+        const allSelected = targetValues.every(v => current.has(v));
+
+        if (allSelected) {
+          // Remove all matching values
+          targetValues.forEach(v => current.delete(v));
+        } else {
+          // Add all matching values
+          targetValues.forEach(v => current.add(v));
+        }
+
+        filterState[stateKey] = Array.from(current);
+        refreshPickerBox(stateKey);
+        updateQuickFilterVisuals();
+        markFiltersPending_();
+      }
+
+      function updateQuickFilterVisuals() {
+        const productPills = {
+          'Red Hat Enterprise Linux': 'RHEL',
+          'Red Hat OpenShift': 'OpenShift',
+          'Ansible Automation Platform': 'Ansible'
+        };
+        const topicPills = { 'AI': 'AI', 'Virtualization': 'Virtualization' };
+
+        document.querySelectorAll('.instant-pill').forEach(pill => {
+          const text = pill.textContent.trim();
+          let isActive = false;
+
+          // Check product pills
+          for (const [fullName, shortName] of Object.entries(productPills)) {
+            if (text === shortName) {
+              const matching = getMatchingProducts(fullName);
+              isActive = matching.length > 0 && matching.every(p => filterState.products.includes(p));
+              break;
+            }
+          }
+
+          // Check topic pills
+          for (const [topic, label] of Object.entries(topicPills)) {
+            if (text === label) {
+              const tdps = { 'AI': ['AI Platform'], 'Virtualization': ['Virtualization'] }[topic] || [];
+              isActive = tdps.length > 0 && tdps.every(t => filterState.tdps.includes(t));
+              break;
+            }
+          }
+
+          pill.classList.toggle('active', isActive);
+        });
+      }
+
 function renderLinkRow(item){
   const url = getPrimaryLink(item);
   if (!url) return "";
