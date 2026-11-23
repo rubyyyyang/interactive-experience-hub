@@ -1104,22 +1104,22 @@
         margin-bottom:16px;
       }
       .discover-row{
-        display:grid;
-        grid-template-columns:repeat(4, 1fr);
+        display:flex;
         gap:12px;
+        overflow-x:auto;
+        -webkit-overflow-scrolling:touch;
+        scrollbar-width:thin;
       }
-      @media (max-width: 1024px) {
-        .discover-row{
-          grid-template-columns:repeat(2, 1fr);
-        }
+      .discover-row::-webkit-scrollbar{
+        height:6px;
       }
-      @media (max-width: 640px) {
-        .discover-row{
-          grid-template-columns:1fr;
-        }
+      .discover-row::-webkit-scrollbar-thumb{
+        background:var(--border);
+        border-radius:3px;
       }
       .discover-card{
-        flex:none;
+        flex:0 0 auto;
+        min-width:160px;
         display:flex;
         align-items:center;
         gap:10px;
