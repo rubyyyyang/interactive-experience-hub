@@ -1494,27 +1494,25 @@ async function copyText(text){
         console.log("🎯 Significant performance improvements while maintaining full compatibility");
       }
 
-      // Manual verification checklist for Package 3A:
-      // 1. Click "More filters" toggles panel visibility
-      // 2. Quick Filter selections persist across More filters collapse/expand
-      // 3. Apply button triggers reloadResults only once
-      // 4. Pending filter changes show visual feedback before Apply
-      // 5. External Browse links open in new tab
-      // 6. Browse by Experience: All Experiences clears format filter
-      // 7. Browse by Experience: Interactive Demos sets format = Interactive Demo
-      // 8. Browse by Experience: External links (Livestreams, Architectures, etc.) open in new tab
-      // 9. Pending filter changes show orange accent on toolbar before Apply
-      // 10. After Apply, pending state clears and results update
-
-      // Unit test: toggleQuickFilter('Red Hat OpenShift')
-      // Setup: filterState.products = []
-      // Action: Call toggleQuickFilter('Red Hat OpenShift')
-      // Expected: filterState.products includes all matching OpenShift products (excluding AI variants)
-      // Expected: FILTERS_HAVE_PENDING_CHANGES = true
-      // Expected: .instant-pill with text "OpenShift" has .active class
-      // Action: Call toggleQuickFilter('Red Hat OpenShift') again
-      // Expected: filterState.products = []
-      // Expected: .instant-pill with text "OpenShift" does not have .active class
+      // === AUTOMATED VERIFICATION (run tests/package-3a-regression.test.js in browser console) ===
+      // 1. Quick Filter toggle behavior (on/off, visual sync, pending state)
+      // 2. Browse by Experience preserves search and other filters
+      // 3. Advanced filter changes sync Quick Filter visual states
+      // 4. No reload before Apply (Quick Filters, typing, Browse all pending-only)
+      // 5. Pending indication on Apply button (Apply → Apply*)
+      // 6. More Filters panel starts collapsed and toggles correctly
+      //
+      // === MANUAL TESTING REQUIRED ===
+      // 7. Desktop: light theme - all UI elements readable, filters functional
+      // 8. Desktop: dark theme - colors correct, no contrast issues
+      // 9. Mobile (iPhone SE): Browse cards wrap, More filters accessible, Quick Filters responsive
+      // 10. Tablet (iPad): Layout usable, no horizontal scroll, dropdowns not clipped
+      // 11. External Browse links (Livestreams, Architectures, Interactive Labs, Labs) open in new tab with correct URLs
+      // 12. URL state preservation: apply filters, check URL hash updates, reload page, verify filters restore
+      // 13. Pagination: apply filter with >20 results, navigate to page 2, verify pagination works
+      // 14. Saved Demos: select cards, save demo, open Saved Demos modal, verify list accurate
+      // 15. Export: select 3 cards, export as CSV, verify 3 rows with correct data
+      // 16. Integration: type search + select Quick Filter + select Browse type + open More filters + select advanced filter + Apply → verify all filters combine correctly in results
 
             function listDiscoveryPage(params) {
         return INITIAL_RESULTS || {
