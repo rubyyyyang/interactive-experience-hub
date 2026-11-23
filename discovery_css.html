@@ -1092,27 +1092,34 @@
       .tdpPill b{margin-left:6px}
 
       .discover-strip{
-        padding:0 0 16px;
+        padding:24px 16px;
+        background:var(--surface-secondary);
+        border-radius:8px;
+        margin-bottom:16px;
       }
       .discover-heading{
-        font-size:13px;
+        font-size:16px;
         font-weight:600;
-        color:var(--muted);
-        margin-bottom:8px;
-        text-transform:uppercase;
-        letter-spacing:0.5px;
+        color:var(--text);
+        margin-bottom:16px;
       }
       .discover-row{
-        display:flex;
-        gap:10px;
-        overflow-x:auto;
-        -webkit-overflow-scrolling:touch;
-        scrollbar-width:none;
+        display:grid;
+        grid-template-columns:repeat(4, 1fr);
+        gap:12px;
       }
-      .discover-row::-webkit-scrollbar{display:none}
+      @media (max-width: 1024px) {
+        .discover-row{
+          grid-template-columns:repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 640px) {
+        .discover-row{
+          grid-template-columns:1fr;
+        }
+      }
       .discover-card{
-        flex:1 1 0;
-        min-width:140px;
+        flex:none;
         display:flex;
         align-items:center;
         gap:10px;

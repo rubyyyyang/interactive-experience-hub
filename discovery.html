@@ -200,9 +200,22 @@
             </div>
           </div>
 
-          <div class="discover-strip">
-            <div class="discover-heading">Browse by Experience</div>
-            <div class="discover-row">
+          <div class="moreFiltersPanel collapsed">
+            <div class="filterRow">
+            <div class="field" id="filter-slot-formats"></div>
+            <div class="field" id="filter-slot-products"></div>
+            <div class="field" id="filter-slot-tdps"></div>
+            <div class="field" id="filter-slot-salesTactics"></div>
+            <div class="field" id="filter-slot-marketingPrograms"></div>
+            <div class="field" id="filter-slot-creatorNames"></div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div class="discover-strip">
+        <div class="discover-heading">Browse by Experience</div>
+        <div class="discover-row">
               <a class="discover-card" href="#" onclick="event.preventDefault(); browseByExperience('all')">
                 <div class="discover-card-icon">
                   <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H4z"/></svg>
@@ -301,7 +314,7 @@
       </div>
 
 
-      <div class="resultsMeta" id="tdpStrip"></div>
+      <div class="resultsMeta" id="tdpStrip" style="display:none;"></div>
 
       <div class="resultsWrap" id="resultsWrap">
       <div class="listLoadingBar" aria-hidden="true"></div>
