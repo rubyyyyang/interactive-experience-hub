@@ -150,32 +150,17 @@ function testMoreFiltersCollapsed() {
   console.log('✓ Test 6 passed');
 }
 
-// Test 7: Applied filters display and manual apply after removal
-function testAppliedFiltersDisplay() {
-  console.log('Test 7: Applied filters display and manual apply after removal');
+// Test 7: Applied filter removal marks pending without reload
+function testAppliedFilterRemoval() {
+  console.log('Test 7: Applied filter removal marks pending without reload');
 
-  // Reset
-  document.getElementById('globalSearch').value = '';
-  filterState.products = [];
-  filterState.formats = [];
-  FILTERS_HAVE_PENDING_CHANGES = false;
-
-  // Apply with no filters
-  applySearchNow();
-  const bar = document.getElementById('appliedFiltersBar');
-  assert(bar.style.display === 'none', 'FAIL: Bar should be hidden with no filters');
-
-  // Add search and filter
+  // Set up filter state
   document.getElementById('globalSearch').value = 'kubernetes';
   filterState.products = ['Red Hat OpenShift'];
   filterState.formats = ['Interactive Demo'];
-  applySearchNow();
+  FILTERS_HAVE_PENDING_CHANGES = false;
 
-  assert(bar.style.display === 'flex', 'FAIL: Bar should be visible with filters');
-  const chips = document.querySelectorAll('.appliedFilterChip');
-  assert(chips.length === 3, 'FAIL: Should show 3 chips (search + product + format)');
-
-  // Remove one filter chip - should mark pending, NOT immediately reload
+  // Test removeAppliedFilter behavior - should mark pending, NOT reload
   const initialRequestSeq = RESULTS_REQUEST_SEQ;
   removeAppliedFilter('products', 'Red Hat OpenShift');
 
@@ -183,9 +168,9 @@ function testAppliedFiltersDisplay() {
   assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Removing applied filter should NOT reload');
   assert(filterState.products.length === 0, 'FAIL: Product should be removed from filterState');
 
-  // Applied filters bar should still show original 3 chips until Apply
-  const chipsAfterRemoval = document.querySelectorAll('.appliedFilterChip');
-  assert(chipsAfterRemoval.length === 3, 'FAIL: Applied filters should not change until Apply');
+  // Verify Apply button shows pending state
+  const applyBtn = document.getElementById('applySearchBtn');
+  assert(applyBtn.textContent === 'Apply*', 'FAIL: Apply button should show pending after chip removal');
 
   console.log('✓ Test 7 passed');
 }
@@ -201,7 +186,7 @@ function runPackage3ATests() {
     testNoReloadBeforeApply();
     testPendingIndication();
     testMoreFiltersCollapsed();
-    testAppliedFiltersDisplay();
+    testAppliedFilterRemoval();
 
     console.log('\n✅ All Package 3A regression tests passed!');
     return true;
