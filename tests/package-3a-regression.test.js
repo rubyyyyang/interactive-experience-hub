@@ -85,24 +85,24 @@ function testAdvancedFilterSync() {
   console.log('✓ Test 3 passed');
 }
 
-// Test 4: No reload before Apply
-function testNoReloadBeforeApply() {
-  console.log('Test 4: No reload before Apply');
+// Test 4: Manual Apply vs immediate Browse
+function testManualApplyVsBrowse() {
+  console.log('Test 4: Manual Apply vs immediate Browse');
 
   const initialRequestSeq = RESULTS_REQUEST_SEQ;
 
-  // Click Quick Filter
+  // Quick Filter should not trigger reload (Manual Apply)
   toggleQuickFilter('Ansible Automation Platform');
   assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Quick Filter should not trigger reload');
 
-  // Type in search
+  // Typing should not trigger reload (Manual Apply)
   document.getElementById('globalSearch').value = 'automation';
   handleSearchInput();
   assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Typing should not trigger reload');
 
-  // Click Browse
+  // Browse by Experience SHOULD trigger immediate reload (exception to Manual Apply)
   browseByExperience('Video Demo');
-  assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Browse should not trigger reload');
+  assert(RESULTS_REQUEST_SEQ > initialRequestSeq, 'FAIL: Browse should trigger immediate reload');
 
   console.log('✓ Test 4 passed');
 }
@@ -183,7 +183,7 @@ function runPackage3ATests() {
     testQuickFilterToggle();
     testBrowseByExperience();
     testAdvancedFilterSync();
-    testNoReloadBeforeApply();
+    testManualApplyVsBrowse();
     testPendingIndication();
     testMoreFiltersCollapsed();
     testAppliedFilterRemoval();

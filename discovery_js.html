@@ -1961,10 +1961,10 @@ async function copyText(text){
           filterState.formats = [type];
         }
 
-        // Update visuals
+        // Update visuals and immediately apply (exception to Manual Apply)
         refreshPickerBox('formats');
         updateBrowseVisuals(type);
-        markFiltersPending_();
+        applySearchNow();
       }
 
       function updateBrowseVisuals(activeType) {
@@ -2382,7 +2382,9 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         CURRENT_RESULTS = items.slice();
         CURRENT_PAGE_RECORD_IDS = items.map(item => String(item.recordId)).filter(Boolean);
         try { seedRecordCache(items); } catch (e) { console.warn("Failed to seed record cache during render:", e); }
-        getCachedElement("summaryText").innerText = `${res.totalRows || 0} Demos found`;
+        const count = res.totalRows || 0;
+        const label = count === 1 ? 'experience' : 'experiences';
+        getCachedElement("summaryText").innerText = `${count} ${label} found`;
 
         renderAppliedFilters();
         renderTdpCounts(res.tdpCounts || {});
@@ -2402,7 +2404,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
       function renderEmptyState(query, activeFilters) {
         var resultsEl = getCachedElement("results");
         var html = '<div class="emptyState">';
-        html += '<div class="emptyStateTitle">No Demos found</div>';
+        html += '<div class="emptyStateTitle">No experiences found</div>';
 
         var synonym = getSynonymSuggestion_(query);
         if (synonym) {
