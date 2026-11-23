@@ -71,26 +71,24 @@ function testHtmlTemplateVariable() {
 }
 
 function testHeaderNavigationLinks() {
-  console.log('Test: Header navigation uses native anchors');
+  console.log('Test: Header navigation has direct Explore Demos and Status Tracker links');
 
-  const headerPattern = /<a [^>]*href="<\?= intakeBaseUrl \?>[^"]*"[^>]*class="navDropdownItem"[^>]*>/g;
-  const headerMatches = discoveryHtml.match(headerPattern);
-  assert.ok(headerMatches && headerMatches.length === 2,
-    'Should have exactly 2 header navigation links using intakeBaseUrl');
+  // Test for Explore Demos direct link (uses goHome onclick, no intakeBaseUrl)
+  const exploreDemosLink = /<a [^>]*href="#"[^>]*onclick="goHome\(event\)"[^>]*class="navButton navLink"[^>]*>/;
+  assert.ok(exploreDemosLink.test(discoveryHtml), 'Should have "Explore Demos" direct navigation link');
 
-  headerMatches.forEach((link, idx) => {
-    assert.ok(/target="_blank"/.test(link),
-      `Header link ${idx + 1} should have target="_blank"`);
-    assert.ok(/rel="noopener"/.test(link),
-      `Header link ${idx + 1} should have rel="noopener"`);
-  });
+  // Test for Status Tracker direct link (uses intakeBaseUrl, no target="_blank")
+  const statusTrackerLink = /<a [^>]*href="<\?= intakeBaseUrl \?>\?page=status"[^>]*class="navButton navLink"[^>]*>/;
+  assert.ok(statusTrackerLink.test(discoveryHtml), 'Should have "Status Tracker" direct navigation link');
 
-  const baseUrlLink = /<a [^>]*href="<\?= intakeBaseUrl \?>"[^>]*class="navDropdownItem"/;
-  const trackerLink = /<a [^>]*href="<\?= intakeBaseUrl \?>\?page=status"[^>]*class="navDropdownItem"/;
-  assert.ok(baseUrlLink.test(discoveryHtml), 'Should have header link to base Intake URL');
-  assert.ok(trackerLink.test(discoveryHtml), 'Should have header link to tracker URL');
+  // Verify Status Tracker link uses same-tab navigation (no target="_blank")
+  const statusTrackerMatch = discoveryHtml.match(statusTrackerLink);
+  if (statusTrackerMatch && statusTrackerMatch[0]) {
+    assert.ok(!/target="_blank"/.test(statusTrackerMatch[0]),
+      'Status Tracker link should NOT have target="_blank" (same-tab navigation)');
+  }
 
-  console.log('  ✓ Header navigation uses native anchors with noopener\n');
+  console.log('  ✓ Header navigation has direct links with same-tab navigation\n');
 }
 
 function testSidebarNavigationLinks() {
@@ -134,17 +132,17 @@ function testNoHardcodedIntakeUrls() {
 }
 
 function testAllFourLinksUpdated() {
-  console.log('Test: All four Intake links use native anchors');
+  console.log('Test: All Intake links use appropriate navigation');
 
   const allIntakeLinks = discoveryHtml.match(/href="<\?= intakeBaseUrl \?>/g);
   assert.ok(allIntakeLinks && allIntakeLinks.length === 4,
-    'Should have exactly 4 native anchor links using <?= intakeBaseUrl ?> (2 header + 2 sidebar)');
+    'Should have exactly 4 native anchor links using <?= intakeBaseUrl ?> (1 header + 1 dropdown + 2 sidebar)');
 
   const noopenerLinks = discoveryHtml.match(/href="<\?= intakeBaseUrl \?>[^"]*"[^>]*target="_blank"[^>]*rel="noopener"/g);
-  assert.ok(noopenerLinks && noopenerLinks.length === 4,
-    'All 4 Intake links should have target="_blank" rel="noopener"');
+  assert.ok(noopenerLinks && noopenerLinks.length === 3,
+    '3 Intake links (dropdown + 2 sidebar) should have target="_blank" rel="noopener"; header link uses same-tab');
 
-  console.log('  ✓ All four Intake links use native anchors with noopener\n');
+  console.log('  ✓ All Intake links use appropriate navigation\n');
 }
 
 try {

@@ -162,7 +162,7 @@
       }
 
       a{color:var(--accent);text-decoration:none}
-      a:hover{text-decoration:underline}
+      a:hover:not(.brandLink){text-decoration:underline}
 
       .wrap{
         max-width:1600px;
@@ -215,10 +215,7 @@
         gap: 12px;
         text-decoration: none;
         color: var(--ink);
-      }
-
-      .brandLink:hover .brandTitle {
-        color: var(--accent);
+        cursor: default;
       }
 
       .brandLogo {
