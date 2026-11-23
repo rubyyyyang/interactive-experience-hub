@@ -2176,6 +2176,10 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         if (wrapEl) {
           wrapEl.classList.remove("is-loading");
         }
+
+        // Invalidate any in-flight chunked renders
+        ++RENDER_SEQ;
+
         const skeletonCount = Math.max(1, Number(count) || 8);
         const cards = Array.from({ length: skeletonCount }, () => `
           <article class="skeletonCard" aria-hidden="true">
@@ -2367,6 +2371,8 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             getCachedElement("summaryText").innerText = "Search failed: " + (error.message || error);
             setResultsLoading(false);
             setApplyButtonLoading_(false);
+            // Clear LAST_RESULTS_REQUEST_KEY to allow retry with same filters
+            LAST_RESULTS_REQUEST_KEY = "";
             if (callback) callback();
           })
           .listDiscoveryPage(filters);
@@ -2505,6 +2511,10 @@ function renderDrawerLink(label, url, actionLabel, recordId){
 
       function renderEmptyState(query, activeFilters) {
         var resultsEl = getCachedElement("results");
+
+        // Invalidate any in-flight chunked renders
+        ++RENDER_SEQ;
+
         var html = '<div class="emptyState">';
         html += '<div class="emptyStateTitle">No experiences found</div>';
 
