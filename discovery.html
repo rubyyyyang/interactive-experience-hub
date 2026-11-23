@@ -57,7 +57,7 @@
       </a>
 
       <!-- Status Tracker Link -->
-      <a href="<?= intakeBaseUrl ?>?page=status" class="navButton navLink">
+      <a href="<?= intakeBaseUrl ?>?page=status" onclick="event.preventDefault(); window.top.location.href='<?= intakeBaseUrl ?>?page=status'; return false;" class="navButton navLink">
         Status Tracker
       </a>
 

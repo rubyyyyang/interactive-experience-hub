@@ -77,14 +77,14 @@ function testHeaderNavigationLinks() {
   const exploreDemosLink = /<a [^>]*href="#"[^>]*onclick="goHome\(event\)"[^>]*class="navButton navLink"[^>]*>/;
   assert.ok(exploreDemosLink.test(discoveryHtml), 'Should have "Explore Demos" direct navigation link');
 
-  // Test for Status Tracker direct link (uses intakeBaseUrl, no target="_blank")
-  const statusTrackerLink = /<a [^>]*href="<\?= intakeBaseUrl \?>\?page=status"[^>]*class="navButton navLink"[^>]*>/;
-  assert.ok(statusTrackerLink.test(discoveryHtml), 'Should have "Status Tracker" direct navigation link');
+  // Test for Status Tracker direct link (uses intakeBaseUrl with window.top navigation)
+  const statusTrackerPattern = /href="<\?= intakeBaseUrl \?>\?page=status".*?onclick=".*?window\.top\.location\.href.*?class="navButton navLink"/s;
+  assert.ok(statusTrackerPattern.test(discoveryHtml), 'Should have "Status Tracker" direct navigation link with window.top navigation');
 
   // Verify Status Tracker link uses same-tab navigation (no target="_blank")
-  const statusTrackerMatch = discoveryHtml.match(statusTrackerLink);
-  if (statusTrackerMatch && statusTrackerMatch[0]) {
-    assert.ok(!/target="_blank"/.test(statusTrackerMatch[0]),
+  const statusTrackerSection = discoveryHtml.match(/<!-- Status Tracker Link -->[\s\S]*?<\/a>/);
+  if (statusTrackerSection && statusTrackerSection[0]) {
+    assert.ok(!/target="_blank"/.test(statusTrackerSection[0]),
       'Status Tracker link should NOT have target="_blank" (same-tab navigation)');
   }
 
