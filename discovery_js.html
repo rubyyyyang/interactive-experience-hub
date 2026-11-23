@@ -497,16 +497,16 @@
 
       function markFiltersPending_() {
         FILTERS_HAVE_PENDING_CHANGES = true;
-        const count = FILTER_DEFS.reduce(function(total, def) {
-          return total + ((filterState[def.key] || []).length ? 1 : 0);
-        }, 0);
+        const toolbar = document.querySelector('.toolbar');
+        if (toolbar) toolbar.classList.add('pendingChanges');
       }
 
       function applySearchNow() {
         clearTimeout(searchTimeout);
         pendingSearches = [];
         FILTERS_HAVE_PENDING_CHANGES = false;
-        const filters = getFilters(1);
+        const toolbar = document.querySelector('.toolbar');
+        if (toolbar) toolbar.classList.remove('pendingChanges');
         reloadResults(1);
       }
       // Manual search input handler. Typing does not trigger search automatically.
@@ -1680,7 +1680,11 @@ async function copyText(text){
         });
         renderTopFilters(FILTER_OPTIONS);
         clearInstantFilters();
+        updateQuickFilterVisuals();
+        updateBrowseVisuals('all');
         FILTERS_HAVE_PENDING_CHANGES = false;
+        const toolbar = document.querySelector('.toolbar');
+        if (toolbar) toolbar.classList.remove('pendingChanges');
         reloadResults(1);
         try {
           if (typeof google !== 'undefined' && google.script && google.script.history) {
