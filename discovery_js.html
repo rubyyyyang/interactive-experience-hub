@@ -1915,6 +1915,44 @@ async function copyText(text){
         });
       }
 
+      function browseByExperience(type) {
+        // Only update format filter, preserve search and other filters
+        if (type === 'all') {
+          filterState.formats = [];
+        } else {
+          filterState.formats = [type];
+        }
+
+        // Update visuals
+        refreshPickerBox('formats');
+        updateBrowseVisuals(type);
+        markFiltersPending_();
+      }
+
+      function updateBrowseVisuals(activeType) {
+        document.querySelectorAll('.discover-card:not(.discover-card-external)').forEach(card => {
+          card.classList.remove('active');
+        });
+
+        // Determine which card to highlight
+        const typeMap = {
+          'all': 'All Experiences',
+          'Interactive Demo': 'Interactive Demos',
+          'Video Demo': 'Video Demos',
+          'YouTube': 'YouTube'
+        };
+
+        const targetLabel = typeMap[activeType];
+        if (targetLabel) {
+          document.querySelectorAll('.discover-card:not(.discover-card-external)').forEach(card => {
+            const label = card.querySelector('.discover-card-label');
+            if (label && label.textContent.trim() === targetLabel) {
+              card.classList.add('active');
+            }
+          });
+        }
+      }
+
 function renderLinkRow(item){
   const url = getPrimaryLink(item);
   if (!url) return "";

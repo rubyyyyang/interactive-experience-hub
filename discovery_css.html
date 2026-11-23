@@ -1071,6 +1071,26 @@
         border-color:var(--accent);
         box-shadow:0 1px 6px rgba(109,40,217,.1);
       }
+      .discover-card.active {
+        border-color: var(--accent);
+        background: var(--accent2);
+        box-shadow: 0 2px 8px rgba(109,40,217,.15);
+      }
+      .discover-card-external {
+        position: relative;
+      }
+      .discover-card-external::after {
+        content: '';
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 12px;
+        height: 12px;
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="%236b7280"><path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg>');
+        background-size: contain;
+        opacity: 0.5;
+        pointer-events: none;
+      }
       .discover-card-icon{
         width:28px;
         height:28px;
