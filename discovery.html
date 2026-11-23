@@ -31,13 +31,13 @@
   <div class="headerContainer">
     <!-- Left: Branding -->
     <div class="headerBrand">
-      <a href="#" onclick="goHome(event)" class="brandLink" title="Return to Hub home">
+      <div class="brandLink">
         <img src="https://coolstuff.redhat.com/assets/stores/REDHAT/branding/site-logo.png" alt="Red Hat" class="brandLogo">
         <div class="brandText">
           <span class="brandDivider">/</span>
           <span class="brandTitle">The Interact Hub</span>
         </div>
-      </a>
+      </div>
     </div>
 
     <!-- Mobile Menu Toggle -->
@@ -51,6 +51,16 @@
 
     <!-- Right: Navigation -->
     <nav class="headerNav" id="headerNav">
+      <!-- Explore Demos Link -->
+      <a href="#" onclick="goHome(event)" class="navButton navLink" aria-current="page">
+        Explore Demos
+      </a>
+
+      <!-- Status Tracker Link -->
+      <a href="<?= intakeBaseUrl ?>?page=status" onclick="event.preventDefault(); window.top.location.href='<?= intakeBaseUrl ?>?page=status'; return false;" class="navButton navLink">
+        Status Tracker
+      </a>
+
       <!-- Create & Submit Dropdown -->
       <div class="navItem navDropdown">
         <button class="navButton" id="createDropdownBtn" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown('createDropdown')">
@@ -65,9 +75,6 @@
           </a>
           <a href="<?= intakeBaseUrl ?>" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
             Submit a Demo for Review
-          </a>
-          <a href="<?= intakeBaseUrl ?>?page=status" target="_blank" rel="noopener" class="navDropdownItem" role="menuitem">
-            Check My Submissions
           </a>
         </div>
       </div>
