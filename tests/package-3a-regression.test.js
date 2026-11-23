@@ -5,6 +5,17 @@
  * Run in browser console after loading discovery.html.
  */
 
+// Test assertion helpers that throw on failure
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function assertEquals(actual, expected, message) {
+  if (actual !== expected) {
+    throw new Error(`${message}\n  Expected: ${expected}\n  Actual: ${actual}`);
+  }
+}
+
 // Test 1: Quick Filter toggle behavior
 function testQuickFilterToggle() {
   console.log('Test 1: Quick Filter toggle behavior');
@@ -16,13 +27,13 @@ function testQuickFilterToggle() {
   toggleQuickFilter('Red Hat Enterprise Linux');
 
   const productsAfterToggle = filterState.products;
-  console.assert(productsAfterToggle.length > 0, 'FAIL: Products should contain RHEL variants');
-  console.assert(FILTERS_HAVE_PENDING_CHANGES === true, 'FAIL: Should mark pending changes');
-  console.assert(document.querySelector('.instant-pill')?.classList.contains('active'), 'FAIL: Pill should be active');
+  assert(productsAfterToggle.length > 0, 'FAIL: Products should contain RHEL variants');
+  assert(FILTERS_HAVE_PENDING_CHANGES === true, 'FAIL: Should mark pending changes');
+  assert(document.querySelector('.instant-pill')?.classList.contains('active'), 'FAIL: Pill should be active');
 
   // Toggle off
   toggleQuickFilter('Red Hat Enterprise Linux');
-  console.assert(filterState.products.length === 0, 'FAIL: Products should be empty after toggle off');
+  assert(filterState.products.length === 0, 'FAIL: Products should be empty after toggle off');
 
   console.log('✓ Test 1 passed');
 }
@@ -39,14 +50,14 @@ function testBrowseByExperience() {
   // Click Interactive Demos
   browseByExperience('Interactive Demo');
 
-  console.assert(document.getElementById('globalSearch').value === 'kubernetes', 'FAIL: Search should be preserved');
-  console.assert(filterState.products.includes('Red Hat OpenShift'), 'FAIL: Product filter should be preserved');
-  console.assert(filterState.formats.length === 1 && filterState.formats[0] === 'Interactive Demo', 'FAIL: Format should be set');
-  console.assert(FILTERS_HAVE_PENDING_CHANGES === true, 'FAIL: Should mark pending changes');
+  assert(document.getElementById('globalSearch').value === 'kubernetes', 'FAIL: Search should be preserved');
+  assert(filterState.products.includes('Red Hat OpenShift'), 'FAIL: Product filter should be preserved');
+  assert(filterState.formats.length === 1 && filterState.formats[0] === 'Interactive Demo', 'FAIL: Format should be set');
+  assert(FILTERS_HAVE_PENDING_CHANGES === true, 'FAIL: Should mark pending changes');
 
   // Click All Experiences
   browseByExperience('all');
-  console.assert(filterState.formats.length === 0, 'FAIL: Formats should be cleared for All Experiences');
+  assert(filterState.formats.length === 0, 'FAIL: Formats should be cleared for All Experiences');
 
   console.log('✓ Test 2 passed');
 }
@@ -62,14 +73,14 @@ function testAdvancedFilterSync() {
   const opensShiftPill = Array.from(document.querySelectorAll('.instant-pill'))
     .find(p => p.textContent.trim() === 'OpenShift');
 
-  console.assert(!opensShiftPill?.classList.contains('active'), 'FAIL: OpenShift pill should start inactive');
+  assert(!opensShiftPill?.classList.contains('active'), 'FAIL: OpenShift pill should start inactive');
 
   // Simulate selecting OpenShift products via advanced dropdown
   const matchingProducts = getMatchingProducts('Red Hat OpenShift');
   filterState.products = matchingProducts;
   updateQuickFilterVisuals();
 
-  console.assert(opensShiftPill?.classList.contains('active'), 'FAIL: OpenShift pill should become active');
+  assert(opensShiftPill?.classList.contains('active'), 'FAIL: OpenShift pill should become active');
 
   console.log('✓ Test 3 passed');
 }
@@ -82,16 +93,16 @@ function testNoReloadBeforeApply() {
 
   // Click Quick Filter
   toggleQuickFilter('Ansible Automation Platform');
-  console.assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Quick Filter should not trigger reload');
+  assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Quick Filter should not trigger reload');
 
   // Type in search
   document.getElementById('globalSearch').value = 'automation';
   handleSearchInput();
-  console.assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Typing should not trigger reload');
+  assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Typing should not trigger reload');
 
   // Click Browse
   browseByExperience('Video Demo');
-  console.assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Browse should not trigger reload');
+  assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Browse should not trigger reload');
 
   console.log('✓ Test 4 passed');
 }
@@ -106,13 +117,13 @@ function testPendingIndication() {
   FILTERS_HAVE_PENDING_CHANGES = false;
   applyBtn.textContent = 'Apply';
 
-  console.assert(applyBtn.textContent === 'Apply', 'FAIL: Button should start as "Apply"');
+  assert(applyBtn.textContent === 'Apply', 'FAIL: Button should start as "Apply"');
 
   // Make a change
   toggleQuickFilter('AI');
 
-  console.assert(applyBtn.textContent === 'Apply*', 'FAIL: Button should change to "Apply*" when pending');
-  console.assert(applyBtn.title.includes('pending'), 'FAIL: Button should have pending tooltip');
+  assert(applyBtn.textContent === 'Apply*', 'FAIL: Button should change to "Apply*" when pending');
+  assert(applyBtn.title.includes('pending'), 'FAIL: Button should have pending tooltip');
 
   console.log('✓ Test 5 passed');
 }
@@ -124,34 +135,35 @@ function testMoreFiltersCollapsed() {
   const panel = document.querySelector('.moreFiltersPanel');
   const btn = document.getElementById('moreFiltersBtn');
 
-  console.assert(panel?.classList.contains('collapsed'), 'FAIL: Panel should start collapsed');
-  console.assert(btn?.textContent === 'More filters', 'FAIL: Button should say "More filters"');
+  assert(panel?.classList.contains('collapsed'), 'FAIL: Panel should start collapsed');
+  assert(btn?.textContent === 'More filters', 'FAIL: Button should say "More filters"');
 
   // Toggle
   toggleMoreFilters();
-  console.assert(!panel?.classList.contains('collapsed'), 'FAIL: Panel should expand');
-  console.assert(btn?.textContent === 'Fewer filters', 'FAIL: Button should say "Fewer filters"');
+  assert(!panel?.classList.contains('collapsed'), 'FAIL: Panel should expand');
+  assert(btn?.textContent === 'Fewer filters', 'FAIL: Button should say "Fewer filters"');
 
   // Toggle back
   toggleMoreFilters();
-  console.assert(panel?.classList.contains('collapsed'), 'FAIL: Panel should collapse');
+  assert(panel?.classList.contains('collapsed'), 'FAIL: Panel should collapse');
 
   console.log('✓ Test 6 passed');
 }
 
-// Test 7: Applied filters display and individual removal
+// Test 7: Applied filters display and manual apply after removal
 function testAppliedFiltersDisplay() {
-  console.log('Test 7: Applied filters display and removal');
+  console.log('Test 7: Applied filters display and manual apply after removal');
 
   // Reset
   document.getElementById('globalSearch').value = '';
   filterState.products = [];
   filterState.formats = [];
+  FILTERS_HAVE_PENDING_CHANGES = false;
 
   // Apply with no filters
   applySearchNow();
   const bar = document.getElementById('appliedFiltersBar');
-  console.assert(bar.style.display === 'none', 'FAIL: Bar should be hidden with no filters');
+  assert(bar.style.display === 'none', 'FAIL: Bar should be hidden with no filters');
 
   // Add search and filter
   document.getElementById('globalSearch').value = 'kubernetes';
@@ -159,9 +171,21 @@ function testAppliedFiltersDisplay() {
   filterState.formats = ['Interactive Demo'];
   applySearchNow();
 
-  console.assert(bar.style.display === 'flex', 'FAIL: Bar should be visible with filters');
+  assert(bar.style.display === 'flex', 'FAIL: Bar should be visible with filters');
   const chips = document.querySelectorAll('.appliedFilterChip');
-  console.assert(chips.length === 3, 'FAIL: Should show 3 chips (search + product + format)');
+  assert(chips.length === 3, 'FAIL: Should show 3 chips (search + product + format)');
+
+  // Remove one filter chip - should mark pending, NOT immediately reload
+  const initialRequestSeq = RESULTS_REQUEST_SEQ;
+  removeAppliedFilter('products', 'Red Hat OpenShift');
+
+  assert(FILTERS_HAVE_PENDING_CHANGES === true, 'FAIL: Removing applied filter should mark pending');
+  assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Removing applied filter should NOT reload');
+  assert(filterState.products.length === 0, 'FAIL: Product should be removed from filterState');
+
+  // Applied filters bar should still show original 3 chips until Apply
+  const chipsAfterRemoval = document.querySelectorAll('.appliedFilterChip');
+  assert(chipsAfterRemoval.length === 3, 'FAIL: Applied filters should not change until Apply');
 
   console.log('✓ Test 7 passed');
 }

@@ -2329,8 +2329,8 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           }
         }
 
-        // Apply changes immediately
-        applySearchNow();
+        // Mark as pending - user must click Apply
+        markFiltersPending_();
       }
 
       function renderTdpCounts(tdpCounts){
