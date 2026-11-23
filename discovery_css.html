@@ -162,7 +162,7 @@
       }
 
       a{color:var(--accent);text-decoration:none}
-      a:hover:not(.brandLink){text-decoration:underline}
+      a:hover:not(.brandLink):not(.navLink){text-decoration:underline}
 
       .wrap{
         max-width:1600px;
@@ -280,6 +280,11 @@
 
       .navLink {
         text-decoration: none;
+      }
+
+      .navLink[aria-current="page"] {
+        background: var(--border);
+        font-weight: 600;
       }
 
       .navChevron {
