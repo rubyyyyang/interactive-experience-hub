@@ -31,6 +31,7 @@
       const RESULTS_CACHE_TTL_MS = 300000;
       const RESULTS_CACHE_MAX_SIZE = 40;
       const RESULTS_CACHE = new Map();
+      const PREFETCH_IN_FLIGHT = new Set(); // Track pending prefetch requests
       let searchCallCount = 0;
       let pendingSearches = [];
       let RESULTS_REQUEST_SEQ = 0;
@@ -620,20 +621,25 @@
             const filters = { ...currentFilters, formats: [type], page: 1 };
             const requestKey = JSON.stringify(filters);
 
-            // Skip if already cached
-            if (getCachedResults_(requestKey)) {
+            // Skip if already cached or in flight
+            if (getCachedResults_(requestKey) || PREFETCH_IN_FLIGHT.has(requestKey)) {
               return;
             }
+
+            // Mark as in flight
+            PREFETCH_IN_FLIGHT.add(requestKey);
 
             // Prefetch in background (silent)
             google.script.run
               .withSuccessHandler((res) => {
+                PREFETCH_IN_FLIGHT.delete(requestKey);
                 if (res) {
                   putCachedResults_(requestKey, res);
                   try { seedRecordCache((res.items) || []); } catch (e) {}
                 }
               })
               .withFailureHandler(() => {
+                PREFETCH_IN_FLIGHT.delete(requestKey);
                 // Silent failure for background prefetch
               })
               .listDiscoveryPage(filters);
@@ -1414,7 +1420,18 @@ async function copyText(text){
             console.log('🔄 Background refresh complete');
             applyBootstrapData_(bootstrap);
             putCachedBootstrap_(bootstrap);
-            renderResults(INITIAL_RESULTS);
+
+            // Only render Bootstrap results if user hasn't changed filters or switched tabs
+            const currentFilters = getFilters(1);
+            const isBaseState = !currentFilters.q && currentFilters.formats.length === 0 &&
+              currentFilters.products.length === 0 && currentFilters.tdps.length === 0 &&
+              currentFilters.creatorNames.length === 0 && currentFilters.marketingPrograms.length === 0 &&
+              currentFilters.salesTactics.length === 0 && CURRENT_PAGE === 1;
+
+            if (isBaseState) {
+              renderResults(INITIAL_RESULTS);
+            }
+
             if (FILTER_OPTIONS && Object.keys(FILTER_OPTIONS).length) {
               renderTopFilters(FILTER_OPTIONS);
             }
@@ -1961,7 +1978,9 @@ async function copyText(text){
         filterState[stateKey] = Array.from(current);
         refreshPickerBox(stateKey);
         updateQuickFilterVisuals();
-        markFiltersPending_();
+
+        // Quick Filters apply immediately (exception to Manual Apply)
+        applySearchNow();
       }
 
       function updateQuickFilterVisuals() {
@@ -2254,12 +2273,16 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         // Get filters for search
         const filters = getFilters(CURRENT_PAGE);
         const requestKey = JSON.stringify(filters);
+
+        // Update URL for both cached and uncached paths
+        const requestSeq = ++RESULTS_REQUEST_SEQ;
+        FILTERS_HAVE_PENDING_CHANGES = false;
+        pushFilterStateToHash_(false);
+
         const cached = getCachedResults_(requestKey);
         if (cached) {
-          // Invalidate any older in-flight requests when serving cached result
-          const requestSeq = ++RESULTS_REQUEST_SEQ;
+          // Serve cached result
           LAST_RESULTS_REQUEST_KEY = requestKey;
-          FILTERS_HAVE_PENDING_CHANGES = false;
           renderResults(cached);
           setResultsLoading(false);
           setApplyButtonLoading_(false);
@@ -2268,15 +2291,11 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           return;
         }
 
-        if (requestKey === LAST_RESULTS_REQUEST_KEY && !callback && !FILTERS_HAVE_PENDING_CHANGES) {
+        if (requestKey === LAST_RESULTS_REQUEST_KEY && !callback) {
           clearSearchStatus_();
           return;
         }
         LAST_RESULTS_REQUEST_KEY = requestKey;
-
-        const requestSeq = ++RESULTS_REQUEST_SEQ;
-        FILTERS_HAVE_PENDING_CHANGES = false;
-        pushFilterStateToHash_(false);
         setApplyButtonLoading_(true);
         setListLoading_(true);
 

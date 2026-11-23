@@ -40,12 +40,14 @@ function testQuickFilterToggle() {
 
 // Test 2: Browse by Experience sets format filter only
 function testBrowseByExperience() {
-  console.log('Test 2: Browse by Experience preserves other filters');
+  console.log('Test 2: Browse by Experience preserves other filters and applies immediately');
 
   // Set up initial state with search and product filter
   document.getElementById('globalSearch').value = 'kubernetes';
   filterState.products = ['Red Hat OpenShift'];
   filterState.formats = [];
+
+  const initialRequestSeq = RESULTS_REQUEST_SEQ;
 
   // Click Interactive Demos
   browseByExperience('Interactive Demo');
@@ -53,7 +55,7 @@ function testBrowseByExperience() {
   assert(document.getElementById('globalSearch').value === 'kubernetes', 'FAIL: Search should be preserved');
   assert(filterState.products.includes('Red Hat OpenShift'), 'FAIL: Product filter should be preserved');
   assert(filterState.formats.length === 1 && filterState.formats[0] === 'Interactive Demo', 'FAIL: Format should be set');
-  assert(FILTERS_HAVE_PENDING_CHANGES === true, 'FAIL: Should mark pending changes');
+  assert(RESULTS_REQUEST_SEQ > initialRequestSeq, 'FAIL: Browse should trigger immediate reload');
 
   // Click All Experiences
   browseByExperience('all');
@@ -85,24 +87,26 @@ function testAdvancedFilterSync() {
   console.log('✓ Test 3 passed');
 }
 
-// Test 4: Manual Apply vs immediate Browse
-function testManualApplyVsBrowse() {
-  console.log('Test 4: Manual Apply vs immediate Browse');
+// Test 4: Manual Apply vs immediate Quick Filter and Browse
+function testManualApplyVsImmediate() {
+  console.log('Test 4: Manual Apply vs immediate Quick Filter and Browse');
 
   const initialRequestSeq = RESULTS_REQUEST_SEQ;
-
-  // Quick Filter should not trigger reload (Manual Apply)
-  toggleQuickFilter('Ansible Automation Platform');
-  assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Quick Filter should not trigger reload');
 
   // Typing should not trigger reload (Manual Apply)
   document.getElementById('globalSearch').value = 'automation';
   handleSearchInput();
   assert(RESULTS_REQUEST_SEQ === initialRequestSeq, 'FAIL: Typing should not trigger reload');
 
-  // Browse by Experience SHOULD trigger immediate reload (exception to Manual Apply)
+  // Quick Filter SHOULD trigger immediate reload (exception to Manual Apply)
+  toggleQuickFilter('Ansible Automation Platform');
+  assert(RESULTS_REQUEST_SEQ > initialRequestSeq, 'FAIL: Quick Filter should trigger immediate reload');
+
+  const afterQuickFilter = RESULTS_REQUEST_SEQ;
+
+  // Browse by Experience SHOULD also trigger immediate reload (exception to Manual Apply)
   browseByExperience('Video Demo');
-  assert(RESULTS_REQUEST_SEQ > initialRequestSeq, 'FAIL: Browse should trigger immediate reload');
+  assert(RESULTS_REQUEST_SEQ > afterQuickFilter, 'FAIL: Browse should trigger immediate reload');
 
   console.log('✓ Test 4 passed');
 }
@@ -183,7 +187,7 @@ function runPackage3ATests() {
     testQuickFilterToggle();
     testBrowseByExperience();
     testAdvancedFilterSync();
-    testManualApplyVsBrowse();
+    testManualApplyVsImmediate();
     testPendingIndication();
     testMoreFiltersCollapsed();
     testAppliedFilterRemoval();
