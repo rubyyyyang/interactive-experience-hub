@@ -31,7 +31,6 @@
       const RESULTS_CACHE_TTL_MS = 300000;
       const RESULTS_CACHE_MAX_SIZE = 40;
       const RESULTS_CACHE = new Map();
-      const INFLIGHT_REQUESTS = new Map(); // Track in-flight requests to prevent duplicates
       let searchCallCount = 0;
       let pendingSearches = [];
       let RESULTS_REQUEST_SEQ = 0;
@@ -602,7 +601,6 @@
 
       function clearResultsCache_() {
         RESULTS_CACHE.clear();
-        INFLIGHT_REQUESTS.clear();
         LAST_RESULTS_REQUEST_KEY = "";
       }
 
@@ -610,10 +608,10 @@
         // Background prefetch top Experience Types for instant tab switching
         // Only prefetch if we have base results loaded (no search/filters)
         const currentFilters = getFilters(1);
-        if (currentFilters.q || currentFilters.products.length || currentFilters.tdps.length ||
-            currentFilters.creatorNames.length || currentFilters.marketingPrograms.length ||
-            currentFilters.salesTactics.length) {
-          return; // Skip prefetch if other filters active
+        if (currentFilters.q || currentFilters.formats.length || currentFilters.products.length ||
+            currentFilters.tdps.length || currentFilters.creatorNames.length ||
+            currentFilters.marketingPrograms.length || currentFilters.salesTactics.length) {
+          return; // Skip prefetch if any filters active
         }
 
         const typesToPrefetch = ['Interactive Demo', 'Video Demo', 'YouTube'];
@@ -622,22 +620,21 @@
             const filters = { ...currentFilters, formats: [type], page: 1 };
             const requestKey = JSON.stringify(filters);
 
-            // Skip if already cached or in-flight
-            if (getCachedResults_(requestKey) || INFLIGHT_REQUESTS.has(requestKey)) {
+            // Skip if already cached
+            if (getCachedResults_(requestKey)) {
               return;
             }
 
-            INFLIGHT_REQUESTS.set(requestKey, true);
+            // Prefetch in background (silent)
             google.script.run
               .withSuccessHandler((res) => {
-                INFLIGHT_REQUESTS.delete(requestKey);
                 if (res) {
                   putCachedResults_(requestKey, res);
                   try { seedRecordCache((res.items) || []); } catch (e) {}
                 }
               })
               .withFailureHandler(() => {
-                INFLIGHT_REQUESTS.delete(requestKey);
+                // Silent failure for background prefetch
               })
               .listDiscoveryPage(filters);
           }, 500 + (index * 300)); // Stagger requests
@@ -1348,14 +1345,22 @@ async function copyText(text){
         if (bootstrap?.synonymMap) SYNONYM_MAP = bootstrap.synonymMap;
         seedRecordCache(INITIAL_RESULTS.items || []);
         try {
+          // Cache Bootstrap results with consistent key (matches getFilters)
           putCachedResults_(JSON.stringify({
-            q: "", products: [], creatorNames: [], tdps: [],
+            q: "", formats: [], products: [], creatorNames: [], tdps: [],
             marketingPrograms: [], salesTactics: [], page: 1, pageSize: 20,
           }), INITIAL_RESULTS);
         } catch (e) {}
 
         // Initialize account display after user email is loaded
         initializeAccountDisplay();
+
+        // Trigger prefetch after Bootstrap data is ready
+        setTimeout(() => {
+          if (!FILTERS_HAVE_PENDING_CHANGES) {
+            prefetchExperienceTypes_();
+          }
+        }, 1500);
       }
 
       async function loadData() {
@@ -2012,12 +2017,15 @@ async function copyText(text){
         const requestKey = JSON.stringify(filters);
         const isCached = !!getCachedResults_(requestKey);
 
-        applySearchNow();
-
         if (isCached) {
-          const duration = performance.now() - startTime;
-          console.log(`Experience tab '${type}' (cached): ${duration.toFixed(1)}ms`);
+          applySearchNow();
+          // Measure including rendering time
+          requestAnimationFrame(() => {
+            const duration = performance.now() - startTime;
+            console.log(`Experience tab '${type}' (cached): ${duration.toFixed(1)}ms`);
+          });
         } else {
+          applySearchNow();
           console.log(`Experience tab '${type}' loading from server...`);
         }
       }
@@ -2248,6 +2256,8 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         const requestKey = JSON.stringify(filters);
         const cached = getCachedResults_(requestKey);
         if (cached) {
+          // Invalidate any older in-flight requests when serving cached result
+          const requestSeq = ++RESULTS_REQUEST_SEQ;
           LAST_RESULTS_REQUEST_KEY = requestKey;
           FILTERS_HAVE_PENDING_CHANGES = false;
           renderResults(cached);
@@ -2269,9 +2279,6 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         pushFilterStateToHash_(false);
         setApplyButtonLoading_(true);
         setListLoading_(true);
-
-        // Track in-flight request
-        INFLIGHT_REQUESTS.set(requestKey, true);
 
         // Avoid rebuilding skeleton DOM for every search. Keep existing cards visible and mark them busy.
         if (CURRENT_RESULTS && CURRENT_RESULTS.length) {
@@ -2305,7 +2312,6 @@ function renderDrawerLink(label, url, actionLabel, recordId){
 
         google.script.run
           .withSuccessHandler((res) => {
-            INFLIGHT_REQUESTS.delete(requestKey);
             if (requestSeq !== RESULTS_REQUEST_SEQ) return;
             try {
               seedRecordCache((res && res.items) || []);
@@ -2324,7 +2330,6 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             }
           })
           .withFailureHandler((error) => {
-            INFLIGHT_REQUESTS.delete(requestKey);
             if (requestSeq !== RESULTS_REQUEST_SEQ) return;
             console.error('Search failed:', error);
             getCachedElement("summaryText").innerText = "Search failed: " + (error.message || error);
