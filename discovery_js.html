@@ -1500,6 +1500,16 @@ async function copyText(text){
       // 9. Pending filter changes show orange accent on toolbar before Apply
       // 10. After Apply, pending state clears and results update
 
+      // Unit test: toggleQuickFilter('Red Hat OpenShift')
+      // Setup: filterState.products = []
+      // Action: Call toggleQuickFilter('Red Hat OpenShift')
+      // Expected: filterState.products includes all matching OpenShift products (excluding AI variants)
+      // Expected: FILTERS_HAVE_PENDING_CHANGES = true
+      // Expected: .instant-pill with text "OpenShift" has .active class
+      // Action: Call toggleQuickFilter('Red Hat OpenShift') again
+      // Expected: filterState.products = []
+      // Expected: .instant-pill with text "OpenShift" does not have .active class
+
             function listDiscoveryPage(params) {
         return INITIAL_RESULTS || {
           totalRows: 0,
