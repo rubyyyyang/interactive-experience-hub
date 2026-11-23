@@ -31,6 +31,7 @@
       const RESULTS_CACHE_TTL_MS = 300000;
       const RESULTS_CACHE_MAX_SIZE = 40;
       const RESULTS_CACHE = new Map();
+      const INFLIGHT_REQUESTS = new Map(); // Track in-flight requests to prevent duplicates
       let searchCallCount = 0;
       let pendingSearches = [];
       let RESULTS_REQUEST_SEQ = 0;
@@ -601,7 +602,46 @@
 
       function clearResultsCache_() {
         RESULTS_CACHE.clear();
+        INFLIGHT_REQUESTS.clear();
         LAST_RESULTS_REQUEST_KEY = "";
+      }
+
+      function prefetchExperienceTypes_() {
+        // Background prefetch top Experience Types for instant tab switching
+        // Only prefetch if we have base results loaded (no search/filters)
+        const currentFilters = getFilters(1);
+        if (currentFilters.q || currentFilters.products.length || currentFilters.tdps.length ||
+            currentFilters.creatorNames.length || currentFilters.marketingPrograms.length ||
+            currentFilters.salesTactics.length) {
+          return; // Skip prefetch if other filters active
+        }
+
+        const typesToPrefetch = ['Interactive Demo', 'Video Demo', 'YouTube'];
+        typesToPrefetch.forEach((type, index) => {
+          setTimeout(() => {
+            const filters = { ...currentFilters, formats: [type], page: 1 };
+            const requestKey = JSON.stringify(filters);
+
+            // Skip if already cached or in-flight
+            if (getCachedResults_(requestKey) || INFLIGHT_REQUESTS.has(requestKey)) {
+              return;
+            }
+
+            INFLIGHT_REQUESTS.set(requestKey, true);
+            google.script.run
+              .withSuccessHandler((res) => {
+                INFLIGHT_REQUESTS.delete(requestKey);
+                if (res) {
+                  putCachedResults_(requestKey, res);
+                  try { seedRecordCache((res.items) || []); } catch (e) {}
+                }
+              })
+              .withFailureHandler(() => {
+                INFLIGHT_REQUESTS.delete(requestKey);
+              })
+              .listDiscoveryPage(filters);
+          }, 500 + (index * 300)); // Stagger requests
+        });
       }
 
       function escapeHtml(str){
@@ -1954,6 +1994,8 @@ async function copyText(text){
       }
 
       function browseByExperience(type) {
+        const startTime = performance.now();
+
         // Only update format filter, preserve search and other filters
         if (type === 'all') {
           filterState.formats = [];
@@ -1964,7 +2006,20 @@ async function copyText(text){
         // Update visuals and immediately apply (exception to Manual Apply)
         refreshPickerBox('formats');
         updateBrowseVisuals(type);
+
+        // Check if result is cached for performance measurement
+        const filters = getFilters(1);
+        const requestKey = JSON.stringify(filters);
+        const isCached = !!getCachedResults_(requestKey);
+
         applySearchNow();
+
+        if (isCached) {
+          const duration = performance.now() - startTime;
+          console.log(`Experience tab '${type}' (cached): ${duration.toFixed(1)}ms`);
+        } else {
+          console.log(`Experience tab '${type}' loading from server...`);
+        }
       }
 
       function updateBrowseVisuals(activeType) {
@@ -2215,6 +2270,9 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         setApplyButtonLoading_(true);
         setListLoading_(true);
 
+        // Track in-flight request
+        INFLIGHT_REQUESTS.set(requestKey, true);
+
         // Avoid rebuilding skeleton DOM for every search. Keep existing cards visible and mark them busy.
         if (CURRENT_RESULTS && CURRENT_RESULTS.length) {
           setResultsLoading(true);
@@ -2247,6 +2305,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
 
         google.script.run
           .withSuccessHandler((res) => {
+            INFLIGHT_REQUESTS.delete(requestKey);
             if (requestSeq !== RESULTS_REQUEST_SEQ) return;
             try {
               seedRecordCache((res && res.items) || []);
@@ -2258,8 +2317,14 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             setResultsLoading(false);
             setApplyButtonLoading_(false);
             if (callback) callback();
+
+            // Trigger background prefetch after first successful load
+            if (CURRENT_PAGE === 1 && !filters.q && filters.formats.length === 0) {
+              setTimeout(prefetchExperienceTypes_, 1000);
+            }
           })
           .withFailureHandler((error) => {
+            INFLIGHT_REQUESTS.delete(requestKey);
             if (requestSeq !== RESULTS_REQUEST_SEQ) return;
             console.error('Search failed:', error);
             getCachedElement("summaryText").innerText = "Search failed: " + (error.message || error);
