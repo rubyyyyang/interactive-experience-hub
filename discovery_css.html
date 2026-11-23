@@ -1092,23 +1092,30 @@
       .tdpPill b{margin-left:6px}
 
       .discover-strip{
-        padding:24px 16px;
-        background:var(--surface-secondary);
-        border-radius:8px;
-        margin-bottom:16px;
+        padding:16px 0;
+        background:var(--bg);
+        border:1px solid var(--border);
+        border-radius:6px;
+        margin-bottom:20px;
       }
       .discover-heading{
-        font-size:16px;
+        font-size:14px;
         font-weight:600;
-        color:var(--text);
-        margin-bottom:16px;
+        color:var(--ink);
+        margin:0 16px 4px 16px;
+      }
+      .discover-helper{
+        font-size:12px;
+        color:var(--muted);
+        margin:0 16px 12px 16px;
       }
       .discover-row{
         display:flex;
-        gap:12px;
+        gap:10px;
         overflow-x:auto;
         -webkit-overflow-scrolling:touch;
         scrollbar-width:thin;
+        padding:0 16px;
       }
       .discover-row::-webkit-scrollbar{
         height:6px;
@@ -1119,46 +1126,49 @@
       }
       .discover-card{
         flex:0 0 auto;
-        min-width:160px;
+        min-width:150px;
         display:flex;
         align-items:center;
         gap:10px;
-        padding:10px 14px;
+        padding:10px 12px;
         border:1px solid var(--border);
-        border-radius:16px;
+        border-radius:8px;
         background:var(--surface);
         text-decoration:none;
         color:var(--ink);
-        transition:border-color .15s, box-shadow .15s;
+        transition:all .15s;
       }
       .discover-card:hover{
         border-color:var(--accent);
-        box-shadow:0 1px 6px rgba(109,40,217,.1);
+        box-shadow:0 2px 8px rgba(109,40,217,.12);
       }
       .discover-card.active {
         border-color: var(--accent);
         background: var(--accent2);
-        box-shadow: 0 2px 8px rgba(109,40,217,.15);
+        box-shadow: 0 2px 8px rgba(109,40,217,.18);
       }
       .discover-card-external {
         position: relative;
+      }
+      .discover-card-external .discover-card-sub svg {
+        display: none;
       }
       .discover-card-external::after {
         content: '';
         position: absolute;
         top: 8px;
         right: 8px;
-        width: 12px;
-        height: 12px;
-        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="%236b7280"><path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg>');
+        width: 10px;
+        height: 10px;
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="%236b7280"><path d="M8.636 3.5a .5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg>');
         background-size: contain;
-        opacity: 0.5;
+        opacity: 0.4;
         pointer-events: none;
       }
       .discover-card-icon{
-        width:28px;
-        height:28px;
-        border-radius:10px;
+        width:26px;
+        height:26px;
+        border-radius:6px;
         background:var(--accent2);
         color:var(--accent);
         display:flex;
