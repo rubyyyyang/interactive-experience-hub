@@ -1501,6 +1501,7 @@ async function copyText(text){
       // 4. No reload before Apply (Quick Filters, typing, Browse all pending-only)
       // 5. Pending indication on Apply button (Apply → Apply*)
       // 6. More Filters panel starts collapsed and toggles correctly
+      // 7. Applied filters display after Apply and individual removal works
       //
       // === MANUAL TESTING REQUIRED ===
       // 7. Desktop: light theme - all UI elements readable, filters functional
@@ -2269,6 +2270,69 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           .listDiscoveryPage(filters);
       }
 
+      function renderAppliedFilters() {
+        const bar = getCachedElement('appliedFiltersBar');
+        const chips = getCachedElement('appliedFiltersChips');
+        if (!bar || !chips) return;
+
+        const appliedChips = [];
+        const searchQuery = getCachedElement('globalSearch').value.trim();
+
+        // Add search chip
+        if (searchQuery) {
+          appliedChips.push(`
+            <div class="appliedFilterChip">
+              Search: "${escapeHtml(searchQuery)}"
+              <button onclick="removeAppliedFilter('search')" title="Remove search" aria-label="Remove search filter">&times;</button>
+            </div>
+          `);
+        }
+
+        // Add filter chips
+        FILTER_DEFS.forEach(def => {
+          const values = filterState[def.key] || [];
+          values.forEach(value => {
+            appliedChips.push(`
+              <div class="appliedFilterChip">
+                ${escapeHtml(def.label)}: ${escapeHtml(value)}
+                <button onclick="removeAppliedFilter('${escapeAttr(def.key)}', '${escapeAttr(value)}')" title="Remove filter" aria-label="Remove ${escapeAttr(def.label)} filter">&times;</button>
+              </div>
+            `);
+          });
+        });
+
+        if (appliedChips.length > 0) {
+          chips.innerHTML = appliedChips.join('');
+          bar.style.display = 'flex';
+        } else {
+          bar.style.display = 'none';
+        }
+      }
+
+      function removeAppliedFilter(key, value) {
+        if (key === 'search') {
+          getCachedElement('globalSearch').value = '';
+        } else {
+          const arr = [...(filterState[key] || [])];
+          const idx = arr.indexOf(value);
+          if (idx >= 0) arr.splice(idx, 1);
+          filterState[key] = arr;
+          refreshPickerBox(key);
+
+          // Sync visuals
+          if (key === 'products' || key === 'tdps') {
+            updateQuickFilterVisuals();
+          }
+          if (key === 'formats') {
+            const activeType = arr.length === 1 ? arr[0] : (arr.length === 0 ? 'all' : null);
+            if (activeType) updateBrowseVisuals(activeType);
+          }
+        }
+
+        // Apply changes immediately
+        applySearchNow();
+      }
+
       function renderTdpCounts(tdpCounts){
         const map = tdpCounts || {};
         const keys = Object.keys(map);
@@ -2320,6 +2384,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         try { seedRecordCache(items); } catch (e) { console.warn("Failed to seed record cache during render:", e); }
         getCachedElement("summaryText").innerText = `${res.totalRows || 0} Demos found`;
 
+        renderAppliedFilters();
         renderTdpCounts(res.tdpCounts || {});
         renderPager(res);
 

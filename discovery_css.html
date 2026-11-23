@@ -1001,6 +1001,60 @@
       .optionRow:hover{background:#f9fafb}
       .optionRow input{width:auto;margin:0}
 
+      .appliedFiltersBar{
+        display:flex;
+        align-items:center;
+        gap:12px;
+        flex-wrap:wrap;
+        margin:12px 0;
+        padding:10px 14px;
+        background:var(--surface);
+        border:1px solid var(--border);
+        border-radius:12px;
+        font-size:13px;
+      }
+
+      .appliedFiltersLabel{
+        color:var(--muted);
+        font-weight:600;
+        font-size:12px;
+      }
+
+      .appliedFiltersChips{
+        display:flex;
+        gap:6px;
+        flex-wrap:wrap;
+        flex:1;
+      }
+
+      .appliedFilterChip{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:5px 10px;
+        border-radius:999px;
+        background:var(--accent2);
+        border:1px solid var(--accent);
+        color:var(--accent);
+        font-size:12px;
+        font-weight:600;
+      }
+
+      .appliedFilterChip button{
+        border:none;
+        background:transparent;
+        cursor:pointer;
+        font-size:14px;
+        line-height:1;
+        color:inherit;
+        padding:0;
+        margin-left:2px;
+      }
+
+      .appliedFilterChip button:hover{
+        opacity:0.7;
+      }
+
       .summaryBar{
         display:flex;
         justify-content:space-between;

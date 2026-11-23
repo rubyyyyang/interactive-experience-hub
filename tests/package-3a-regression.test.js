@@ -139,6 +139,33 @@ function testMoreFiltersCollapsed() {
   console.log('✓ Test 6 passed');
 }
 
+// Test 7: Applied filters display and individual removal
+function testAppliedFiltersDisplay() {
+  console.log('Test 7: Applied filters display and removal');
+
+  // Reset
+  document.getElementById('globalSearch').value = '';
+  filterState.products = [];
+  filterState.formats = [];
+
+  // Apply with no filters
+  applySearchNow();
+  const bar = document.getElementById('appliedFiltersBar');
+  console.assert(bar.style.display === 'none', 'FAIL: Bar should be hidden with no filters');
+
+  // Add search and filter
+  document.getElementById('globalSearch').value = 'kubernetes';
+  filterState.products = ['Red Hat OpenShift'];
+  filterState.formats = ['Interactive Demo'];
+  applySearchNow();
+
+  console.assert(bar.style.display === 'flex', 'FAIL: Bar should be visible with filters');
+  const chips = document.querySelectorAll('.appliedFilterChip');
+  console.assert(chips.length === 3, 'FAIL: Should show 3 chips (search + product + format)');
+
+  console.log('✓ Test 7 passed');
+}
+
 // Run all tests
 function runPackage3ATests() {
   console.log('=== Package 3A Regression Tests ===\n');
@@ -150,6 +177,7 @@ function runPackage3ATests() {
     testNoReloadBeforeApply();
     testPendingIndication();
     testMoreFiltersCollapsed();
+    testAppliedFiltersDisplay();
 
     console.log('\n✅ All Package 3A regression tests passed!');
     return true;
