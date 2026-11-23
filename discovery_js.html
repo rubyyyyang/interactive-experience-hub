@@ -497,23 +497,29 @@
 
       function markFiltersPending_() {
         FILTERS_HAVE_PENDING_CHANGES = true;
-        const toolbar = document.querySelector('.toolbar');
-        if (toolbar) toolbar.classList.add('pendingChanges');
+        const applyBtn = getCachedElement('applySearchBtn');
+        if (applyBtn && applyBtn.textContent === 'Apply') {
+          applyBtn.textContent = 'Apply*';
+          applyBtn.title = 'Apply pending filter and search changes';
+        }
       }
 
       function applySearchNow() {
         clearTimeout(searchTimeout);
         pendingSearches = [];
         FILTERS_HAVE_PENDING_CHANGES = false;
-        const toolbar = document.querySelector('.toolbar');
-        if (toolbar) toolbar.classList.remove('pendingChanges');
+        const applyBtn = getCachedElement('applySearchBtn');
+        if (applyBtn) {
+          applyBtn.textContent = 'Apply';
+          applyBtn.title = '';
+        }
         reloadResults(1);
       }
       // Manual search input handler. Typing does not trigger search automatically.
       function handleSearchInput() {
         clearTimeout(searchTimeout);
         pendingSearches = [];
-        FILTERS_HAVE_PENDING_CHANGES = true;
+        markFiltersPending_();
 
         const query = document.getElementById("globalSearch").value.trim();
 
@@ -1526,6 +1532,11 @@ async function copyText(text){
           const html = renderSingleFilter(def, filterOptions[def.key] || []);
           getCachedElement(`filter-slot-${def.key}`).innerHTML = html;
         });
+        // Sync visual states after rendering filters
+        updateQuickFilterVisuals();
+        const formats = filterState.formats || [];
+        const activeType = formats.length === 1 ? formats[0] : (formats.length === 0 ? 'all' : null);
+        if (activeType) updateBrowseVisuals(activeType);
       }
 
       function renderSingleFilter(def, options){
@@ -1622,6 +1633,17 @@ async function copyText(text){
         else arr.push(value);
         filterState[key] = arr;
         refreshPickerBox(key);
+
+        // Sync Quick Filter visuals when products/tdps change
+        if (key === 'products' || key === 'tdps') {
+          updateQuickFilterVisuals();
+        }
+        // Sync Browse visuals when formats change
+        if (key === 'formats') {
+          const activeType = arr.length === 1 ? arr[0] : (arr.length === 0 ? 'all' : null);
+          if (activeType) updateBrowseVisuals(activeType);
+        }
+
         markFiltersPending_();
       }
 
@@ -1693,8 +1715,11 @@ async function copyText(text){
         updateQuickFilterVisuals();
         updateBrowseVisuals('all');
         FILTERS_HAVE_PENDING_CHANGES = false;
-        const toolbar = document.querySelector('.toolbar');
-        if (toolbar) toolbar.classList.remove('pendingChanges');
+        const applyBtn = getCachedElement('applySearchBtn');
+        if (applyBtn) {
+          applyBtn.textContent = 'Apply';
+          applyBtn.title = '';
+        }
         reloadResults(1);
         try {
           if (typeof google !== 'undefined' && google.script && google.script.history) {
