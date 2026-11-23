@@ -35,6 +35,7 @@
       let searchCallCount = 0;
       let pendingSearches = [];
       let RESULTS_REQUEST_SEQ = 0;
+      let RENDER_SEQ = 0; // Track render sequence to invalidate stale chunked renders
       let LAST_RESULTS_REQUEST_KEY = "";
       let SEARCH_STATUS_HIDE_TIMER = null;
       let SEARCH_IS_LOADING = false;
@@ -2206,6 +2207,9 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         let index = 0;
         resultsEl.innerHTML = "";
 
+        // Capture render sequence to detect stale renders
+        const thisRenderSeq = ++RENDER_SEQ;
+
         function buildCardHtml(item) {
           const isSelected = SELECTED_CARDS.has(item.recordId);
           const isSaved = SAVED_ARCADES.has(item.recordId);
@@ -2248,6 +2252,11 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         }
 
         function appendChunk() {
+          // Abort if newer render started
+          if (thisRenderSeq !== RENDER_SEQ) {
+            return;
+          }
+
           const slice = items.slice(index, index + chunkSize);
           if (!slice.length) {
             applySelectionModeToVisibleCards();
@@ -2274,14 +2283,12 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         const filters = getFilters(CURRENT_PAGE);
         const requestKey = JSON.stringify(filters);
 
-        // Update URL for both cached and uncached paths
-        const requestSeq = ++RESULTS_REQUEST_SEQ;
-        FILTERS_HAVE_PENDING_CHANGES = false;
-        pushFilterStateToHash_(false);
-
         const cached = getCachedResults_(requestKey);
         if (cached) {
-          // Serve cached result
+          // Update URL and serve cached result
+          const requestSeq = ++RESULTS_REQUEST_SEQ;
+          FILTERS_HAVE_PENDING_CHANGES = false;
+          pushFilterStateToHash_(false);
           LAST_RESULTS_REQUEST_KEY = requestKey;
           renderResults(cached);
           setResultsLoading(false);
@@ -2291,10 +2298,16 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           return;
         }
 
+        // Check for duplicate uncached request BEFORE incrementing sequence
         if (requestKey === LAST_RESULTS_REQUEST_KEY && !callback) {
           clearSearchStatus_();
           return;
         }
+
+        // Update URL and start new request
+        const requestSeq = ++RESULTS_REQUEST_SEQ;
+        FILTERS_HAVE_PENDING_CHANGES = false;
+        pushFilterStateToHash_(false);
         LAST_RESULTS_REQUEST_KEY = requestKey;
         setApplyButtonLoading_(true);
         setListLoading_(true);

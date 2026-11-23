@@ -16,24 +16,28 @@ function assertEquals(actual, expected, message) {
   }
 }
 
-// Test 1: Quick Filter toggle behavior
+// Test 1: Quick Filter toggle applies immediately
 function testQuickFilterToggle() {
-  console.log('Test 1: Quick Filter toggle behavior');
+  console.log('Test 1: Quick Filter toggle applies immediately');
 
   // Reset state
   filterState.products = [];
+  const initialRequestSeq = RESULTS_REQUEST_SEQ;
 
   // Toggle RHEL Quick Filter on
   toggleQuickFilter('Red Hat Enterprise Linux');
 
   const productsAfterToggle = filterState.products;
   assert(productsAfterToggle.length > 0, 'FAIL: Products should contain RHEL variants');
-  assert(FILTERS_HAVE_PENDING_CHANGES === true, 'FAIL: Should mark pending changes');
+  assert(RESULTS_REQUEST_SEQ > initialRequestSeq, 'FAIL: Quick Filter should trigger immediate reload');
   assert(document.querySelector('.instant-pill')?.classList.contains('active'), 'FAIL: Pill should be active');
+
+  const afterFirstToggle = RESULTS_REQUEST_SEQ;
 
   // Toggle off
   toggleQuickFilter('Red Hat Enterprise Linux');
   assert(filterState.products.length === 0, 'FAIL: Products should be empty after toggle off');
+  assert(RESULTS_REQUEST_SEQ > afterFirstToggle, 'FAIL: Toggle off should also trigger immediate reload');
 
   console.log('✓ Test 1 passed');
 }
@@ -111,7 +115,7 @@ function testManualApplyVsImmediate() {
   console.log('✓ Test 4 passed');
 }
 
-// Test 5: Pending indication on Apply button
+// Test 5: Pending indication on Apply button (Manual Apply only)
 function testPendingIndication() {
   console.log('Test 5: Pending indication on Apply button');
 
@@ -123,10 +127,11 @@ function testPendingIndication() {
 
   assert(applyBtn.textContent === 'Apply', 'FAIL: Button should start as "Apply"');
 
-  // Make a change
-  toggleQuickFilter('AI');
+  // Typing in Search (Manual Apply) should mark pending
+  document.getElementById('globalSearch').value = 'test query';
+  handleSearchInput();
 
-  assert(applyBtn.textContent === 'Apply*', 'FAIL: Button should change to "Apply*" when pending');
+  assert(applyBtn.textContent === 'Apply*', 'FAIL: Button should change to "Apply*" when Search has pending changes');
   assert(applyBtn.title.includes('pending'), 'FAIL: Button should have pending tooltip');
 
   console.log('✓ Test 5 passed');
@@ -179,6 +184,61 @@ function testAppliedFilterRemoval() {
   console.log('✓ Test 7 passed');
 }
 
+// Test 8: Repeated same-filter clicks do not create stuck state
+function testRepeatedSameFilterClicks() {
+  console.log('Test 8: Repeated same-filter clicks');
+
+  // Reset to known state
+  filterState.products = [];
+  const initialRequestSeq = RESULTS_REQUEST_SEQ;
+
+  // Click same Quick Filter twice rapidly
+  toggleQuickFilter('Ansible Automation Platform');
+  const afterFirst = RESULTS_REQUEST_SEQ;
+  assert(afterFirst > initialRequestSeq, 'FAIL: First click should trigger reload');
+
+  toggleQuickFilter('Ansible Automation Platform');
+  const afterSecond = RESULTS_REQUEST_SEQ;
+  assert(afterSecond > afterFirst, 'FAIL: Second click (toggle off) should also trigger reload');
+
+  // Click same Browse tab twice rapidly
+  browseByExperience('Interactive Demo');
+  const afterBrowse1 = RESULTS_REQUEST_SEQ;
+  assert(afterBrowse1 > afterSecond, 'FAIL: First Browse click should trigger reload');
+
+  browseByExperience('Interactive Demo');
+  const afterBrowse2 = RESULTS_REQUEST_SEQ;
+  // Same Browse tab clicked twice should NOT increment (early return for duplicate request)
+  assert(afterBrowse2 === afterBrowse1, 'FAIL: Clicking same Browse tab twice should early-return');
+
+  console.log('✓ Test 8 passed');
+}
+
+// Test 9: Rapid cached/uncached tab switching
+function testRapidTabSwitching() {
+  console.log('Test 9: Rapid cached/uncached tab switching');
+
+  const initialRequestSeq = RESULTS_REQUEST_SEQ;
+  const initialRenderSeq = RENDER_SEQ;
+
+  // Switch tabs rapidly (some may be cached, some uncached)
+  browseByExperience('Interactive Demo');
+  browseByExperience('Video Demo');
+  browseByExperience('all');
+  browseByExperience('YouTube');
+
+  // Verify RESULTS_REQUEST_SEQ incremented (at least for uncached requests)
+  assert(RESULTS_REQUEST_SEQ > initialRequestSeq, 'FAIL: Tab switching should increment request sequence');
+
+  // Verify RENDER_SEQ incremented (chunked rendering started)
+  assert(RENDER_SEQ > initialRenderSeq, 'FAIL: Tab switching should increment render sequence');
+
+  // Verify final state matches last selected tab (YouTube)
+  assert(filterState.formats.length === 1 && filterState.formats[0] === 'YouTube', 'FAIL: Final format should be YouTube');
+
+  console.log('✓ Test 9 passed');
+}
+
 // Run all tests
 function runPackage3ATests() {
   console.log('=== Package 3A Regression Tests ===\n');
@@ -191,6 +251,8 @@ function runPackage3ATests() {
     testPendingIndication();
     testMoreFiltersCollapsed();
     testAppliedFilterRemoval();
+    testRepeatedSameFilterClicks();
+    testRapidTabSwitching();
 
     console.log('\n✅ All Package 3A regression tests passed!');
     return true;
