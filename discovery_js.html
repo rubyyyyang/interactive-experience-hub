@@ -2593,8 +2593,14 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           relaxedFilters.q = tokens[0];
         }
 
+        // Capture render sequence to detect stale responses
+        var renderSeq = RENDER_SEQ;
+
         google.script.run
           .withSuccessHandler(function(res) {
+            // Abort if user switched away from empty state
+            if (renderSeq !== RENDER_SEQ) return;
+
             if (res && res.items && res.items.length > 0) {
               var html = '<div class="emptyStateRelatedWrap">';
               html += '<div class="emptyStateRelatedLabel">Related demos</div>';
