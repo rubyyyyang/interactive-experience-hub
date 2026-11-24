@@ -1,0 +1,92 @@
+=== Package 3A Browser Test Results ===
+DEV URL: https://script.google.com/a/macros/redhat.com/s/AKfycbxvHiD1Xab3gsf0pYA-k5ZejnRyabPupv6gULcY4m21/dev
+Commit: 1dd5842
+Date: 2026-11-23
+
+INSTRUCTIONS:
+1. Open DEV URL in Chrome
+2. Open DevTools console (F12)
+3. Copy tests/package-3a-regression.test.js into console
+4. Run: runPackage3ATests()
+5. Record results below
+
+--- AUTOMATED TEST RESULTS ---
+
+Test 1: Quick Filter toggle behavior
+Result:
+
+Test 2: Browse by Experience preserves other filters
+Result:
+
+Test 3: Advanced filter sync to Quick Filters
+Result:
+
+Test 4: No reload before Apply
+Result:
+
+Test 5: Pending indication on Apply button
+Result:
+
+Test 6: More Filters starts collapsed
+Result:
+
+Test 7: Applied filter removal marks pending without reload
+Result:
+
+Overall:
+
+--- MANUAL TEST RESULTS ---
+
+Page Order Verification:
+[ ] Search + More filters + Apply + Reset visible
+[ ] Quick Filters below search
+[ ] Browse by Experience below Quick Filters
+[ ] Results Grid below Browse
+
+Manual Apply Behavior:
+[ ] Type in search - shows Apply*
+[ ] Click Quick Filter - shows Apply*
+[ ] Click Browse card - shows Apply*
+[ ] No results reload until Apply clicked
+[ ] Apply button reloads results
+
+Applied Filter Chips:
+[ ] Apply filters (search + product + format)
+[ ] 3 chips appear in applied filters bar
+[ ] Click X on one chip
+[ ] Apply* shown (pending)
+[ ] No immediate reload
+[ ] Click Apply
+[ ] Results reload
+[ ] Chips update to show remaining filters
+
+Browse External Links:
+[ ] Livestreams opens https://www.redhat.com/en/livestreaming
+[ ] Architectures opens https://www.redhat.com/architect/portfolio/
+[ ] Interactive Labs opens https://www.redhat.com/en/interactive-labs
+[ ] Labs opens https://demo.redhat.com/
+[ ] All open in new tab
+
+Mobile Layout (iPhone SE or similar):
+[ ] Search full width
+[ ] Buttons wrap responsively
+[ ] Quick Filters wrap
+[ ] Browse cards stack
+[ ] No horizontal scroll
+
+Essential Existing Features:
+[ ] URL hash restoration works
+[ ] Pagination works with filters
+[ ] Save demo (bookmark icon) works
+[ ] Selection checkboxes work
+[ ] Export to CSV works
+
+--- ISSUES FOUND ---
+
+(List any failures or issues)
+
+--- CONCLUSION ---
+
+Pass/Fail:
+Ready for merge: Yes/No
+Issues requiring fix:
