@@ -31,9 +31,11 @@
       const RESULTS_CACHE_TTL_MS = 300000;
       const RESULTS_CACHE_MAX_SIZE = 40;
       const RESULTS_CACHE = new Map();
+      const PREFETCH_IN_FLIGHT = new Set(); // Track pending prefetch requests
       let searchCallCount = 0;
       let pendingSearches = [];
       let RESULTS_REQUEST_SEQ = 0;
+      let RENDER_SEQ = 0; // Track render sequence to invalidate stale chunked renders
       let LAST_RESULTS_REQUEST_KEY = "";
       let SEARCH_STATUS_HIDE_TIMER = null;
       let SEARCH_IS_LOADING = false;
@@ -497,23 +499,29 @@
 
       function markFiltersPending_() {
         FILTERS_HAVE_PENDING_CHANGES = true;
-        const count = FILTER_DEFS.reduce(function(total, def) {
-          return total + ((filterState[def.key] || []).length ? 1 : 0);
-        }, 0);
+        const applyBtn = getCachedElement('applySearchBtn');
+        if (applyBtn && applyBtn.textContent === 'Apply') {
+          applyBtn.textContent = 'Apply*';
+          applyBtn.title = 'Apply pending filter and search changes';
+        }
       }
 
       function applySearchNow() {
         clearTimeout(searchTimeout);
         pendingSearches = [];
         FILTERS_HAVE_PENDING_CHANGES = false;
-        const filters = getFilters(1);
+        const applyBtn = getCachedElement('applySearchBtn');
+        if (applyBtn) {
+          applyBtn.textContent = 'Apply';
+          applyBtn.title = '';
+        }
         reloadResults(1);
       }
       // Manual search input handler. Typing does not trigger search automatically.
       function handleSearchInput() {
         clearTimeout(searchTimeout);
         pendingSearches = [];
-        FILTERS_HAVE_PENDING_CHANGES = true;
+        markFiltersPending_();
 
         const query = document.getElementById("globalSearch").value.trim();
 
@@ -596,6 +604,48 @@
       function clearResultsCache_() {
         RESULTS_CACHE.clear();
         LAST_RESULTS_REQUEST_KEY = "";
+      }
+
+      function prefetchExperienceTypes_() {
+        // Background prefetch top Experience Types for instant tab switching
+        // Only prefetch if we have base results loaded (no search/filters)
+        const currentFilters = getFilters(1);
+        if (currentFilters.q || currentFilters.formats.length || currentFilters.products.length ||
+            currentFilters.tdps.length || currentFilters.creatorNames.length ||
+            currentFilters.marketingPrograms.length || currentFilters.salesTactics.length) {
+          return; // Skip prefetch if any filters active
+        }
+
+        const typesToPrefetch = ['Interactive Demo', 'Video Demo', 'YouTube'];
+        typesToPrefetch.forEach((type, index) => {
+          setTimeout(() => {
+            const filters = { ...currentFilters, formats: [type], page: 1 };
+            const requestKey = JSON.stringify(filters);
+
+            // Skip if already cached or in flight
+            if (getCachedResults_(requestKey) || PREFETCH_IN_FLIGHT.has(requestKey)) {
+              return;
+            }
+
+            // Mark as in flight
+            PREFETCH_IN_FLIGHT.add(requestKey);
+
+            // Prefetch in background (silent)
+            google.script.run
+              .withSuccessHandler((res) => {
+                PREFETCH_IN_FLIGHT.delete(requestKey);
+                if (res) {
+                  putCachedResults_(requestKey, res);
+                  try { seedRecordCache((res.items) || []); } catch (e) {}
+                }
+              })
+              .withFailureHandler(() => {
+                PREFETCH_IN_FLIGHT.delete(requestKey);
+                // Silent failure for background prefetch
+              })
+              .listDiscoveryPage(filters);
+          }, 500 + (index * 300)); // Stagger requests
+        });
       }
 
       function escapeHtml(str){
@@ -1302,14 +1352,22 @@ async function copyText(text){
         if (bootstrap?.synonymMap) SYNONYM_MAP = bootstrap.synonymMap;
         seedRecordCache(INITIAL_RESULTS.items || []);
         try {
+          // Cache Bootstrap results with consistent key (matches getFilters)
           putCachedResults_(JSON.stringify({
-            q: "", products: [], creatorNames: [], tdps: [],
+            q: "", formats: [], products: [], creatorNames: [], tdps: [],
             marketingPrograms: [], salesTactics: [], page: 1, pageSize: 20,
           }), INITIAL_RESULTS);
         } catch (e) {}
 
         // Initialize account display after user email is loaded
         initializeAccountDisplay();
+
+        // Trigger prefetch after Bootstrap data is ready
+        setTimeout(() => {
+          if (!FILTERS_HAVE_PENDING_CHANGES) {
+            prefetchExperienceTypes_();
+          }
+        }, 1500);
       }
 
       async function loadData() {
@@ -1363,7 +1421,18 @@ async function copyText(text){
             console.log('🔄 Background refresh complete');
             applyBootstrapData_(bootstrap);
             putCachedBootstrap_(bootstrap);
-            renderResults(INITIAL_RESULTS);
+
+            // Only render Bootstrap results if user hasn't changed filters or switched tabs
+            const currentFilters = getFilters(1);
+            const isBaseState = !currentFilters.q && currentFilters.formats.length === 0 &&
+              currentFilters.products.length === 0 && currentFilters.tdps.length === 0 &&
+              currentFilters.creatorNames.length === 0 && currentFilters.marketingPrograms.length === 0 &&
+              currentFilters.salesTactics.length === 0 && CURRENT_PAGE === 1;
+
+            if (isBaseState) {
+              renderResults(INITIAL_RESULTS);
+            }
+
             if (FILTER_OPTIONS && Object.keys(FILTER_OPTIONS).length) {
               renderTopFilters(FILTER_OPTIONS);
             }
@@ -1488,6 +1557,27 @@ async function copyText(text){
         console.log("🎯 Significant performance improvements while maintaining full compatibility");
       }
 
+      // === AUTOMATED VERIFICATION (run tests/package-3a-regression.test.js in browser console) ===
+      // 1. Quick Filter toggle behavior (on/off, visual sync, pending state)
+      // 2. Browse by Experience preserves search and other filters
+      // 3. Advanced filter changes sync Quick Filter visual states
+      // 4. No reload before Apply (Quick Filters, typing, Browse all pending-only)
+      // 5. Pending indication on Apply button (Apply → Apply*)
+      // 6. More Filters panel starts collapsed and toggles correctly
+      // 7. Applied filters display after Apply and individual removal works
+      //
+      // === MANUAL TESTING REQUIRED ===
+      // 7. Desktop: light theme - all UI elements readable, filters functional
+      // 8. Desktop: dark theme - colors correct, no contrast issues
+      // 9. Mobile (iPhone SE): Browse cards wrap, More filters accessible, Quick Filters responsive
+      // 10. Tablet (iPad): Layout usable, no horizontal scroll, dropdowns not clipped
+      // 11. External Browse links (Livestreams, Architectures, Interactive Labs, Labs) open in new tab with correct URLs
+      // 12. URL state preservation: apply filters, check URL hash updates, reload page, verify filters restore
+      // 13. Pagination: apply filter with >20 results, navigate to page 2, verify pagination works
+      // 14. Saved Demos: select cards, save demo, open Saved Demos modal, verify list accurate
+      // 15. Export: select 3 cards, export as CSV, verify 3 rows with correct data
+      // 16. Integration: type search + select Quick Filter + select Browse type + open More filters + select advanced filter + Apply → verify all filters combine correctly in results
+
             function listDiscoveryPage(params) {
         return INITIAL_RESULTS || {
           totalRows: 0,
@@ -1504,6 +1594,11 @@ async function copyText(text){
           const html = renderSingleFilter(def, filterOptions[def.key] || []);
           getCachedElement(`filter-slot-${def.key}`).innerHTML = html;
         });
+        // Sync visual states after rendering filters
+        updateQuickFilterVisuals();
+        const formats = filterState.formats || [];
+        const activeType = formats.length === 1 ? formats[0] : (formats.length === 0 ? 'all' : null);
+        if (activeType) updateBrowseVisuals(activeType);
       }
 
       function renderSingleFilter(def, options){
@@ -1600,6 +1695,17 @@ async function copyText(text){
         else arr.push(value);
         filterState[key] = arr;
         refreshPickerBox(key);
+
+        // Sync Quick Filter visuals when products/tdps change
+        if (key === 'products' || key === 'tdps') {
+          updateQuickFilterVisuals();
+        }
+        // Sync Browse visuals when formats change
+        if (key === 'formats') {
+          const activeType = arr.length === 1 ? arr[0] : (arr.length === 0 ? 'all' : null);
+          if (activeType) updateBrowseVisuals(activeType);
+        }
+
         markFiltersPending_();
       }
 
@@ -1668,7 +1774,14 @@ async function copyText(text){
         });
         renderTopFilters(FILTER_OPTIONS);
         clearInstantFilters();
+        updateQuickFilterVisuals();
+        updateBrowseVisuals('all');
         FILTERS_HAVE_PENDING_CHANGES = false;
+        const applyBtn = getCachedElement('applySearchBtn');
+        if (applyBtn) {
+          applyBtn.textContent = 'Apply';
+          applyBtn.title = '';
+        }
         reloadResults(1);
         try {
           if (typeof google !== 'undefined' && google.script && google.script.history) {
@@ -1829,6 +1942,138 @@ async function copyText(text){
           pill.classList.remove('active');
         });
       }
+
+      function toggleMoreFilters() {
+        const panel = document.querySelector('.moreFiltersPanel');
+        const btn = getCachedElement('moreFiltersBtn');
+        if (!panel) return;
+        const isCollapsed = panel.classList.contains('collapsed');
+        if (isCollapsed) {
+          panel.classList.remove('collapsed');
+          if (btn) btn.textContent = 'Fewer filters';
+        } else {
+          panel.classList.add('collapsed');
+          if (btn) btn.textContent = 'More filters';
+        }
+      }
+
+      function toggleQuickFilter(filterKey) {
+        // AI and Virtualization map to TDPs, others map to products
+        const topicTdpMap = { 'AI': ['AI Platform'], 'Virtualization': ['Virtualization'] };
+        const isTopic = topicTdpMap.hasOwnProperty(filterKey);
+
+        const stateKey = isTopic ? 'tdps' : 'products';
+        const targetValues = isTopic ? topicTdpMap[filterKey] : getMatchingProducts(filterKey);
+
+        const current = new Set(filterState[stateKey] || []);
+        const allSelected = targetValues.every(v => current.has(v));
+
+        if (allSelected) {
+          // Remove all matching values
+          targetValues.forEach(v => current.delete(v));
+        } else {
+          // Add all matching values
+          targetValues.forEach(v => current.add(v));
+        }
+
+        filterState[stateKey] = Array.from(current);
+        refreshPickerBox(stateKey);
+        updateQuickFilterVisuals();
+
+        // Quick Filters apply immediately (exception to Manual Apply)
+        applySearchNow();
+      }
+
+      function updateQuickFilterVisuals() {
+        const productPills = {
+          'Red Hat Enterprise Linux': 'RHEL',
+          'Red Hat OpenShift': 'OpenShift',
+          'Ansible Automation Platform': 'Ansible'
+        };
+        const topicPills = { 'AI': 'AI', 'Virtualization': 'Virtualization' };
+
+        document.querySelectorAll('.instant-pill').forEach(pill => {
+          const text = pill.textContent.trim();
+          let isActive = false;
+
+          // Check product pills
+          for (const [fullName, shortName] of Object.entries(productPills)) {
+            if (text === shortName) {
+              const matching = getMatchingProducts(fullName);
+              isActive = matching.length > 0 && matching.every(p => filterState.products.includes(p));
+              break;
+            }
+          }
+
+          // Check topic pills
+          for (const [topic, label] of Object.entries(topicPills)) {
+            if (text === label) {
+              const tdps = { 'AI': ['AI Platform'], 'Virtualization': ['Virtualization'] }[topic] || [];
+              isActive = tdps.length > 0 && tdps.every(t => filterState.tdps.includes(t));
+              break;
+            }
+          }
+
+          pill.classList.toggle('active', isActive);
+        });
+      }
+
+      function browseByExperience(type) {
+        const startTime = performance.now();
+
+        // Only update format filter, preserve search and other filters
+        if (type === 'all') {
+          filterState.formats = [];
+        } else {
+          filterState.formats = [type];
+        }
+
+        // Update visuals and immediately apply (exception to Manual Apply)
+        refreshPickerBox('formats');
+        updateBrowseVisuals(type);
+
+        // Check if result is cached for performance measurement
+        const filters = getFilters(1);
+        const requestKey = JSON.stringify(filters);
+        const isCached = !!getCachedResults_(requestKey);
+
+        if (isCached) {
+          applySearchNow();
+          // Measure including rendering time
+          requestAnimationFrame(() => {
+            const duration = performance.now() - startTime;
+            console.log(`Experience tab '${type}' (cached): ${duration.toFixed(1)}ms`);
+          });
+        } else {
+          applySearchNow();
+          console.log(`Experience tab '${type}' loading from server...`);
+        }
+      }
+
+      function updateBrowseVisuals(activeType) {
+        document.querySelectorAll('.discover-card:not(.discover-card-external)').forEach(card => {
+          card.classList.remove('active');
+        });
+
+        // Determine which card to highlight
+        const typeMap = {
+          'all': 'All Experiences',
+          'Interactive Demo': 'Interactive Demos',
+          'Video Demo': 'Video Demos',
+          'YouTube': 'YouTube'
+        };
+
+        const targetLabel = typeMap[activeType];
+        if (targetLabel) {
+          document.querySelectorAll('.discover-card:not(.discover-card-external)').forEach(card => {
+            const label = card.querySelector('.discover-card-label');
+            if (label && label.textContent.trim() === targetLabel) {
+              card.classList.add('active');
+            }
+          });
+        }
+      }
+
 function renderLinkRow(item){
   const url = getPrimaryLink(item);
   if (!url) return "";
@@ -1931,6 +2176,10 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         if (wrapEl) {
           wrapEl.classList.remove("is-loading");
         }
+
+        // Invalidate any in-flight chunked renders
+        ++RENDER_SEQ;
+
         const skeletonCount = Math.max(1, Number(count) || 8);
         const cards = Array.from({ length: skeletonCount }, () => `
           <article class="skeletonCard" aria-hidden="true">
@@ -1961,6 +2210,9 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         const chunkSize = 8;
         let index = 0;
         resultsEl.innerHTML = "";
+
+        // Capture render sequence to detect stale renders
+        const thisRenderSeq = ++RENDER_SEQ;
 
         function buildCardHtml(item) {
           const isSelected = SELECTED_CARDS.has(item.recordId);
@@ -2004,6 +2256,11 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         }
 
         function appendChunk() {
+          // Abort if newer render started
+          if (thisRenderSeq !== RENDER_SEQ) {
+            return;
+          }
+
           const slice = items.slice(index, index + chunkSize);
           if (!slice.length) {
             applySelectionModeToVisibleCards();
@@ -2029,10 +2286,14 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         // Get filters for search
         const filters = getFilters(CURRENT_PAGE);
         const requestKey = JSON.stringify(filters);
+
         const cached = getCachedResults_(requestKey);
         if (cached) {
-          LAST_RESULTS_REQUEST_KEY = requestKey;
+          // Update URL and serve cached result
+          const requestSeq = ++RESULTS_REQUEST_SEQ;
           FILTERS_HAVE_PENDING_CHANGES = false;
+          pushFilterStateToHash_(false);
+          LAST_RESULTS_REQUEST_KEY = requestKey;
           renderResults(cached);
           setResultsLoading(false);
           setApplyButtonLoading_(false);
@@ -2041,15 +2302,17 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           return;
         }
 
-        if (requestKey === LAST_RESULTS_REQUEST_KEY && !callback && !FILTERS_HAVE_PENDING_CHANGES) {
+        // Check for duplicate uncached request BEFORE incrementing sequence
+        if (requestKey === LAST_RESULTS_REQUEST_KEY && !callback) {
           clearSearchStatus_();
           return;
         }
-        LAST_RESULTS_REQUEST_KEY = requestKey;
 
+        // Update URL and start new request
         const requestSeq = ++RESULTS_REQUEST_SEQ;
         FILTERS_HAVE_PENDING_CHANGES = false;
         pushFilterStateToHash_(false);
+        LAST_RESULTS_REQUEST_KEY = requestKey;
         setApplyButtonLoading_(true);
         setListLoading_(true);
 
@@ -2096,6 +2359,11 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             setResultsLoading(false);
             setApplyButtonLoading_(false);
             if (callback) callback();
+
+            // Trigger background prefetch after first successful load
+            if (CURRENT_PAGE === 1 && !filters.q && filters.formats.length === 0) {
+              setTimeout(prefetchExperienceTypes_, 1000);
+            }
           })
           .withFailureHandler((error) => {
             if (requestSeq !== RESULTS_REQUEST_SEQ) return;
@@ -2103,9 +2371,74 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             getCachedElement("summaryText").innerText = "Search failed: " + (error.message || error);
             setResultsLoading(false);
             setApplyButtonLoading_(false);
+            // Clear LAST_RESULTS_REQUEST_KEY to allow retry with same filters
+            LAST_RESULTS_REQUEST_KEY = "";
             if (callback) callback();
           })
           .listDiscoveryPage(filters);
+      }
+
+      function renderAppliedFilters() {
+        const bar = getCachedElement('appliedFiltersBar');
+        const chips = getCachedElement('appliedFiltersChips');
+        if (!bar || !chips) return;
+
+        const appliedChips = [];
+        const searchQuery = getCachedElement('globalSearch').value.trim();
+
+        // Add search chip
+        if (searchQuery) {
+          appliedChips.push(`
+            <div class="appliedFilterChip">
+              Search: "${escapeHtml(searchQuery)}"
+              <button onclick="removeAppliedFilter('search')" title="Remove search" aria-label="Remove search filter">&times;</button>
+            </div>
+          `);
+        }
+
+        // Add filter chips
+        FILTER_DEFS.forEach(def => {
+          const values = filterState[def.key] || [];
+          values.forEach(value => {
+            appliedChips.push(`
+              <div class="appliedFilterChip">
+                ${escapeHtml(def.label)}: ${escapeHtml(value)}
+                <button onclick="removeAppliedFilter('${escapeAttr(def.key)}', '${escapeAttr(value)}')" title="Remove filter" aria-label="Remove ${escapeAttr(def.label)} filter">&times;</button>
+              </div>
+            `);
+          });
+        });
+
+        if (appliedChips.length > 0) {
+          chips.innerHTML = appliedChips.join('');
+          bar.style.display = 'flex';
+        } else {
+          bar.style.display = 'none';
+        }
+      }
+
+      function removeAppliedFilter(key, value) {
+        if (key === 'search') {
+          getCachedElement('globalSearch').value = '';
+        } else {
+          const arr = [...(filterState[key] || [])];
+          const idx = arr.indexOf(value);
+          if (idx >= 0) arr.splice(idx, 1);
+          filterState[key] = arr;
+          refreshPickerBox(key);
+
+          // Sync visuals
+          if (key === 'products' || key === 'tdps') {
+            updateQuickFilterVisuals();
+          }
+          if (key === 'formats') {
+            const activeType = arr.length === 1 ? arr[0] : (arr.length === 0 ? 'all' : null);
+            if (activeType) updateBrowseVisuals(activeType);
+          }
+        }
+
+        // Mark as pending - user must click Apply
+        markFiltersPending_();
       }
 
       function renderTdpCounts(tdpCounts){
@@ -2157,8 +2490,11 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         CURRENT_RESULTS = items.slice();
         CURRENT_PAGE_RECORD_IDS = items.map(item => String(item.recordId)).filter(Boolean);
         try { seedRecordCache(items); } catch (e) { console.warn("Failed to seed record cache during render:", e); }
-        getCachedElement("summaryText").innerText = `${res.totalRows || 0} Demos found`;
+        const count = res.totalRows || 0;
+        const label = count === 1 ? 'experience' : 'experiences';
+        getCachedElement("summaryText").innerText = `${count} ${label} found`;
 
+        renderAppliedFilters();
         renderTdpCounts(res.tdpCounts || {});
         renderPager(res);
 
@@ -2175,8 +2511,12 @@ function renderDrawerLink(label, url, actionLabel, recordId){
 
       function renderEmptyState(query, activeFilters) {
         var resultsEl = getCachedElement("results");
+
+        // Invalidate any in-flight chunked renders
+        ++RENDER_SEQ;
+
         var html = '<div class="emptyState">';
-        html += '<div class="emptyStateTitle">No Demos found</div>';
+        html += '<div class="emptyStateTitle">No experiences found</div>';
 
         var synonym = getSynonymSuggestion_(query);
         if (synonym) {
@@ -2253,8 +2593,14 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           relaxedFilters.q = tokens[0];
         }
 
+        // Capture render sequence to detect stale responses
+        var renderSeq = RENDER_SEQ;
+
         google.script.run
           .withSuccessHandler(function(res) {
+            // Abort if user switched away from empty state
+            if (renderSeq !== RENDER_SEQ) return;
+
             if (res && res.items && res.items.length > 0) {
               var html = '<div class="emptyStateRelatedWrap">';
               html += '<div class="emptyStateRelatedLabel">Related demos</div>';
