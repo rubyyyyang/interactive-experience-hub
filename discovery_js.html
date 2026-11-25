@@ -859,7 +859,7 @@ function getSortPriority(item) {
       }
 
       function syncCardBookmarkIcons_() {
-        document.querySelectorAll('.card .btn.icon-only').forEach(function(btn) {
+        document.querySelectorAll('.card .btn.icon-only, .drawerSection .btn.icon-only').forEach(function(btn) {
           var onclick = btn.getAttribute('onclick') || '';
           var m = onclick.match(/toggleSavedArcade\('([^']+)'\)/);
           if (!m) return;
@@ -2675,10 +2675,10 @@ function renderDrawerLink(label, url, actionLabel, recordId){
               <button class="btn small muted icon-only${isSaved ? ' saved' : ''}" onclick="toggleSavedArcade('${escapeAttr(rec.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(rec.recordId)}')); syncCardBookmarkIcons_();" title="${isSaved ? 'Saved' : 'Save Demo'}">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
               </button>
-              <button class="btn small muted" onclick="copyText('${window.location.origin}${window.location.pathname}?id=${escapeAttr(rec.recordId)}'); showToast_('Link copied to clipboard');" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+              ${primaryUrl ? `<button class="btn small muted" onclick="copyText('${escapeAttr(primaryUrl)}');" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
                 Copy Link
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>
-              </button>
+              </button>` : ''}
             </div>
           </div>
 
