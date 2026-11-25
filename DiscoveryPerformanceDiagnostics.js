@@ -9,7 +9,7 @@
  * - Isolated diagnostic keys: PERF_DIAG_* (auto-cleaned in finally blocks)
  * - Metrics-only persistence: <9KB scalar summary in document properties
  * - Reuses actual bundle in memory (not persisted)
- * - Accounts for DISCOVERY_DIRTY cache side effect from index builder
+ * - Index builder consumes/removes DISCOVERY_DIRTY cache flag when present
  *
  * USAGE:
  * 1. Copy to Apps Script editor
@@ -22,7 +22,7 @@
  */
 function runDiscoveryPerformanceDiagnostics() {
   console.log('=== DISCOVERY PERFORMANCE DIAGNOSTICS ===\n');
-  console.log('⚠️ Note: Index builder sets DISCOVERY_DIRTY cache flag as side effect\n');
+  console.log('⚠️ Note: Index builder consumes/removes DISCOVERY_DIRTY cache flag when present\n');
 
   const summary = {
     timestamp: new Date().toISOString(),
@@ -47,8 +47,8 @@ function runDiscoveryPerformanceDiagnostics() {
 
     // Reuse actual bundle for serialization and compression measurements
     summary.serialization = measureSerialization(indexResult.bundle);
-    summary.compression = measureCompression(indexResult.serializedJson);
-    summary.cacheTest = measureCacheRoundTrip(indexResult.compressedPayload);
+    summary.compression = measureCompression(summary.serialization.json);
+    summary.cacheTest = measureCacheRoundTrip(summary.compression.compressedPayload);
 
     printSummary(summary);
 
@@ -77,7 +77,7 @@ function runDiscoveryPerformanceDiagnostics() {
     }
 
     console.log('\n✅ Diagnostics complete');
-    return summary;
+    return scalarSummary;
 
   } catch (error) {
     console.error('❌ Diagnostic failed:', error);
@@ -141,7 +141,7 @@ function measureSheetRead() {
 
 function measureIndexConstruction() {
   console.log('\n🏗️ Index construction (actual production data)...');
-  console.log('  ⚠️ Sets DISCOVERY_DIRTY cache flag (production side effect)');
+  console.log('  ⚠️ Consumes/removes DISCOVERY_DIRTY cache flag if present');
 
   const start = Date.now();
   const bundle = getDiscoveryIndexBundle_();
