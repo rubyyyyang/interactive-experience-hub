@@ -1321,6 +1321,17 @@ Shared via The Interact Hub`;
         return '#6b7280';
       }
 
+      function normalizeProductDisplay(productValue) {
+        if (!productValue || !productValue.trim()) return '';
+        // Split by comma, trim each token, filter out N/A and empty values
+        const tokens = productValue.split(',')
+          .map(function(token) { return token.trim(); })
+          .filter(function(token) {
+            return token && token.toLowerCase() !== 'n/a';
+          });
+        return tokens.join(', ');
+      }
+
       function findEmailExportLinks(item) {
         var pageLink = item.drupalPageUrl || item.rhacPage || "";
         var demoLink = item.productionLink || "";
@@ -2189,7 +2200,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         const primaryUrl = getPrimaryLink(item);
         const experienceTypeIcon = getExperienceTypeIcon(item);
         const experienceTypeLabel = item.format || 'Unknown Type';
-        const hasValidProduct = item.product && item.product.trim() && item.product.toLowerCase() !== 'n/a';
+        const normalizedProduct = normalizeProductDisplay(item.product);
 
         return `
         <article class="card" data-record-id="${escapeAttr(item.recordId)}" onclick="openMore('${escapeAttr(item.recordId)}')" style="cursor:pointer;">
@@ -2211,13 +2222,13 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           </div>
 
           <div class="cardBody">
-            <div class="cardProductName">${hasValidProduct ? escapeHtml(item.product) : ''}</div>
+            <div class="cardProductName">${normalizedProduct ? escapeHtml(normalizedProduct) : ''}</div>
 
             <div class="desc">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery || "")}</div>
 
             ${item.creatorName ? '<div style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:13px;color:var(--muted);"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2 1a2 2 0 0 1 2 2v.5c0 .83-.67 1.5-1.5 1.5h-5A1.5 1.5 0 0 1 4 11.5V11a2 2 0 0 1 2-2h4z"/></svg>' + escapeHtml(item.creatorName) + '</div>' : ''}
 
-            <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="border-top:1px solid var(--border);margin-top:auto;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
               <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;font-size:13px;color:var(--muted);text-decoration:none;">View details</a>
               ${primaryUrl ? '<a class="btn small primary" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade(\'launch_demo\', \'' + escapeAttr(item.recordId) + '\');" style="pointer-events:auto;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">' + getLaunchButtonLabel(item) + '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg></a>' : ''}
             </div>
@@ -2290,7 +2301,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           const primaryUrl = getPrimaryLink(item);
           const experienceTypeIcon = getExperienceTypeIcon(item);
           const experienceTypeLabel = item.format || 'Unknown Type';
-          const hasValidProduct = item.product && item.product.trim() && item.product.toLowerCase() !== 'n/a';
+          const normalizedProduct = normalizeProductDisplay(item.product);
 
           return `
           <article class="${cardClasses}" data-record-id="${escapeAttr(item.recordId)}" onclick="${SELECTION_MODE ? '' : "openMore('" + escapeAttr(item.recordId) + "')"}" style="cursor:pointer;">
@@ -2314,13 +2325,13 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             </div>
 
             <div class="cardBody">
-              <div class="cardProductName">${hasValidProduct ? escapeHtml(item.product) : ``}</div>
+              <div class="cardProductName">${normalizedProduct ? escapeHtml(normalizedProduct) : ``}</div>
 
               <div class="desc">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery)}</div>
 
               ${item.creatorName ? `<div style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:13px;color:var(--muted);"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2 1a2 2 0 0 1 2 2v.5c0 .83-.67 1.5-1.5 1.5h-5A1.5 1.5 0 0 1 4 11.5V11a2 2 0 0 1 2-2h4z"/></svg>${escapeHtml(item.creatorName)}</div>` : ``}
 
-              <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+              <div style="border-top:1px solid var(--border);margin-top:auto;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
                 <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;font-size:13px;color:var(--muted);text-decoration:none;">View details</a>
                 ${primaryUrl ? `<a class="btn small primary" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">${getLaunchButtonLabel(item)}<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg></a>` : ``}
               </div>

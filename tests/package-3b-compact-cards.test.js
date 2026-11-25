@@ -348,6 +348,37 @@ test('formatDescriptionWithHeader_: Places header above bullets only when bullet
   assert(!resultEmptyBullets.includes("What you"), "Description with empty bullets should NOT include header");
 });
 
+// Test 15: normalizeProductDisplay removes N/A tokens from comma-separated values
+test('normalizeProductDisplay: Removes individual N/A tokens from comma-separated product values', () => {
+  const normalizeProductDisplaySrc = extractFunction(discoveryJsContent, 'normalizeProductDisplay');
+  assert(normalizeProductDisplaySrc, 'Should find normalizeProductDisplay function');
+
+  eval(normalizeProductDisplaySrc);
+
+  // Test removing N/A from comma-separated list
+  assertEqual(normalizeProductDisplay('Red Hat OpenShift, N/A'), 'Red Hat OpenShift', 'Should remove trailing N/A token');
+  assertEqual(normalizeProductDisplay('N/A, Red Hat OpenShift'), 'Red Hat OpenShift', 'Should remove leading N/A token');
+  assertEqual(normalizeProductDisplay('Red Hat OpenShift, N/A, Ansible'), 'Red Hat OpenShift, Ansible', 'Should remove middle N/A token');
+
+  // Test case insensitivity
+  assertEqual(normalizeProductDisplay('Red Hat OpenShift, n/a'), 'Red Hat OpenShift', 'Should handle lowercase n/a');
+  assertEqual(normalizeProductDisplay('Red Hat OpenShift, N/a'), 'Red Hat OpenShift', 'Should handle mixed case N/a');
+
+  // Test all N/A
+  assertEqual(normalizeProductDisplay('N/A'), '', 'Should return empty string for all N/A');
+  assertEqual(normalizeProductDisplay('N/A, n/a'), '', 'Should return empty string for multiple N/A');
+
+  // Test empty/whitespace
+  assertEqual(normalizeProductDisplay(''), '', 'Should handle empty string');
+  assertEqual(normalizeProductDisplay('   '), '', 'Should handle whitespace-only string');
+
+  // Test trimming
+  assertEqual(normalizeProductDisplay('  Red Hat OpenShift  , N/A  '), 'Red Hat OpenShift', 'Should trim tokens');
+
+  // Test valid products only
+  assertEqual(normalizeProductDisplay('Red Hat OpenShift, Ansible'), 'Red Hat OpenShift, Ansible', 'Should preserve valid comma-separated products');
+});
+
 console.log(`\n=== Summary ===`);
 console.log(`Passed: ${passed}`);
 console.log(`Failed: ${failed}`);
