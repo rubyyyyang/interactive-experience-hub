@@ -1436,6 +1436,18 @@
       .k{color:var(--muted)}
       .v{word-break:break-word}
 
+      details.drawerSection summary .drawerKicker {
+        margin-bottom: 0;
+      }
+
+      details.drawerSection[open] summary svg {
+        transform: rotate(90deg);
+      }
+
+      details.drawerSection summary::-webkit-details-marker {
+        display: none;
+      }
+
       .drawerLink{
         border:1px solid var(--border);
         border-radius:14px;
