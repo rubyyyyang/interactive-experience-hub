@@ -235,7 +235,7 @@ test('Visual Hybrid Card: Includes Experience Type header, description preview, 
 
   // Verify description IS rendered in card with 3-line clamp
   assert(renderCardBody.includes('item.description'), 'Card should render description field');
-  assert(renderCardBody.includes('-webkit-line-clamp:3'), 'Card description should use 3-line clamp');
+  assert(renderCardBody.includes('class="desc"') || renderCardBody.includes('class=\\"desc\\"'), 'Card description should use desc class (which has 3-line clamp)');
   assert(renderCardBody.includes('getFirstParagraph_'), 'Card should use getFirstParagraph_ helper for description');
 
   // Verify product is rendered as simple text (not badge)

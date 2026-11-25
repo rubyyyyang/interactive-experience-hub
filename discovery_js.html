@@ -1298,20 +1298,20 @@ Shared via The Interact Hub`;
       }
 
       function getExperienceTypeIcon(item) {
-        // Interactive Demo: purple interaction icon
+        // Interactive Demo: mouse-pointer-click icon, purple
         if (item.format === 'Interactive Demo') {
-          return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6d28d9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v3M13.66 4.34l-2.12 2.12M15 10h-3M13.66 15.66l-2.12-2.12M8 15v-3M4.34 13.66l-2.12 2.12M1 10h3M4.34 4.34L2.22 2.22"/></svg>`;
+          return `<svg width="16" height="16" viewBox="0 0 16 16" fill="#6d28d9"><path d="M6.573 1.17a.75.75 0 0 1 1.227.08l3.5 5.25a.75.75 0 0 1-.06.925l-1.72 1.72 2.355 2.355a.75.75 0 1 1-1.06 1.06l-2.355-2.355-1.72 1.72a.75.75 0 0 1-.925.06l-5.25-3.5a.75.75 0 0 1-.08-1.227l6.038-6.038z"/></svg>`;
         }
-        // Video Demo: teal video icon
+        // Video Demo: video camera icon, teal
         if (item.format === 'Video Demo') {
-          return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#0d9488" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="10" rx="2"/><path d="M11 8l-4 2.5V5.5z"/></svg>`;
+          return `<svg width="16" height="16" viewBox="0 0 16 16" fill="#0d9488"><path d="M2 4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v.5l1.276-.638A.5.5 0 0 1 14 4.342v7.316a.5.5 0 0 1-.724.447L12 11.5V12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4z"/></svg>`;
         }
-        // YouTube: red video icon
+        // YouTube: recognizable YouTube icon, red
         if (item.format === 'YouTube') {
-          return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="10" rx="2"/><path d="M11 8l-4 2.5V5.5z"/></svg>`;
+          return `<svg width="16" height="16" viewBox="0 0 16 16" fill="#dc2626"><path d="M15.32 4.06c-.434-.772-.905-.914-1.864-.968C12.498 3.027 10.089 3 8.002 3c-2.091 0-4.501.027-5.458.091-.957.055-1.429.196-1.867.969C.23 4.831 0 6.159 0 8.497v.008c0 2.328.23 3.666.677 4.429.438.772.909.912 1.866.977.958.056 3.368.089 5.459.089 2.087 0 4.496-.033 5.455-.088.959-.065 1.43-.205 1.864-.977.451-.763.68-2.101.68-4.429v-.008c0-2.339-.229-3.667-.68-4.438zM6 11V5l5 3-5 3z"/></svg>`;
         }
         // Unknown/neutral: gray generic icon
-        return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="2"/></svg>`;
+        return `<svg width="16" height="16" viewBox="0 0 16 16" fill="#6b7280"><rect x="2" y="2" width="12" height="12" rx="2"/></svg>`;
       }
 
       function getExperienceTypeColor(item) {
@@ -2189,6 +2189,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         const primaryUrl = getPrimaryLink(item);
         const experienceTypeIcon = getExperienceTypeIcon(item);
         const experienceTypeLabel = item.format || 'Unknown Type';
+        const hasValidProduct = item.product && item.product.trim() && item.product.toLowerCase() !== 'n/a';
 
         return `
         <article class="card" data-record-id="${escapeAttr(item.recordId)}" onclick="openMore('${escapeAttr(item.recordId)}')" style="cursor:pointer;">
@@ -2203,20 +2204,20 @@ function renderDrawerLink(label, url, actionLabel, recordId){
               </button>
             </div>
             <h3 class="title" style="margin:0 0 8px 0;">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery || "", { allowShort: true })}</h3>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;min-height:24px;">
               ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? '<span class="badge featured">Featured</span>' : ''}
               ${item.duration ? '<span class="badge duration">' + escapeHtml(item.duration) + ' min</span>' : ''}
             </div>
           </div>
 
           <div class="cardBody">
-            ${item.product ? '<div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:10px;">' + escapeHtml(item.product) + '</div>' : ''}
+            <div class="cardProductName">${hasValidProduct ? escapeHtml(item.product) : ''}</div>
 
-            <div class="desc" style="-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery || "")}</div>
+            <div class="desc">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery || "")}</div>
 
             ${item.creatorName ? '<div style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:13px;color:var(--muted);"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2 1a2 2 0 0 1 2 2v.5c0 .83-.67 1.5-1.5 1.5h-5A1.5 1.5 0 0 1 4 11.5V11a2 2 0 0 1 2-2h4z"/></svg>' + escapeHtml(item.creatorName) + '</div>' : ''}
 
-            <div style="border-top:1px solid var(--border);margin-top:auto;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
               <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;font-size:13px;color:var(--muted);text-decoration:none;">View details</a>
               ${primaryUrl ? '<a class="btn small primary" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade(\'launch_demo\', \'' + escapeAttr(item.recordId) + '\');" style="pointer-events:auto;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">' + getLaunchButtonLabel(item) + '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg></a>' : ''}
             </div>
@@ -2289,6 +2290,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           const primaryUrl = getPrimaryLink(item);
           const experienceTypeIcon = getExperienceTypeIcon(item);
           const experienceTypeLabel = item.format || 'Unknown Type';
+          const hasValidProduct = item.product && item.product.trim() && item.product.toLowerCase() !== 'n/a';
 
           return `
           <article class="${cardClasses}" data-record-id="${escapeAttr(item.recordId)}" onclick="${SELECTION_MODE ? '' : "openMore('" + escapeAttr(item.recordId) + "')"}" style="cursor:pointer;">
@@ -2305,22 +2307,22 @@ function renderDrawerLink(label, url, actionLabel, recordId){
                 </button>
               </div>
               <h3 class="title${SELECTION_MODE ? ' selectable' : ''}" style="margin:0 0 8px 0;">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery, { allowShort: true })}</h3>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;min-height:24px;">
                 ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? `<span class="badge featured">Featured</span>` : ``}
                 ${item.duration ? `<span class="badge duration">${escapeHtml(item.duration)} min</span>` : ``}
               </div>
             </div>
 
             <div class="cardBody">
-              ${item.product ? `<div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:10px;">${escapeHtml(item.product)}</div>` : ``}
+              <div class="cardProductName">${hasValidProduct ? escapeHtml(item.product) : ``}</div>
 
-              <div class="desc" style="-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery)}</div>
+              <div class="desc">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery)}</div>
 
               ${item.creatorName ? `<div style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:13px;color:var(--muted);"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2 1a2 2 0 0 1 2 2v.5c0 .83-.67 1.5-1.5 1.5h-5A1.5 1.5 0 0 1 4 11.5V11a2 2 0 0 1 2-2h4z"/></svg>${escapeHtml(item.creatorName)}</div>` : ``}
 
-              <div style="border-top:1px solid var(--border);margin-top:auto;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+              <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
                 <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;font-size:13px;color:var(--muted);text-decoration:none;">View details</a>
-                ${primaryUrl ? `<a class="btn small primary" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">${getLaunchButtonLabel(item)}<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg></a>` : ''}
+                ${primaryUrl ? `<a class="btn small primary" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">${getLaunchButtonLabel(item)}<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg></a>` : ``}
               </div>
             </div>
           </article>`;
