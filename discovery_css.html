@@ -746,6 +746,23 @@
         transition: max-height 0.3s ease, opacity 0.2s ease, overflow 0s 0.3s;
       }
 
+      /* More filters button chevron rotation */
+      #moreFiltersBtn .moreFiltersChevron {
+        transform: rotate(0deg);
+      }
+
+      .moreFiltersPanel:not(.collapsed) ~ .searchRow #moreFiltersBtn .moreFiltersChevron,
+      body:has(.moreFiltersPanel:not(.collapsed)) #moreFiltersBtn .moreFiltersChevron {
+        transform: rotate(180deg);
+      }
+
+      .filterHelperText {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+        opacity: 0.8;
+      }
+
       .field{min-width:0}
 
       .label{

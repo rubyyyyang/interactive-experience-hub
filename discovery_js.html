@@ -1954,12 +1954,13 @@ async function copyText(text){
         const btn = getCachedElement('moreFiltersBtn');
         if (!panel) return;
         const isCollapsed = panel.classList.contains('collapsed');
+        const chevron = btn?.querySelector('.moreFiltersChevron');
         if (isCollapsed) {
           panel.classList.remove('collapsed');
-          if (btn) btn.textContent = 'Fewer filters';
+          if (chevron) chevron.style.transform = 'rotate(180deg)';
         } else {
           panel.classList.add('collapsed');
-          if (btn) btn.textContent = 'More filters';
+          if (chevron) chevron.style.transform = 'rotate(0deg)';
         }
       }
 
