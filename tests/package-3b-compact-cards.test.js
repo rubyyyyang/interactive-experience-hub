@@ -218,8 +218,8 @@ test('Drawer Copy Link: Uses getPrimaryLink as target URL', () => {
     'Copy Link button should include campaign tracking from getPrimaryLink');
 });
 
-// Test 11: Card rendering excludes description and detailed metadata
-test('Card rendering: Excludes description and detailed metadata fields', () => {
+// Test 11: Card rendering includes description and excludes detailed metadata
+test('Card rendering: Includes 3-line description preview and excludes detailed metadata', () => {
   // Read actual card rendering from discovery_js.html
   const renderCardMatch = discoveryJsContent.match(/function renderCard\(item, currentSearchQuery\)\s*{[\s\S]+?return `[\s\S]+?<\/article>`;[\s\S]+?}/);
 
@@ -227,8 +227,10 @@ test('Card rendering: Excludes description and detailed metadata fields', () => 
 
   const renderCardBody = renderCardMatch[0];
 
-  // Verify description is NOT rendered in card
-  assert(!renderCardBody.includes('item.description'), 'Card should not render description field');
+  // Verify description IS rendered in card with 3-line clamp
+  assert(renderCardBody.includes('item.description'), 'Card should render description field');
+  assert(renderCardBody.includes('-webkit-line-clamp:3'), 'Card description should use 3-line clamp');
+  assert(renderCardBody.includes('getFirstParagraph_'), 'Card should use getFirstParagraph_ helper for description');
 
   // Verify detailed metadata is NOT rendered in card
   assert(!renderCardBody.includes('item.primaryTopic'), 'Card should not render primaryTopic');

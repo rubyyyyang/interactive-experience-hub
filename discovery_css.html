@@ -823,7 +823,7 @@
         color:#fff;
       }
 
-      .drawerSection .btn.launch{
+      .drawerBody .btn.launch{
         background:var(--accent);
         color:#fff;
         width:100%;
@@ -831,7 +831,7 @@
         font-size:15px;
         padding:12px 20px;
       }
-      .drawerSection .btn.launch:hover{
+      .drawerBody .btn.launch:hover{
         background:#5b21b6;
         color:#fff;
       }
@@ -1425,10 +1425,11 @@
       }
 
       .drawerSection{
-        border:1px solid var(--border);
-        border-radius:16px;
-        padding:14px;
-        margin-bottom:12px;
+        margin-bottom:20px;
+      }
+
+      .drawerSection:first-child{
+        margin-bottom:24px;
       }
 
       .drawerKicker{
@@ -1436,7 +1437,8 @@
         color:var(--muted);
         text-transform:uppercase;
         letter-spacing:.25px;
-        margin-bottom:8px;
+        margin-bottom:12px;
+        font-weight:700;
       }
 
       .kv{
@@ -1449,8 +1451,27 @@
       .k{color:var(--muted)}
       .v{word-break:break-word}
 
+      details.drawerSection{
+        border:1px solid var(--border);
+        border-radius:12px;
+        padding:14px;
+      }
+
+      details.drawerSection summary{
+        cursor:pointer;
+        list-style:none;
+        display:flex;
+        align-items:center;
+        gap:8px;
+      }
+
       details.drawerSection summary .drawerKicker {
         margin-bottom: 0;
+      }
+
+      details.drawerSection summary svg {
+        transition:transform 0.2s;
+        flex-shrink:0;
       }
 
       details.drawerSection[open] summary svg {

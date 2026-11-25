@@ -2150,6 +2150,8 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             <div class="meta">
               ${item.creatorName ? '<div><b>Creator:</b> ' + escapeHtml(item.creatorName) + '</div>' : ''}
             </div>
+
+            <div class="desc" style="-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery || "")}</div>
           </div>
 
           <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;">More Info &rarr;</a>
@@ -2245,6 +2247,8 @@ function renderDrawerLink(label, url, actionLabel, recordId){
               <div class="meta">
                 ${item.creatorName ? `<div><b>Creator:</b> ${escapeHtml(item.creatorName)}</div>` : ``}
               </div>
+
+              <div class="desc" style="-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery)}</div>
             </div>
 
             <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;">More Info &rarr;</a>
@@ -2674,18 +2678,18 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         const isSaved = SAVED_ARCADES.has(rec.recordId);
 
         document.getElementById("drawerBody").innerHTML = `
-          <div class="drawerSection" style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+          <div class="drawerSection">
             ${primaryUrl ? `<a class="btn launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="trackIndividualArcade('launch_demo', '${escapeAttr(rec.recordId)}');" style="text-decoration:none;">${getLaunchButtonLabel(rec)}</a>` : ''}
+          </div>
 
-            <div style="display:flex;gap:8px;align-items:center;">
-              <button class="btn small muted icon-only${isSaved ? ' saved' : ''}" onclick="toggleSavedArcade('${escapeAttr(rec.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(rec.recordId)}')); syncCardBookmarkIcons_();" title="${isSaved ? 'Saved' : 'Save Demo'}">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
-              </button>
-              ${primaryUrl ? `<button class="btn small muted" onclick="copyText('${escapeAttr(primaryUrl)}');" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
-                Copy Link
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>
-              </button>` : ''}
-            </div>
+          <div class="drawerSection" style="display:flex;gap:8px;">
+            <button class="btn small muted icon-only${isSaved ? ' saved' : ''}" onclick="toggleSavedArcade('${escapeAttr(rec.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(rec.recordId)}')); syncCardBookmarkIcons_();" title="${isSaved ? 'Saved' : 'Save Demo'}">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
+            </button>
+            ${primaryUrl ? `<button class="btn small muted" onclick="copyText('${escapeAttr(primaryUrl)}');" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;">
+              Copy Link
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>
+            </button>` : ''}
           </div>
 
           <div class="drawerSection">
@@ -2702,12 +2706,12 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             </div>
           </div>
 
-          <details class="drawerSection" style="cursor:pointer;">
-            <summary class="drawerKicker" style="list-style:none;display:flex;align-items:center;gap:6px;">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="transition:transform 0.2s;transform:rotate(0deg);">
+          <details class="drawerSection">
+            <summary>
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
               </svg>
-              Technical
+              <span class="drawerKicker">Technical</span>
             </summary>
             <div class="kv" style="margin-top:12px;">
               ${rec.primaryProduct ? '<div class="k">Primary Product</div><div class="v">' + escapeHtml(rec.primaryProduct) + '</div>' : ''}
