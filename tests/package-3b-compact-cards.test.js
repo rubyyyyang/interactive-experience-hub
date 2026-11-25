@@ -207,9 +207,9 @@ test('Drawer Copy Link: Uses getPrimaryLink as target URL', () => {
 
   const primaryUrl = getPrimaryLink(item);
 
-  // Simulate drawer Copy Link button HTML generation (from discovery_js.html line 2678-2682)
+  // Simulate drawer Copy Link button HTML (matches new compact labeled format)
   const drawerCopyButton = primaryUrl
-    ? `<button class="btn small muted" onclick="copyText('${primaryUrl}');">Copy Link</button>`
+    ? `<button class="btn small muted" onclick="copyText('${primaryUrl}');"><span>Copy Link</span></button>`
     : '';
 
   assert(drawerCopyButton.includes('https://www.redhat.com/en/interactive-demos/example?intcmp='),
@@ -218,8 +218,8 @@ test('Drawer Copy Link: Uses getPrimaryLink as target URL', () => {
     'Copy Link button should include campaign tracking from getPrimaryLink');
 });
 
-// Test 11: Card rendering includes description and excludes detailed metadata
-test('Card rendering: Includes 3-line description preview and excludes detailed metadata', () => {
+// Test 11: Visual Hybrid Card rendering includes header with Experience Type and description preview
+test('Visual Hybrid Card: Includes Experience Type header, description preview, and excludes detailed metadata', () => {
   // Read actual card rendering from discovery_js.html
   const renderCardMatch = discoveryJsContent.match(/function renderCard\(item, currentSearchQuery\)\s*{[\s\S]+?return `[\s\S]+?<\/article>`;[\s\S]+?}/);
 
@@ -227,20 +227,92 @@ test('Card rendering: Includes 3-line description preview and excludes detailed 
 
   const renderCardBody = renderCardMatch[0];
 
+  // Verify Visual Hybrid Card structure: cardHeader and cardBody
+  assert(renderCardBody.includes('cardHeader'), 'Card should have cardHeader section');
+  assert(renderCardBody.includes('cardBody'), 'Card should have cardBody section');
+  assert(renderCardBody.includes('cardExperienceType'), 'Card header should include Experience Type');
+  assert(renderCardBody.includes('getExperienceTypeIcon'), 'Card should use Experience Type icon helper');
+
   // Verify description IS rendered in card with 3-line clamp
   assert(renderCardBody.includes('item.description'), 'Card should render description field');
   assert(renderCardBody.includes('-webkit-line-clamp:3'), 'Card description should use 3-line clamp');
   assert(renderCardBody.includes('getFirstParagraph_'), 'Card should use getFirstParagraph_ helper for description');
+
+  // Verify product is rendered as simple text (not badge)
+  assert(renderCardBody.includes('item.product'), 'Card should render product name');
+
+  // Verify creator and duration are rendered as secondary metadata
+  assert(renderCardBody.includes('item.creatorName'), 'Card should render creator name');
+  assert(renderCardBody.includes('item.duration'), 'Card should render duration');
+
+  // Verify Edit in Arcade is NOT in cards (removed per requirements)
+  assert(!renderCardBody.includes('Edit in Arcade'), 'Card should not render Edit in Arcade button');
 
   // Verify detailed metadata is NOT rendered in card
   assert(!renderCardBody.includes('item.primaryTopic'), 'Card should not render primaryTopic');
   assert(!renderCardBody.includes('item.tdp') || renderCardBody.includes('addCampaignTracking'), 'Card should not render TDP as visible metadata (only used for campaign tracking)');
   assert(!renderCardBody.includes('item.salesTactic'), 'Card should not render salesTactic');
   assert(!renderCardBody.includes('item.marketingProgram'), 'Card should not render marketingProgram');
+});
 
-  // Verify required fields ARE rendered
-  assert(renderCardBody.includes('item.format'), 'Card should render format badge');
-  assert(renderCardBody.includes('item.creatorName'), 'Card should render creator name');
+// Test 12: getExperienceTypeIcon returns correct icons for each format
+test('getExperienceTypeIcon: Returns distinct icons for Interactive Demo, Video Demo, and YouTube', () => {
+  // Extract getExperienceTypeIcon function
+  const getExperienceTypeIconSrc = extractFunction(discoveryJsContent, 'getExperienceTypeIcon');
+  assert(getExperienceTypeIconSrc, 'Should find getExperienceTypeIcon function');
+
+  eval(getExperienceTypeIconSrc);
+
+  const interactiveDemoIcon = getExperienceTypeIcon({ format: 'Interactive Demo' });
+  const videoDemoIcon = getExperienceTypeIcon({ format: 'Video Demo' });
+  const youtubeIcon = getExperienceTypeIcon({ format: 'YouTube' });
+  const unknownIcon = getExperienceTypeIcon({ format: 'Unknown' });
+
+  // Verify each icon is distinct and contains SVG
+  assert(interactiveDemoIcon.includes('<svg'), 'Interactive Demo should have SVG icon');
+  assert(interactiveDemoIcon.includes('#6d28d9'), 'Interactive Demo icon should be purple');
+
+  assert(videoDemoIcon.includes('<svg'), 'Video Demo should have SVG icon');
+  assert(videoDemoIcon.includes('#0d9488'), 'Video Demo icon should be teal');
+
+  assert(youtubeIcon.includes('<svg'), 'YouTube should have SVG icon');
+  assert(youtubeIcon.includes('#dc2626'), 'YouTube icon should be red');
+
+  assert(unknownIcon.includes('<svg'), 'Unknown format should have SVG icon');
+  assert(unknownIcon.includes('#6b7280'), 'Unknown format icon should be gray');
+
+  // Verify icons are distinct from each other
+  assert(interactiveDemoIcon !== videoDemoIcon, 'Interactive Demo and Video Demo icons should be different');
+  assert(interactiveDemoIcon !== youtubeIcon, 'Interactive Demo and YouTube icons should be different');
+  assert(videoDemoIcon !== youtubeIcon, 'Video Demo and YouTube icons should be different');
+});
+
+// Test 13: Drawer renders "About this experience" and "Created by" sections
+test('Drawer: Renders "About this experience" and "Created by" sections with correct structure', () => {
+  // Extract renderDrawerContent function using the helper
+  const renderDrawerContentSrc = extractFunction(discoveryJsContent, 'renderDrawerContent');
+
+  assert(renderDrawerContentSrc, 'Should find renderDrawerContent function');
+
+  // Verify "About this experience" section
+  assert(renderDrawerContentSrc.includes('About this experience'), 'Drawer should render "About this experience" heading');
+  assert(renderDrawerContentSrc.includes("What you") && renderDrawerContentSrc.includes("ll explore"), "Drawer should include 'What you'll explore' header for bullets");
+
+  // Verify "Created by" section with compact format
+  assert(renderDrawerContentSrc.includes('Created by'), 'Drawer should render "Created by" heading');
+  assert(renderDrawerContentSrc.includes('rec.creatorName'), 'Drawer should render creator name');
+  assert(renderDrawerContentSrc.includes('rec.creatorTeam'), 'Drawer should render creator team');
+  assert(renderDrawerContentSrc.includes('rec.creatorEmail'), 'Drawer should render creator email');
+
+  // Verify "Metadata" accordion (renamed from "Technical")
+  assert(renderDrawerContentSrc.includes('Metadata'), 'Drawer should render "Metadata" accordion');
+
+  // Verify Save and Copy Link buttons have labels
+  assert(renderDrawerContentSrc.includes('<span>Save</span>') || renderDrawerContentSrc.includes('<span>${isSaved'), 'Save button should have label');
+  assert(renderDrawerContentSrc.includes('<span>Copy Link</span>'), 'Copy Link button should have label');
+
+  // Verify Experience Type icon is rendered in drawer
+  assert(renderDrawerContentSrc.includes('getExperienceTypeIcon'), 'Drawer should use Experience Type icon');
 });
 
 console.log(`\n=== Summary ===`);
