@@ -176,7 +176,9 @@
                 <div id="recentSearchesDropdown" class="recent-searches"></div>
               </div>
             </div>
-            <button class="btn" id="moreFiltersBtn" onclick="toggleMoreFilters()" title="Show TDP, Creator, Product, and other filter options">
+            <button class="btn" id="moreFiltersBtn" onclick="toggleMoreFilters()"
+                    aria-expanded="false" aria-controls="moreFiltersPanel"
+                    title="Show TDP, Creator, Product, and other filter options">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="opacity:0.7;">
                 <path d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
               </svg>
@@ -212,7 +214,7 @@
             Use More filters to refine by TDP, Creator, Product, Sales Tactic, and Marketing Program
           </div>
 
-          <div class="moreFiltersPanel collapsed">
+          <div class="moreFiltersPanel collapsed" id="moreFiltersPanel">
             <div class="filterRow">
             <div class="field" id="filter-slot-formats"></div>
             <div class="field" id="filter-slot-products"></div>

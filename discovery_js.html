@@ -1958,9 +1958,11 @@ async function copyText(text){
         if (isCollapsed) {
           panel.classList.remove('collapsed');
           if (chevron) chevron.style.transform = 'rotate(180deg)';
+          if (btn) btn.setAttribute('aria-expanded', 'true');
         } else {
           panel.classList.add('collapsed');
           if (chevron) chevron.style.transform = 'rotate(0deg)';
+          if (btn) btn.setAttribute('aria-expanded', 'false');
         }
       }
 
