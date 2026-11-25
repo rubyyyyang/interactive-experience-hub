@@ -859,6 +859,7 @@ function getSortPriority(item) {
       }
 
       function syncCardBookmarkIcons_() {
+        // Sync card bookmark icons (icon-only buttons)
         document.querySelectorAll('.card .btn.icon-only, .drawerSection .btn.icon-only').forEach(function(btn) {
           var onclick = btn.getAttribute('onclick') || '';
           var m = onclick.match(/toggleSavedArcade\('([^']+)'\)/);
@@ -869,6 +870,19 @@ function getSortPriority(item) {
           btn.title = saved ? 'Saved' : 'Save Demo';
           var svg = btn.querySelector('svg');
           if (svg) svg.setAttribute('fill', saved ? 'currentColor' : 'none');
+        });
+
+        // Sync drawer labeled Save button
+        document.querySelectorAll('.drawerSaveBtn').forEach(function(btn) {
+          var rid = btn.getAttribute('data-record-id');
+          if (!rid) return;
+          var saved = SAVED_ARCADES.has(rid);
+          btn.classList.toggle('saved', saved);
+          btn.title = saved ? 'Saved' : 'Save Demo';
+          var svg = btn.querySelector('svg');
+          if (svg) svg.setAttribute('fill', saved ? 'currentColor' : 'none');
+          var span = btn.querySelector('span');
+          if (span) span.textContent = saved ? 'Saved' : 'Save';
         });
       }
 
@@ -1199,6 +1213,21 @@ Shared via The Interact Hub`;
         var intro = parts[0].trim();
         var bullets = parts.slice(1).filter(function(b) { return b.trim(); });
         var html = intro ? escapeHtml(intro) + "<br><br>" : "";
+        html += "<ul style='margin:6px 0 0 0; padding-left:20px;'>";
+        bullets.forEach(function(b) { html += "<li style='margin-bottom:4px;'>" + escapeHtml(b.trim()) + "</li>"; });
+        html += "</ul>";
+        return html;
+      }
+
+      function formatDescriptionWithHeader_(text) {
+        if (!text) return escapeHtml("No description available.");
+        var parts = text.split(/\s*•\s*/);
+        if (parts.length <= 1) return escapeHtml(text).replace(/\n/g, "<br>");
+        var intro = parts[0].trim();
+        var bullets = parts.slice(1).filter(function(b) { return b.trim(); });
+        if (bullets.length === 0) return escapeHtml(text).replace(/\n/g, "<br>");
+        var html = intro ? escapeHtml(intro) + "<br><br>" : "";
+        html += '<div style="margin-bottom:12px;font-weight:600;font-size:13px;color:var(--ink);">What you\'ll explore</div>';
         html += "<ul style='margin:6px 0 0 0; padding-left:20px;'>";
         bullets.forEach(function(b) { html += "<li style='margin-bottom:4px;'>" + escapeHtml(b.trim()) + "</li>"; });
         html += "</ul>";
@@ -2164,32 +2193,32 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         return `
         <article class="card" data-record-id="${escapeAttr(item.recordId)}" onclick="openMore('${escapeAttr(item.recordId)}')" style="cursor:pointer;">
           <div class="cardHeader">
-            <div class="cardExperienceType">
-              ${experienceTypeIcon}
-              <span class="cardExperienceTypeLabel">${escapeHtml(experienceTypeLabel)}</span>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;margin-bottom:10px;">
+              <div class="cardExperienceType">
+                ${experienceTypeIcon}
+                <span class="cardExperienceTypeLabel">${escapeHtml(experienceTypeLabel)}</span>
+              </div>
+              <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}')); syncCardBookmarkIcons_();" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
+              </button>
             </div>
-            <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}')); syncCardBookmarkIcons_();" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
-            </button>
+            <h3 class="title" style="margin:0 0 8px 0;">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery || "", { allowShort: true })}</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? '<span class="badge featured">Featured</span>' : ''}
+              ${item.duration ? '<span class="badge duration">' + escapeHtml(item.duration) + ' min</span>' : ''}
+            </div>
           </div>
 
           <div class="cardBody">
-            <h3 class="title">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery || "", { allowShort: true })}</h3>
+            ${item.product ? '<div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:10px;">' + escapeHtml(item.product) + '</div>' : ''}
 
-            ${item.product ? '<div style="margin-top:8px;font-size:13px;color:var(--muted);">' + escapeHtml(item.product) + '</div>' : ''}
+            <div class="desc" style="-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery || "")}</div>
 
-            <div class="desc" style="margin-top:10px;-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery || "")}</div>
+            ${item.creatorName ? '<div style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:13px;color:var(--muted);"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2 1a2 2 0 0 1 2 2v.5c0 .83-.67 1.5-1.5 1.5h-5A1.5 1.5 0 0 1 4 11.5V11a2 2 0 0 1 2-2h4z"/></svg>' + escapeHtml(item.creatorName) + '</div>' : ''}
 
-            <div class="meta" style="margin-top:10px;">
-              ${item.creatorName ? '<div>By ' + escapeHtml(item.creatorName) + '</div>' : ''}
-              ${item.duration ? '<div>' + escapeHtml(item.duration) + ' min</div>' : ''}
-            </div>
-
-            ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? '<div style="margin-top:8px;"><span class="badge featured">Featured</span></div>' : ''}
-
-            <div class="cardActions" style="margin-top:auto;padding-top:12px;">
-              <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;display:inline-block;margin:0;">More Info</a>
-              ${primaryUrl ? '<a class="btn small launch" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade(\'launch_demo\', \'' + escapeAttr(item.recordId) + '\');" style="pointer-events:auto; text-decoration:none;">' + getLaunchButtonLabel(item) + '</a>' : ''}
+            <div style="border-top:1px solid var(--border);margin-top:auto;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+              <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;font-size:13px;color:var(--muted);text-decoration:none;">View details</a>
+              ${primaryUrl ? '<a class="btn small primary" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade(\'launch_demo\', \'' + escapeAttr(item.recordId) + '\');" style="pointer-events:auto;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">' + getLaunchButtonLabel(item) + '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg></a>' : ''}
             </div>
           </div>
         </article>`;
@@ -2266,32 +2295,32 @@ function renderDrawerLink(label, url, actionLabel, recordId){
             ${SELECTION_MODE ? `<div class="cardCheckbox${isSelected ? ' checked' : ''}"></div>` : ''}
 
             <div class="cardHeader">
-              <div class="cardExperienceType">
-                ${experienceTypeIcon}
-                <span class="cardExperienceTypeLabel">${escapeHtml(experienceTypeLabel)}</span>
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;margin-bottom:10px;">
+                <div class="cardExperienceType">
+                  ${experienceTypeIcon}
+                  <span class="cardExperienceTypeLabel">${escapeHtml(experienceTypeLabel)}</span>
+                </div>
+                <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}')); syncCardBookmarkIcons_();" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
+                </button>
               </div>
-              <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}')); syncCardBookmarkIcons_();" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
-              </button>
+              <h3 class="title${SELECTION_MODE ? ' selectable' : ''}" style="margin:0 0 8px 0;">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery, { allowShort: true })}</h3>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? `<span class="badge featured">Featured</span>` : ``}
+                ${item.duration ? `<span class="badge duration">${escapeHtml(item.duration)} min</span>` : ``}
+              </div>
             </div>
 
             <div class="cardBody">
-              <h3 class="title${SELECTION_MODE ? ' selectable' : ''}">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery, { allowShort: true })}</h3>
+              ${item.product ? `<div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:10px;">${escapeHtml(item.product)}</div>` : ``}
 
-              ${item.product ? `<div style="margin-top:8px;font-size:13px;color:var(--muted);">${escapeHtml(item.product)}</div>` : ``}
+              <div class="desc" style="-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery)}</div>
 
-              <div class="desc" style="margin-top:10px;-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery)}</div>
+              ${item.creatorName ? `<div style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:13px;color:var(--muted);"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2 1a2 2 0 0 1 2 2v.5c0 .83-.67 1.5-1.5 1.5h-5A1.5 1.5 0 0 1 4 11.5V11a2 2 0 0 1 2-2h4z"/></svg>${escapeHtml(item.creatorName)}</div>` : ``}
 
-              <div class="meta" style="margin-top:10px;">
-                ${item.creatorName ? `<div>By ${escapeHtml(item.creatorName)}</div>` : ``}
-                ${item.duration ? `<div>${escapeHtml(item.duration)} min</div>` : ``}
-              </div>
-
-              ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? `<div style="margin-top:8px;"><span class="badge featured">Featured</span></div>` : ``}
-
-              <div class="cardActions" style="margin-top:auto;padding-top:12px;">
-                <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;display:inline-block;margin:0;">More Info</a>
-                ${primaryUrl ? `<a class="btn small launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto; text-decoration:none;">${getLaunchButtonLabel(item)}</a>` : ''}
+              <div style="border-top:1px solid var(--border);margin-top:auto;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+                <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;font-size:13px;color:var(--muted);text-decoration:none;">View details</a>
+                ${primaryUrl ? `<a class="btn small primary" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">${getLaunchButtonLabel(item)}<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg></a>` : ''}
               </div>
             </div>
           </article>`;
@@ -2717,22 +2746,18 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         const primaryUrl = getPrimaryLink(rec);
         const isSaved = SAVED_ARCADES.has(rec.recordId);
 
-        // Parse description to identify bullet highlights
-        const descriptionParts = formatDescription_(rec.description);
-        const hasBullets = descriptionParts.includes('<ul');
-
         document.getElementById("drawerBody").innerHTML = `
           <div class="drawerSection">
             ${primaryUrl ? `<a class="btn launch drawerPrimaryLaunch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="trackIndividualArcade('launch_demo', '${escapeAttr(rec.recordId)}');" style="text-decoration:none;">${getLaunchButtonLabel(rec)}</a>` : ''}
           </div>
 
           <div class="drawerSection" style="display:flex;gap:8px;align-items:center;">
-            <button class="btn small muted" onclick="toggleSavedArcade('${escapeAttr(rec.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(rec.recordId)}')); syncCardBookmarkIcons_();" style="display:inline-flex;align-items:center;gap:6px;" title="${isSaved ? 'Saved' : 'Save Demo'}">
+            <button class="btn small muted drawerSaveBtn" data-record-id="${escapeAttr(rec.recordId)}" onclick="toggleSavedArcade('${escapeAttr(rec.recordId)}'); syncCardBookmarkIcons_();" style="display:inline-flex;align-items:center;gap:6px;" title="${isSaved ? 'Saved' : 'Save Demo'}">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
               <span>${isSaved ? 'Saved' : 'Save'}</span>
             </button>
             ${primaryUrl ? `<button class="btn small muted" onclick="copyText('${escapeAttr(primaryUrl)}');" style="display:inline-flex;align-items:center;gap:6px;">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 73.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>
               <span>Copy Link</span>
             </button>` : ''}
           </div>
@@ -2740,8 +2765,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           <div class="drawerSection" style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
             <div class="drawerKicker">About this experience</div>
             <div class="desc" style="display:block;-webkit-line-clamp:unset">
-              ${hasBullets ? '<div style="margin-bottom:12px;font-weight:600;font-size:13px;color:var(--ink);">What you\'ll explore</div>' : ''}
-              ${descriptionParts}
+              ${formatDescriptionWithHeader_(rec.description)}
             </div>
           </div>
 

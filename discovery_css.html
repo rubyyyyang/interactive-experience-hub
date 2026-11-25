@@ -1219,11 +1219,9 @@
       .cardHeader{
         background:linear-gradient(135deg, rgba(109,40,217,0.03), rgba(109,40,217,0.08));
         border-radius:18px 18px 0 0;
-        padding:12px 14px;
+        padding:12px 14px 14px 14px;
         display:flex;
-        align-items:center;
-        justify-content:space-between;
-        gap:8px;
+        flex-direction:column;
         border-bottom:1px solid rgba(109,40,217,0.12);
       }
 
@@ -1384,20 +1382,16 @@
 
       .more-info-link{
         display:inline-block;
-        font-size:12px;
-        font-weight:600;
-        color:var(--accent);
+        font-size:13px;
+        font-weight:500;
+        color:var(--muted);
         cursor:pointer;
         text-decoration:none;
+        transition:color 0.2s;
       }
-      .more-info-link:hover{ text-decoration:underline; }
-
-      .cardActions{
-        display:flex;
-        gap:8px;
-        flex-wrap:wrap;
-        align-items:center;
-        justify-content:space-between;
+      .more-info-link:hover{
+        color:var(--accent);
+        text-decoration:none;
       }
 
       .pager{

@@ -296,7 +296,7 @@ test('Drawer: Renders "About this experience" and "Created by" sections with cor
 
   // Verify "About this experience" section
   assert(renderDrawerContentSrc.includes('About this experience'), 'Drawer should render "About this experience" heading');
-  assert(renderDrawerContentSrc.includes("What you") && renderDrawerContentSrc.includes("ll explore"), "Drawer should include 'What you'll explore' header for bullets");
+  assert(renderDrawerContentSrc.includes("formatDescriptionWithHeader_"), "Drawer should use formatDescriptionWithHeader_ for description with bullet headers");
 
   // Verify "Created by" section with compact format
   assert(renderDrawerContentSrc.includes('Created by'), 'Drawer should render "Created by" heading');
@@ -313,6 +313,39 @@ test('Drawer: Renders "About this experience" and "Created by" sections with cor
 
   // Verify Experience Type icon is rendered in drawer
   assert(renderDrawerContentSrc.includes('getExperienceTypeIcon'), 'Drawer should use Experience Type icon');
+
+  // Verify drawer Save button has drawerSaveBtn class for synchronization
+  assert(renderDrawerContentSrc.includes('drawerSaveBtn'), 'Drawer Save button should have drawerSaveBtn class');
+  assert(renderDrawerContentSrc.includes('data-record-id'), 'Drawer Save button should have data-record-id attribute');
+});
+
+// Test 14: formatDescriptionWithHeader_ places "What you'll explore" correctly
+test('formatDescriptionWithHeader_: Places header above bullets only when bullets exist', () => {
+  const formatDescriptionWithHeaderSrc = extractFunction(discoveryJsContent, 'formatDescriptionWithHeader_');
+  assert(formatDescriptionWithHeaderSrc, 'Should find formatDescriptionWithHeader_ function');
+
+  eval(formatDescriptionWithHeaderSrc);
+  eval(extractFunction(discoveryJsContent, 'escapeHtml'));
+
+  const descWithBullets = "This is an intro. • First point • Second point";
+  const descNoBullets = "This is just a plain description.";
+  const descEmptyBullets = "Intro text • ";
+
+  const resultWithBullets = formatDescriptionWithHeader_(descWithBullets);
+  const resultNoBullets = formatDescriptionWithHeader_(descNoBullets);
+  const resultEmptyBullets = formatDescriptionWithHeader_(descEmptyBullets);
+
+  // With bullets: should include "What you'll explore" header
+  assert(resultWithBullets.includes("What you"), "Description with bullets should include 'What you'll explore' header");
+  assert(resultWithBullets.includes("ll explore"), "Description with bullets should include 'What you'll explore' header");
+  assert(resultWithBullets.includes("<ul"), "Description with bullets should include bullet list");
+
+  // Without bullets: should NOT include the header
+  assert(!resultNoBullets.includes("What you"), "Description without bullets should NOT include 'What you'll explore' header");
+  assert(!resultNoBullets.includes("<ul"), "Description without bullets should NOT include bullet list");
+
+  // Empty bullets: should NOT include the header
+  assert(!resultEmptyBullets.includes("What you"), "Description with empty bullets should NOT include header");
 });
 
 console.log(`\n=== Summary ===`);
