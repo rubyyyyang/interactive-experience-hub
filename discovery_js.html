@@ -1268,6 +1268,30 @@ Shared via The Interact Hub`;
         };
       }
 
+      function getExperienceTypeIcon(item) {
+        // Interactive Demo: purple interaction icon
+        if (item.format === 'Interactive Demo') {
+          return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6d28d9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v3M13.66 4.34l-2.12 2.12M15 10h-3M13.66 15.66l-2.12-2.12M8 15v-3M4.34 13.66l-2.12 2.12M1 10h3M4.34 4.34L2.22 2.22"/></svg>`;
+        }
+        // Video Demo: teal video icon
+        if (item.format === 'Video Demo') {
+          return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#0d9488" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="10" rx="2"/><path d="M11 8l-4 2.5V5.5z"/></svg>`;
+        }
+        // YouTube: red video icon
+        if (item.format === 'YouTube') {
+          return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="14" height="10" rx="2"/><path d="M11 8l-4 2.5V5.5z"/></svg>`;
+        }
+        // Unknown/neutral: gray generic icon
+        return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="2"/></svg>`;
+      }
+
+      function getExperienceTypeColor(item) {
+        if (item.format === 'Interactive Demo') return '#6d28d9';
+        if (item.format === 'Video Demo') return '#0d9488';
+        if (item.format === 'YouTube') return '#dc2626';
+        return '#6b7280';
+      }
+
       function findEmailExportLinks(item) {
         var pageLink = item.drupalPageUrl || item.rhacPage || "";
         var demoLink = item.productionLink || "";
@@ -2134,35 +2158,39 @@ function renderDrawerLink(label, url, actionLabel, recordId){
       function renderCard(item, currentSearchQuery) {
         const isSaved = SAVED_ARCADES.has(item.recordId);
         const primaryUrl = getPrimaryLink(item);
+        const experienceTypeIcon = getExperienceTypeIcon(item);
+        const experienceTypeLabel = item.format || 'Unknown Type';
 
         return `
         <article class="card" data-record-id="${escapeAttr(item.recordId)}" onclick="openMore('${escapeAttr(item.recordId)}')" style="cursor:pointer;">
-          <div style="flex:1;overflow:hidden;">
-            <h3 class="title">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery || "", { allowShort: true })}</h3>
-
-            <div class="badges">
-              ${item.format ? '<span class="badge duration" style="font-size:11px;font-weight:600;">' + escapeHtml(item.format) + '</span>' : ''}
-              ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? '<span class="badge featured">Featured</span>' : ''}
-              ${item.duration ? '<span class="badge duration">' + escapeHtml(item.duration) + ' min</span>' : ''}
-              ${item.product ? renderProductBadge(item.product) : ''}
+          <div class="cardHeader">
+            <div class="cardExperienceType">
+              ${experienceTypeIcon}
+              <span class="cardExperienceTypeLabel">${escapeHtml(experienceTypeLabel)}</span>
             </div>
-
-            <div class="meta">
-              ${item.creatorName ? '<div><b>Creator:</b> ' + escapeHtml(item.creatorName) + '</div>' : ''}
-            </div>
-
-            <div class="desc" style="-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery || "")}</div>
-          </div>
-
-          <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;">More Info &rarr;</a>
-
-          <div class="cardActions">
-            ${primaryUrl ? '<a class="btn small launch" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade(\'launch_demo\', \'' + escapeAttr(item.recordId) + '\');" style="pointer-events:auto; text-decoration:none;">' + getLaunchButtonLabel(item) + '</a>' : ''}
-            ${hasEditableSource(item) && getEditLink(item) ? '<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText(\'' + escapeAttr(getEditLink(item)) + '\')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>' : ''}
-
             <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}')); syncCardBookmarkIcons_();" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
             </button>
+          </div>
+
+          <div class="cardBody">
+            <h3 class="title">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery || "", { allowShort: true })}</h3>
+
+            ${item.product ? '<div style="margin-top:8px;font-size:13px;color:var(--muted);">' + escapeHtml(item.product) + '</div>' : ''}
+
+            <div class="desc" style="margin-top:10px;-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery || "")}</div>
+
+            <div class="meta" style="margin-top:10px;">
+              ${item.creatorName ? '<div>By ' + escapeHtml(item.creatorName) + '</div>' : ''}
+              ${item.duration ? '<div>' + escapeHtml(item.duration) + ' min</div>' : ''}
+            </div>
+
+            ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? '<div style="margin-top:8px;"><span class="badge featured">Featured</span></div>' : ''}
+
+            <div class="cardActions" style="margin-top:auto;padding-top:12px;">
+              <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;display:inline-block;margin:0;">More Info</a>
+              ${primaryUrl ? '<a class="btn small launch" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade(\'launch_demo\', \'' + escapeAttr(item.recordId) + '\');" style="pointer-events:auto; text-decoration:none;">' + getLaunchButtonLabel(item) + '</a>' : ''}
+            </div>
           </div>
         </article>`;
       }
@@ -2230,36 +2258,41 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           const isSaved = SAVED_ARCADES.has(item.recordId);
           const cardClasses = `card${SELECTION_MODE ? ' selectable' : ''}${isSelected ? ' selected' : ''}`;
           const primaryUrl = getPrimaryLink(item);
+          const experienceTypeIcon = getExperienceTypeIcon(item);
+          const experienceTypeLabel = item.format || 'Unknown Type';
 
           return `
           <article class="${cardClasses}" data-record-id="${escapeAttr(item.recordId)}" onclick="${SELECTION_MODE ? '' : "openMore('" + escapeAttr(item.recordId) + "')"}" style="cursor:pointer;">
             ${SELECTION_MODE ? `<div class="cardCheckbox${isSelected ? ' checked' : ''}"></div>` : ''}
-            <div style="flex:1;overflow:hidden;">
-              <h3 class="title${SELECTION_MODE ? ' selectable' : ''}">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery, { allowShort: true })}</h3>
 
-              <div class="badges">
-                ${item.format ? `<span class="badge duration" style="font-size:11px;font-weight:600;">${escapeHtml(item.format)}</span>` : ``}
-                ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? `<span class="badge featured">Featured</span>` : ``}
-                ${item.duration ? `<span class="badge duration">${escapeHtml(item.duration)} min</span>` : ``}
-                ${item.product ? renderProductBadge(item.product) : ``}
+            <div class="cardHeader">
+              <div class="cardExperienceType">
+                ${experienceTypeIcon}
+                <span class="cardExperienceTypeLabel">${escapeHtml(experienceTypeLabel)}</span>
               </div>
-
-              <div class="meta">
-                ${item.creatorName ? `<div><b>Creator:</b> ${escapeHtml(item.creatorName)}</div>` : ``}
-              </div>
-
-              <div class="desc" style="-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery)}</div>
-            </div>
-
-            <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;">More Info &rarr;</a>
-
-            <div class="cardActions">
-              ${primaryUrl ? `<a class="btn small launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto; text-decoration:none;">${getLaunchButtonLabel(item)}</a>` : ''}
-              ${hasEditableSource(item) && getEditLink(item) ? `<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText('${escapeAttr(getEditLink(item))}')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>` : ''}
-
               <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}')); syncCardBookmarkIcons_();" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
               </button>
+            </div>
+
+            <div class="cardBody">
+              <h3 class="title${SELECTION_MODE ? ' selectable' : ''}">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery, { allowShort: true })}</h3>
+
+              ${item.product ? `<div style="margin-top:8px;font-size:13px;color:var(--muted);">${escapeHtml(item.product)}</div>` : ``}
+
+              <div class="desc" style="margin-top:10px;-webkit-line-clamp:3;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery)}</div>
+
+              <div class="meta" style="margin-top:10px;">
+                ${item.creatorName ? `<div>By ${escapeHtml(item.creatorName)}</div>` : ``}
+                ${item.duration ? `<div>${escapeHtml(item.duration)} min</div>` : ``}
+              </div>
+
+              ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? `<div style="margin-top:8px;"><span class="badge featured">Featured</span></div>` : ``}
+
+              <div class="cardActions" style="margin-top:auto;padding-top:12px;">
+                <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;display:inline-block;margin:0;">More Info</a>
+                ${primaryUrl ? `<a class="btn small launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto; text-decoration:none;">${getLaunchButtonLabel(item)}</a>` : ''}
+              </div>
             </div>
           </article>`;
         }

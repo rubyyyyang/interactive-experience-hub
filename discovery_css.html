@@ -1209,11 +1209,60 @@
         border:1px solid var(--border);
         border-radius:18px;
         box-shadow:var(--shadow);
-        padding:14px;
+        padding:0;
         display:flex;
         flex-direction:column;
         min-height:260px;
         position:relative;
+      }
+
+      .cardHeader{
+        background:linear-gradient(135deg, rgba(109,40,217,0.03), rgba(109,40,217,0.08));
+        border-radius:18px 18px 0 0;
+        padding:12px 14px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:8px;
+        border-bottom:1px solid rgba(109,40,217,0.12);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) .cardHeader {
+          background:linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.14));
+          border-bottom-color:rgba(139,92,246,0.18);
+        }
+      }
+
+      [data-theme="dark"] .cardHeader {
+        background:linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.14));
+        border-bottom-color:rgba(139,92,246,0.18);
+      }
+
+      .cardExperienceType{
+        display:flex;
+        align-items:center;
+        gap:6px;
+        flex:1;
+        min-width:0;
+      }
+
+      .cardExperienceTypeLabel{
+        font-size:11px;
+        font-weight:700;
+        text-transform:uppercase;
+        letter-spacing:0.5px;
+        color:var(--muted);
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
+
+      .cardBody{
+        padding:14px;
+        display:flex;
+        flex-direction:column;
+        flex:1;
       }
 
 
@@ -1335,12 +1384,11 @@
 
       .more-info-link{
         display:inline-block;
-        margin-top:auto;
-        padding-top:8px;
         font-size:12px;
         font-weight:600;
         color:var(--accent);
         cursor:pointer;
+        text-decoration:none;
       }
       .more-info-link:hover{ text-decoration:underline; }
 
@@ -1348,7 +1396,8 @@
         display:flex;
         gap:8px;
         flex-wrap:wrap;
-        padding-top:10px;
+        align-items:center;
+        justify-content:space-between;
       }
 
       .pager{
@@ -1385,7 +1434,7 @@
         display:flex;
         align-items:stretch;
         justify-content:flex-end;
-        z-index:100;
+        z-index:1050;
         pointer-events:none;
         transition:background .25s ease;
       }
@@ -1747,8 +1796,8 @@
 
       .cardCheckbox{
         position:absolute;
-        top:12px;
-        left:12px;
+        top:14px;
+        left:14px;
         width:20px;
         height:20px;
         border:2px solid var(--border);
@@ -1776,8 +1825,8 @@
         font-weight:bold;
       }
 
-      .card.selectable .title{
-        padding-left:32px;
+      .card.selectable .cardHeader{
+        padding-left:42px;
       }
 
       /* Floating Selection System */
