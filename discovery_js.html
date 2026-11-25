@@ -2679,7 +2679,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
 
         document.getElementById("drawerBody").innerHTML = `
           <div class="drawerSection">
-            ${primaryUrl ? `<a class="btn launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="trackIndividualArcade('launch_demo', '${escapeAttr(rec.recordId)}');" style="text-decoration:none;">${getLaunchButtonLabel(rec)}</a>` : ''}
+            ${primaryUrl ? `<a class="btn launch drawerPrimaryLaunch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="trackIndividualArcade('launch_demo', '${escapeAttr(rec.recordId)}');" style="text-decoration:none;">${getLaunchButtonLabel(rec)}</a>` : ''}
           </div>
 
           <div class="drawerSection" style="display:flex;gap:8px;">
