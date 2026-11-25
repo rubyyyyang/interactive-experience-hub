@@ -176,71 +176,202 @@ function getDiscoveryIndexBundle_() {
 
 ---
 
-### 5. Version-Based Invalidation Verification
+### 5. Version-Based Invalidation - CORRECTED ANALYSIS
 
-**Current versionKey composition:**
+**Existing implementation in `RM_Triggers.js` (lines 84-160):**
+
+The `handleSpreadsheetEdit()` installable trigger ALREADY calls `bumpDiscoveryDataVersion_()` on line 131 for Request_Master single-cell edits.
+
+**Current behavior:**
+
 ```javascript
-function getDiscoverySheetVersion_(sheet) {
-  const props = PropertiesService.getDocumentProperties();
-  const version = props.getProperty("DISCOVERY_DATA_VERSION") || "1";
-  var ytRows = 0;
-  try {
-    var yt = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("YouTube_Responses");
-    if (yt) ytRows = yt.getLastRow();
-  } catch (_) {}
-  return [
-    DISCOVERY_CACHE_SCHEMA_VERSION,  // Constant: 3
-    sheet.getSheetId(),               // Sheet ID (constant for Request_Master)
-    sheet.getLastRow(),               // Changes on row add/delete
-    sheet.getLastColumn(),            // Changes on column add/delete
-    version,                          // Manual bump via bumpDiscoveryDataVersion_()
-    ytRows                            // Changes when YouTube rows added
-  ].join(":");
-}
-```
-
-**Invalidation scenarios to verify:**
-
-| Scenario | versionKey changes? | Cache invalidated? | Correct? |
-|----------|-------------------|-------------------|----------|
-| Edit existing Request_Master cell | ❌ No (lastRow/lastColumn unchanged) | ❌ No | ⚠️ **Stale cache** |
-| Add row to Request_Master | ✅ Yes (lastRow increments) | ✅ Yes | ✅ Correct |
-| Delete row from Request_Master | ✅ Yes (lastRow decrements) | ✅ Yes | ✅ Correct |
-| Add column to Request_Master | ✅ Yes (lastColumn increments) | ✅ Yes | ✅ Correct |
-| Edit existing YouTube_Responses cell | ❌ No (ytRows unchanged) | ❌ No | ⚠️ **Stale cache** |
-| Add row to YouTube_Responses | ✅ Yes (ytRows increments) | ✅ Yes | ✅ Correct |
-| Manual `forceInvalidateDiscoveryCache()` | ✅ Yes (version bumped) | ✅ Yes | ✅ Correct |
-| Greg's batch update (overwrites cells) | ❌ No (row count unchanged) | ❌ No | ⚠️ **Stale cache** |
-
-**Critical finding:** **Editing existing cells does NOT invalidate cache.**
-
-**Impact:**
-- User edits title/description/status → cache remains stale
-- Greg's batch refresh (overwrites existing rows) → cache remains stale
-- Cache stays stale until next row add/delete OR manual invalidation
-
-**Solutions:**
-
-1. **Monitor lastEdit timestamp** (not available in Apps Script without Apps Script Advanced Services)
-2. **Lower TTL** (e.g., 5 minutes instead of 30 minutes) - accepts staleness window
-3. **Trigger-based invalidation** - Add onEdit trigger to bump version
-4. **Manual invalidation workflow** - Document when to call `forceInvalidateDiscoveryCache()`
-
-**Recommendation:** Add onEdit trigger to bump DISCOVERY_DATA_VERSION on Request_Master or YouTube_Responses edits.
-
-**Code to add to RM_Triggers.js:**
-```javascript
-function onEditDiscoveryInvalidation(e) {
-  if (!e) return;
-  const sheetName = e.source.getActiveSheet().getName();
-  if (sheetName === 'Request_Master' || sheetName === 'YouTube_Responses') {
-    // Only bump on actual cell edits, not formula recalculations
-    if (e.changeType === 'EDIT' || e.changeType === 'INSERT_ROW' || e.changeType === 'REMOVE_ROW') {
-      bumpDiscoveryDataVersion_();
+function handleSpreadsheetEdit(event) {
+  // For Request_Master (lines 97-133)
+  if (sheetName === masterSheetName) {
+    if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) {
+      console.log("Ignoring multi-cell edit to prevent trigger storms");
+      return; // ⚠️ DOES NOT bump version for multi-cell edits
     }
+    
+    // ... process single-cell edit ...
+    bumpDiscoveryDataVersion_(); // ✅ Bumps version for single-cell edits
+    return;
+  }
+  
+  // For YouTube_Responses (lines 136-148)
+  if (sheetName === 'YouTube_Responses') {
+    if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) {
+      console.log("Ignoring multi-cell edit to prevent trigger storms");
+      return; // ⚠️ DOES NOT bump version for multi-cell edits
+    }
+    
+    processYouTubeStatusEdit(event, sheet);
+    return; // ⚠️ DOES NOT bump version for ANY YouTube edits
   }
 }
 ```
+
+**Invalidation scenarios - CORRECTED:**
+
+| Scenario | versionKey changes? | Cache invalidated? | Status |
+|----------|-------------------|-------------------|--------|
+| **Request_Master single-cell edit** | ✅ Yes (version bumped line 131) | ✅ Yes | ✅ **Working** |
+| **Request_Master multi-cell edit** | ❌ No (early return line 103-105) | ❌ No | ⚠️ **Gap #1** |
+| Request_Master row add/delete | ✅ Yes (lastRow changes) | ✅ Yes | ✅ Working |
+| Request_Master column add/delete | ✅ Yes (lastColumn changes) | ✅ Yes | ✅ Working |
+| **YouTube_Responses single-cell edit** | ❌ No (no bump call) | ❌ No | ⚠️ **Gap #2** |
+| **YouTube_Responses multi-cell edit** | ❌ No (early return line 142-144) | ❌ No | ⚠️ **Gap #3** |
+| YouTube_Responses row add/delete | ✅ Yes (ytRows changes) | ✅ Yes | ✅ Working |
+| **Programmatic writes (Intake, workflows)** | ❌ No (triggers don't fire) | ❌ No | ⚠️ **Gap #4** |
+| **Greg's batch update (overwrites cells)** | ❌ No (programmatic write) | ❌ No | ⚠️ **Gap #5** |
+| Manual `forceInvalidateDiscoveryCache()` | ✅ Yes (version bumped) | ✅ Yes | ✅ Working |
+
+**Confirmed gaps:**
+
+1. **Request_Master multi-cell edits** - Trigger ignores to prevent storms, no version bump
+2. **YouTube_Responses single-cell edits** - Processed but no version bump
+3. **YouTube_Responses multi-cell edits** - Trigger ignores, no version bump
+4. **Programmatic writes** - Apps Script triggers don't fire for `setValue()` calls from scripts
+5. **Greg's batch update** - Programmatic overwrite, no trigger fired
+
+**Client-side cache investigation:**
+
+Client uses `localStorage` with 30-min TTL (discovery_js.html lines 1324-1377):
+
+```javascript
+const BOOTSTRAP_CACHE_KEY = 'discovery_bootstrap_cache';
+const BOOTSTRAP_CACHE_MAX_AGE = 30 * 60 * 1000; // 30 minutes
+
+function getCachedBootstrap_() {
+  const raw = localStorage.getItem(BOOTSTRAP_CACHE_KEY);
+  const cached = JSON.parse(raw);
+  if (Date.now() - (cached._ts || 0) > BOOTSTRAP_CACHE_MAX_AGE) {
+    localStorage.removeItem(BOOTSTRAP_CACHE_KEY);
+    return null; // ✅ Expires after 30 min
+  }
+  return cached;
+}
+```
+
+**Does client cache respect backend version changes?**
+
+❌ **No - client localStorage is TTL-only, NOT version-aware**
+
+Client cache remains valid for 30 minutes regardless of backend DISCOVERY_DATA_VERSION changes. User could see stale data for up to 30 minutes after backend update.
+
+**Mitigation:** Background refresh updates cache without blocking user (line 1424-1447), but user may still see stale data initially.
+
+---
+
+**Smallest proposed fixes:**
+
+**Fix #1: Add version bump for YouTube_Responses edits**
+
+In `RM_Triggers.js`, line 147 (after `processYouTubeStatusEdit`):
+
+```javascript
+// Handle YouTube_Responses
+if (sheetName === 'YouTube_Responses') {
+  if (range.getRow() <= 1) return;
+  if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) {
+    console.log("Ignoring multi-cell edit to prevent trigger storms");
+    return;
+  }
+  
+  processYouTubeStatusEdit(event, sheet);
+  bumpDiscoveryDataVersion_(); // ← ADD THIS LINE
+  return;
+}
+```
+
+**Fix #2: Bump version for multi-cell edits (selective)**
+
+Replace early return with selective version bump:
+
+```javascript
+// For Request_Master
+if (sheetName === masterSheetName) {
+  if (range.getRow() <= ENHANCED_CONFIG.SHEETS.HEADER_ROW) return;
+  
+  if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) {
+    console.log("Multi-cell edit detected - bumping discovery version only");
+    bumpDiscoveryDataVersion_(); // ← Bump but skip detailed processing
+    return;
+  }
+  
+  // ... continue with single-cell processing ...
+}
+```
+
+**Fix #3: Document programmatic write invalidation**
+
+Programmatic writes (Intake submissions, Greg's batch, lifecycle workflows) CANNOT be detected by triggers.
+
+**Recommendation:** Document manual invalidation procedure:
+
+```javascript
+// In any script that performs bulk data updates:
+function afterBulkUpdate() {
+  // ... write data to Request_Master ...
+  
+  // Invalidate discovery cache
+  if (typeof bumpDiscoveryDataVersion_ === 'function') {
+    bumpDiscoveryDataVersion_();
+  }
+}
+```
+
+**Locations to add manual invalidation:**
+- `RM_CreatorIntake.js` - After writing Intake submission to Request_Master
+- `RM_Workflow.js` - After status/link updates
+- `RM_Datasync.js` - After Greg's batch refresh
+- Any other script that calls `sheet.getRange().setValue()`
+
+**Fix #4: Client-side version-aware caching (optional, more complex)**
+
+Add version check to client cache:
+
+```javascript
+function getCachedBootstrap_() {
+  const raw = localStorage.getItem(BOOTSTRAP_CACHE_KEY);
+  const cached = JSON.parse(raw);
+  
+  // Check both TTL and version
+  if (Date.now() - (cached._ts || 0) > BOOTSTRAP_CACHE_MAX_AGE) {
+    return null;
+  }
+  
+  // Fetch current version from server (requires new endpoint)
+  google.script.run
+    .withSuccessHandler((serverVersion) => {
+      if (cached.version !== serverVersion) {
+        localStorage.removeItem(BOOTSTRAP_CACHE_KEY);
+        // Trigger refresh
+      }
+    })
+    .getDiscoveryDataVersion();
+  
+  return cached;
+}
+```
+
+**Trade-off:** Adds server roundtrip on every page load, defeats purpose of cache.
+
+**Better alternative:** Keep TTL-only cache, accept 30-min staleness window as reasonable for internal tool.
+
+---
+
+**Summary of confirmed gaps:**
+
+| Gap | Impact | Proposed Fix | Priority |
+|-----|--------|--------------|----------|
+| YouTube_Responses edits | Medium - YouTube data stale until row add/delete | Add `bumpDiscoveryDataVersion_()` after line 147 | High |
+| Request_Master multi-cell edits | Low - rare user action | Bump version on multi-cell edit | Medium |
+| YouTube_Responses multi-cell edits | Low - rare user action | Bump version on multi-cell edit | Medium |
+| Programmatic writes | High - Greg's batch, Intake, workflows | Add manual bump in each script | High |
+| Client localStorage | Medium - 30 min stale window | Accept as-is OR add version check | Low |
+
+**Recommendation:** Implement Fix #1 (YouTube bump) and Fix #3 (document manual invalidation) as smallest, safest improvements.
 
 ---
 
@@ -542,23 +673,225 @@ function doGet(e) {
 
 ---
 
-## Deployment Verification Procedure
+## Executable Performance Diagnostics
 
-Since deployment access is required for measurements:
+### Local Tests (No Deployment Required)
 
-1. **Add instrumentation code** to DiscoveryWebApp.js
-2. **Deploy to dev/test environment** via `clasp push --dev`
-3. **Run test scenarios:**
-   - Cold start: Clear cache, load Discovery page → measure rebuild time + bundle size
-   - Warm cache: Reload page → measure cache hit time
-   - Concurrent: Open 3 tabs simultaneously → count rebuilds
-   - Prefetch: Monitor console for prefetch rebuild count
-4. **Collect logs** from Apps Script execution logs (View → Executions)
-5. **Analyze findings:**
-   - If bundle <100 KB: proceed with full bundle caching
-   - If bundle >100 KB: implement chunking strategy
-   - If compression beneficial (time saved > compression overhead): add LZString
-6. **Report measurements** in PERFORMANCE_RESULTS.md
+**Static code analysis completed:**
+- ✅ Cache invalidation gaps identified and documented
+- ✅ Trigger behavior analyzed against existing implementation
+- ✅ Client-side cache TTL vs. version-awareness verified
+
+### Runtime Measurements (Deployment Required)
+
+**Diagnostic function:** `DiscoveryPerformanceDiagnostics.js`
+
+This read-only diagnostic measures:
+- Record count (Request_Master + YouTube_Responses)
+- Sheet read performance (getDisplayValues vs. getValues)
+- Index construction time
+- Serialized index size (bytes, KB, MB)
+- Compression ratio and overhead (if LZString available)
+- Cache write/read success and timing
+- Cold vs. warm request latency
+
+**Execution Instructions:**
+
+### Step 1: Deploy Diagnostic Code
+
+```bash
+# From repository root
+cd /Users/rubyyang/Arcade\ Finder
+
+# Copy diagnostic code to Apps Script project
+# (Manual step - copy content of DiscoveryPerformanceDiagnostics.js)
+```
+
+In Apps Script editor:
+1. Open project in Apps Script editor
+2. Create new script file: `DiscoveryPerformanceDiagnostics.js`
+3. Paste entire content from local file
+4. Save (Ctrl/Cmd + S)
+
+### Step 2: Run Diagnostics
+
+In Apps Script editor:
+1. Select function: `runDiscoveryPerformanceDiagnostics`
+2. Click Run (▶️)
+3. Grant permissions if prompted (read-only access to Sheets and Cache)
+4. Wait for execution to complete (~10-30 seconds depending on data size)
+
+### Step 3: View Results
+
+**Option A: Execution Log (Real-time)**
+
+1. Go to View → Executions
+2. Click most recent execution
+3. View detailed logs with measurements
+
+**Option B: Stored Results (Retrievable Later)**
+
+In Apps Script editor:
+1. Run function: `getPreviousDiagnosticResults`
+2. View formatted summary in log
+
+**Option C: Raw JSON (For Analysis)**
+
+```javascript
+// In Apps Script editor console
+const json = PropertiesService.getDocumentProperties().getProperty('PERF_DIAGNOSTICS_RESULTS');
+console.log(JSON.parse(json));
+```
+
+### Step 4: Collect Measurements
+
+**Expected output format:**
+
+```
+=== DISCOVERY PERFORMANCE DIAGNOSTICS ===
+
+📊 Measuring record counts...
+  Request_Master: 523 rows × 48 columns
+  YouTube_Responses: 87 rows × 32 columns
+  Total records: 610
+
+📖 Measuring sheet read performance...
+  Sample size: 100 rows × 48 columns = 4800 cells
+  getDisplayValues(): 1247ms
+  getValues(): 1053ms
+  getFormulas(): 892ms
+  Formula cells: 1203 (25.1%)
+  Potential speedup: 15.5%
+
+🏗️ Measuring index construction...
+  Total time: 2341ms
+  Records indexed: 587
+  Facet dimensions: 7
+  Search terms: 1842
+  Time per record: 3.99ms
+
+📦 Measuring serialization...
+  Size: 324,581 bytes (316.97 KB)
+  Serialization: 47ms
+  Deserialization: 31ms
+  Exceeds 100KB cache limit: YES ⚠️
+  Chunks needed (90KB each): 4
+
+🗜️ Measuring compression...
+  Original: 324,581 bytes
+  Compressed: 142,039 bytes
+  Compression ratio: 56.2%
+  Compress time: 234ms
+  Decompress time: 187ms
+  Total overhead: 421ms
+  Exceeds cache limit: YES ⚠️
+  Worthwhile: Yes
+
+💾 Measuring cache operations...
+  Raw JSON: Skipped (exceeds 100KB limit)
+  Compressed: Skipped (exceeds 100KB limit)
+  Chunked (4 chunks):
+    Write: 123ms
+    Read: 89ms
+    Success: Yes
+
+⏱️ Measuring request latency...
+  Cold request (index rebuild): 2456ms
+    Records returned: 20
+  Warm request (in-memory cache): 42ms
+    Records returned: 20
+  Speedup: 98.3%
+  Filtered request (q="openshift", format="Interactive Demo"): 67ms
+    Records returned: 15
+
+============================================================
+DIAGNOSTIC SUMMARY
+============================================================
+
+📊 DATA VOLUME:
+  Total records: 610
+  Request_Master: 523 rows
+  YouTube_Responses: 87 rows
+
+⚡ PERFORMANCE:
+  Index construction: 2341ms
+  Sheet read (getDisplayValues): 1247ms
+  Sheet read (getValues): 1053ms
+  Potential speedup: 15.5%
+
+💾 CACHING:
+  Index size: 316.97 KB
+  Exceeds 100KB limit: YES ⚠️
+  Chunks needed: 4
+  Compressed size: 138.71 KB
+  Compression ratio: 56.2%
+  Compression overhead: 421ms
+
+🚀 REQUEST LATENCY:
+  Cold (rebuild): 2456ms
+  Warm (cached): 42ms
+  Filtered: 67ms
+
+💡 RECOMMENDATIONS:
+  ⚠️ Bundle exceeds 100KB - chunking required
+     Implement 4-chunk strategy
+  ✅ Compression recommended (56.2% reduction)
+  ✅ Caching provides 98% speedup - recommend implementation
+
+============================================================
+```
+
+### Step 5: Interpret Results
+
+Based on measurements, choose implementation strategy:
+
+**Decision Matrix:**
+
+| Measurement | Threshold | Action |
+|-------------|-----------|--------|
+| Index size | <100 KB | Single-key cache strategy |
+| Index size | 100-200 KB | Chunked cache strategy (2-3 chunks) |
+| Index size | 200-400 KB | Chunked + compressed strategy |
+| Index size | >400 KB | Hybrid strategy (facets only) OR accept performance trade-off |
+| Compression ratio | >30% AND overhead <500ms | Use compression |
+| Compression ratio | <30% OR overhead >1000ms | Skip compression |
+| getValues speedup | >20% | Switch from getDisplayValues |
+| getValues speedup | <20% | Keep getDisplayValues (data compatibility) |
+| Warm speedup | >80% | High-priority implementation |
+| Warm speedup | 50-80% | Medium-priority implementation |
+| Warm speedup | <50% | Low-priority, investigate other bottlenecks |
+
+### Step 6: Document Findings
+
+Create `PERFORMANCE_RESULTS.md` with:
+1. Copy-paste diagnostic summary output
+2. Chosen implementation strategy with rationale
+3. Expected improvement estimates
+4. Implementation plan and risk assessment
+
+### Safety Notes
+
+- ✅ Diagnostic is read-only (no data modification)
+- ✅ Uses isolated test cache keys (`PERF_TEST_*`)
+- ✅ Cleans up test cache entries after measurements
+- ✅ Can be run multiple times without side effects
+- ✅ Results stored in document properties (retrievable later)
+
+### Troubleshooting
+
+**"ReferenceError: getMasterSheet_ is not defined"**
+- Ensure diagnostic code is in same Apps Script project as DiscoveryWebApp.js
+- Run from Apps Script editor, not standalone
+
+**"ReferenceError: LZString is not defined"**
+- Compression tests will be skipped automatically
+- To test compression: add LZString library to Apps Script project
+- Library ID: `1Yo6vQRwkG7-tvPZKdJwY8OiOYvF0SRL6VhY8SYi1N6KBw7drlaHNmbLF`
+
+**Cache write failures:**
+- Expected if bundle >100 KB
+- Diagnostic will report failure and recommend chunking
+- Not an error, just confirms need for chunking strategy
 
 ---
 
