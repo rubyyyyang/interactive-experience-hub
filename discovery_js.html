@@ -2691,51 +2691,66 @@ function renderDrawerLink(label, url, actionLabel, recordId){
       function renderDrawerContent(rec) {
         document.getElementById("drawerTitle").innerText = rec.title || "Details";
 
-        const meta = [];
-        if (rec.format) {
-          meta.push(`<span class="badge duration" style="font-size:11px;font-weight:600;">${escapeHtml(rec.format)}</span>`);
-        }
+        // Render Experience Type icon and label in drawerMeta
+        const experienceTypeIcon = getExperienceTypeIcon(rec);
+        const experienceTypeLabel = rec.format || 'Unknown Type';
+        const experienceTypeMeta = `
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+            ${experienceTypeIcon}
+            <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);">${escapeHtml(experienceTypeLabel)}</span>
+          </div>
+        `;
+
+        const otherMeta = [];
         if (rec.discoverStatus === "Featured" || rec.discoverStatus === "Featured + Latest") {
-          meta.push(`<span class="badge featured">Featured</span>`);
+          otherMeta.push(`<span class="badge featured">Featured</span>`);
         }
         if (rec.duration) {
-          meta.push(`<span class="badge duration">${escapeHtml(rec.duration)} min</span>`);
+          otherMeta.push(`<span class="badge duration">${escapeHtml(rec.duration)} min</span>`);
         }
         if (rec.product) {
-          meta.push(renderProductBadge(rec.product));
+          otherMeta.push(renderProductBadge(rec.product));
         }
 
-        document.getElementById("drawerMeta").innerHTML = meta.join("");
+        document.getElementById("drawerMeta").innerHTML = experienceTypeMeta + otherMeta.join("");
 
         const primaryUrl = getPrimaryLink(rec);
         const isSaved = SAVED_ARCADES.has(rec.recordId);
+
+        // Parse description to identify bullet highlights
+        const descriptionParts = formatDescription_(rec.description);
+        const hasBullets = descriptionParts.includes('<ul');
 
         document.getElementById("drawerBody").innerHTML = `
           <div class="drawerSection">
             ${primaryUrl ? `<a class="btn launch drawerPrimaryLaunch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="trackIndividualArcade('launch_demo', '${escapeAttr(rec.recordId)}');" style="text-decoration:none;">${getLaunchButtonLabel(rec)}</a>` : ''}
           </div>
 
-          <div class="drawerSection" style="display:flex;gap:8px;">
-            <button class="btn small muted icon-only${isSaved ? ' saved' : ''}" onclick="toggleSavedArcade('${escapeAttr(rec.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(rec.recordId)}')); syncCardBookmarkIcons_();" title="${isSaved ? 'Saved' : 'Save Demo'}">
+          <div class="drawerSection" style="display:flex;gap:8px;align-items:center;">
+            <button class="btn small muted" onclick="toggleSavedArcade('${escapeAttr(rec.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(rec.recordId)}')); syncCardBookmarkIcons_();" style="display:inline-flex;align-items:center;gap:6px;" title="${isSaved ? 'Saved' : 'Save Demo'}">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
+              <span>${isSaved ? 'Saved' : 'Save'}</span>
             </button>
-            ${primaryUrl ? `<button class="btn small muted" onclick="copyText('${escapeAttr(primaryUrl)}');" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;">
-              Copy Link
+            ${primaryUrl ? `<button class="btn small muted" onclick="copyText('${escapeAttr(primaryUrl)}');" style="display:inline-flex;align-items:center;gap:6px;">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>
+              <span>Copy Link</span>
             </button>` : ''}
           </div>
 
-          <div class="drawerSection">
-            <div class="drawerKicker">About</div>
-            <div class="desc" style="display:block;-webkit-line-clamp:unset">${formatDescription_(rec.description)}</div>
+          <div class="drawerSection" style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
+            <div class="drawerKicker">About this experience</div>
+            <div class="desc" style="display:block;-webkit-line-clamp:unset">
+              ${hasBullets ? '<div style="margin-bottom:12px;font-weight:600;font-size:13px;color:var(--ink);">What you\'ll explore</div>' : ''}
+              ${descriptionParts}
+            </div>
           </div>
 
-          <div class="drawerSection">
-            <div class="drawerKicker">Creator</div>
-            <div class="kv">
-              <div class="k">Name</div><div class="v">${escapeHtml(rec.creatorName || "—")}</div>
-              <div class="k">Email</div><div class="v">${rec.creatorEmail ? `<a href="mailto:${escapeAttr(rec.creatorEmail)}" style="color:var(--accent);">${escapeHtml(rec.creatorEmail)}</a>` : "—"}</div>
-              <div class="k">Team</div><div class="v">${escapeHtml(rec.creatorTeam || "—")}</div>
+          <div class="drawerSection" style="border-top:1px solid var(--border);padding-top:16px;">
+            <div class="drawerKicker">Created by</div>
+            <div style="font-size:13px;line-height:1.6;">
+              ${rec.creatorName ? `<div><strong>${escapeHtml(rec.creatorName)}</strong></div>` : ''}
+              ${rec.creatorTeam ? `<div style="color:var(--muted);">${escapeHtml(rec.creatorTeam)}</div>` : ''}
+              ${rec.creatorEmail ? `<div><a href="mailto:${escapeAttr(rec.creatorEmail)}" style="color:var(--accent);text-decoration:none;">${escapeHtml(rec.creatorEmail)}</a></div>` : ''}
             </div>
           </div>
 
@@ -2744,19 +2759,19 @@ function renderDrawerLink(label, url, actionLabel, recordId){
               <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
               </svg>
-              <span class="drawerKicker">Technical</span>
+              <span class="drawerKicker">Metadata</span>
             </summary>
             <div class="kv" style="margin-top:12px;">
               ${rec.primaryProduct ? '<div class="k">Primary Product</div><div class="v">' + escapeHtml(rec.primaryProduct) + '</div>' : ''}
               ${rec.secondaryProduct ? '<div class="k">Secondary Product</div><div class="v">' + escapeHtml(rec.secondaryProduct) + '</div>' : ''}
               ${rec.primaryTopic ? '<div class="k">Primary Topic</div><div class="v">' + escapeHtml(rec.primaryTopic) + '</div>' : ''}
               ${rec.secondaryTopic ? '<div class="k">Secondary Topic</div><div class="v">' + escapeHtml(rec.secondaryTopic) + '</div>' : ''}
-              <div class="k">TDP</div><div class="v">${escapeHtml(rec.tdp || "—")}</div>
-              <div class="k">Marketing Program</div><div class="v">${escapeHtml(rec.marketingProgram || "—")}</div>
-              <div class="k">Sales Tactic</div><div class="v">${escapeHtml(rec.salesTactic || "—")}</div>
-              <div class="k">Event</div><div class="v">${escapeHtml(rec.event || "—")}</div>
-              <div class="k">Language</div><div class="v">${escapeHtml(rec.language || "—")}</div>
-              <div class="k">Global ID</div><div class="v">${escapeHtml(rec.globalId || "—")}</div>
+              ${rec.tdp ? '<div class="k">TDP</div><div class="v">' + escapeHtml(rec.tdp) + '</div>' : ''}
+              ${rec.marketingProgram ? '<div class="k">Marketing Program</div><div class="v">' + escapeHtml(rec.marketingProgram) + '</div>' : ''}
+              ${rec.salesTactic ? '<div class="k">Sales Tactic</div><div class="v">' + escapeHtml(rec.salesTactic) + '</div>' : ''}
+              ${rec.event ? '<div class="k">Event</div><div class="v">' + escapeHtml(rec.event) + '</div>' : ''}
+              ${rec.language ? '<div class="k">Language</div><div class="v">' + escapeHtml(rec.language) + '</div>' : ''}
+              ${rec.globalId ? '<div class="k">Global ID</div><div class="v">' + escapeHtml(rec.globalId) + '</div>' : ''}
             </div>
           </details>
 
