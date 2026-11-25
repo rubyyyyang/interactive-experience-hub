@@ -859,7 +859,7 @@ function getSortPriority(item) {
       }
 
       function syncCardBookmarkIcons_() {
-        document.querySelectorAll('.card .btn.icon-only').forEach(function(btn) {
+        document.querySelectorAll('.card .btn.icon-only, .drawerSection .btn.icon-only').forEach(function(btn) {
           var onclick = btn.getAttribute('onclick') || '';
           var m = onclick.match(/toggleSavedArcade\('([^']+)'\)/);
           if (!m) return;
@@ -1244,8 +1244,14 @@ Shared via The Interact Hub`;
 
       function getPrimaryLink(item){
         let baseUrl = getLaunchLink(item) || getEditLink(item);
+
+        // For Video Demo and YouTube, fall back to productionLink if no launch page exists
+        if (!baseUrl && (isYouTubeItem(item) || isVideoDemo(item))) {
+          baseUrl = item.productionLink || "";
+        }
+
         if (!baseUrl) return "";
-        
+
         // Add TDP-based campaign tracking
         return addCampaignTracking(baseUrl, item.tdp);
       }
@@ -2021,8 +2027,16 @@ async function copyText(text){
       function browseByExperience(type) {
         const startTime = performance.now();
 
-        // Only update format filter, preserve search and other filters
-        if (type === 'all') {
+        // Determine current state to support toggle behavior
+        const currentFormats = filterState.formats || [];
+        const isCurrentlySelected = (type !== 'all' && currentFormats.length === 1 && currentFormats[0] === type);
+
+        // Toggle behavior: clicking already-selected type deselects it and returns to All Experiences
+        // Otherwise, set the clicked type (preserving search and other filters)
+        if (isCurrentlySelected) {
+          filterState.formats = [];
+          type = 'all'; // Update visual target
+        } else if (type === 'all') {
           filterState.formats = [];
         } else {
           filterState.formats = [type];
@@ -2128,30 +2142,33 @@ function renderDrawerLink(label, url, actionLabel, recordId){
       function renderCard(item, currentSearchQuery) {
         const isSaved = SAVED_ARCADES.has(item.recordId);
         const primaryUrl = getPrimaryLink(item);
-        const primaryUrlJson = JSON.stringify(String(primaryUrl || ""));
+
         return `
         <article class="card" data-record-id="${escapeAttr(item.recordId)}" onclick="openMore('${escapeAttr(item.recordId)}')" style="cursor:pointer;">
           <div style="flex:1;overflow:hidden;">
             <h3 class="title">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery || "", { allowShort: true })}</h3>
+
             <div class="badges">
+              ${item.format ? '<span class="badge duration" style="font-size:11px;font-weight:600;">' + escapeHtml(item.format) + '</span>' : ''}
               ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? '<span class="badge featured">Featured</span>' : ''}
               ${item.duration ? '<span class="badge duration">' + escapeHtml(item.duration) + ' min</span>' : ''}
               ${item.product ? renderProductBadge(item.product) : ''}
             </div>
+
             <div class="meta">
-              ${item.primaryTopic ? '<div><b>Primary Topic:</b> ' + escapeHtml(item.primaryTopic) + '</div>' : ''}
-              ${item.tdp ? '<div><b>TDP:</b> ' + escapeHtml(item.tdp) + '</div>' : ''}
-              ${item.salesTactic ? '<div><b>Tactic:</b> ' + escapeHtml(item.salesTactic) + '</div>' : ''}
-              ${item.marketingProgram ? '<div><b>Program:</b> ' + escapeHtml(item.marketingProgram) + '</div>' : ''}
+              ${item.creatorName ? '<div><b>Creator:</b> ' + escapeHtml(item.creatorName) + '</div>' : ''}
             </div>
-            <div class="desc" style="-webkit-line-clamp:5;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery || "")}</div>
           </div>
-          <a class="more-info-link" onclick="event.stopPropagation(); openMore(\'' + escapeAttr(item.recordId) + '\')" style="pointer-events:auto;">More Info &rarr;</a>
+
+          <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;">More Info &rarr;</a>
+
           <div class="cardActions">
             ${primaryUrl ? '<a class="btn small launch" href="' + escapeAttr(primaryUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade(\'launch_demo\', \'' + escapeAttr(item.recordId) + '\');" style="pointer-events:auto; text-decoration:none;">' + getLaunchButtonLabel(item) + '</a>' : ''}
-            ${getEditLink(item) ? '<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText(\'' + escapeAttr(getEditLink(item)) + '\')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>' : ''}
+            ${hasEditableSource(item) && getEditLink(item) ? '<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText(\'' + escapeAttr(getEditLink(item)) + '\')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>' : ''}
 
-            <button class="btn small icon-only' + (isSaved ? ' saved' : '') + '" onclick="event.stopPropagation(); toggleSavedArcade(\'' + escapeAttr(item.recordId) + '\'); this.classList.toggle(\'saved\', SAVED_ARCADES.has(\'' + escapeAttr(item.recordId) + '\'));" style="pointer-events:auto;" title="' + (isSaved ? 'Saved' : 'Save Demo') + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="' + (isSaved ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg></button>
+            <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}')); syncCardBookmarkIcons_();" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
+            </button>
           </div>
         </article>`;
       }
@@ -2219,7 +2236,7 @@ function renderDrawerLink(label, url, actionLabel, recordId){
           const isSaved = SAVED_ARCADES.has(item.recordId);
           const cardClasses = `card${SELECTION_MODE ? ' selectable' : ''}${isSelected ? ' selected' : ''}`;
           const primaryUrl = getPrimaryLink(item);
-          const primaryUrlJson = JSON.stringify(String(primaryUrl || ""));
+
           return `
           <article class="${cardClasses}" data-record-id="${escapeAttr(item.recordId)}" onclick="${SELECTION_MODE ? '' : "openMore('" + escapeAttr(item.recordId) + "')"}" style="cursor:pointer;">
             ${SELECTION_MODE ? `<div class="cardCheckbox${isSelected ? ' checked' : ''}"></div>` : ''}
@@ -2227,28 +2244,24 @@ function renderDrawerLink(label, url, actionLabel, recordId){
               <h3 class="title${SELECTION_MODE ? ' selectable' : ''}">${highlightSearchTermsMemoized(item.title || "Untitled", currentSearchQuery, { allowShort: true })}</h3>
 
               <div class="badges">
+                ${item.format ? `<span class="badge duration" style="font-size:11px;font-weight:600;">${escapeHtml(item.format)}</span>` : ``}
                 ${item.discoverStatus === "Featured" || item.discoverStatus === "Featured + Latest" ? `<span class="badge featured">Featured</span>` : ``}
                 ${item.duration ? `<span class="badge duration">${escapeHtml(item.duration)} min</span>` : ``}
                 ${item.product ? renderProductBadge(item.product) : ``}
               </div>
 
               <div class="meta">
-                ${item.primaryTopic ? `<div><b>Primary Topic:</b> ${escapeHtml(item.primaryTopic)}</div>` : ``}
-                ${item.tdp ? `<div><b>TDP:</b> ${escapeHtml(item.tdp)}</div>` : ``}
-                ${item.salesTactic ? `<div><b>Tactic:</b> ${escapeHtml(item.salesTactic)}</div>` : ``}
-                ${item.marketingProgram ? `<div><b>Program:</b> ${escapeHtml(item.marketingProgram)}</div>` : ``}
+                ${item.creatorName ? `<div><b>Creator:</b> ${escapeHtml(item.creatorName)}</div>` : ``}
               </div>
-
-              <div class="desc" style="-webkit-line-clamp:5;">${highlightSearchTermsMemoized(getFirstParagraph_(item.description) || "No description available.", currentSearchQuery)}</div>
             </div>
 
             <a class="more-info-link" onclick="event.stopPropagation(); openMore('${escapeAttr(item.recordId)}')" style="pointer-events:auto;">More Info &rarr;</a>
 
             <div class="cardActions">
               ${primaryUrl ? `<a class="btn small launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); trackIndividualArcade('launch_demo', '${escapeAttr(item.recordId)}');" style="pointer-events:auto; text-decoration:none;">${getLaunchButtonLabel(item)}</a>` : ''}
-              ${getEditLink(item) ? `<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText('${escapeAttr(getEditLink(item))}')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>` : ''}
+              ${hasEditableSource(item) && getEditLink(item) ? `<button class="btn small muted" data-tooltip="Copies link — paste in browser to edit" onclick="event.stopPropagation(); copyText('${escapeAttr(getEditLink(item))}')" style="pointer-events:auto; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">Edit in Arcade <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg></button>` : ''}
 
-              <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}'));" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
+              <button class="btn small icon-only${isSaved ? ' saved' : ''}" onclick="event.stopPropagation(); toggleSavedArcade('${escapeAttr(item.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(item.recordId)}')); syncCardBookmarkIcons_();" style="pointer-events:auto;" title="${isSaved ? 'Saved' : 'Save Demo'}">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
               </button>
             </div>
@@ -2650,8 +2663,14 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         document.getElementById("drawerTitle").innerText = rec.title || "Details";
 
         const meta = [];
+        if (rec.format) {
+          meta.push(`<span class="badge duration" style="font-size:11px;font-weight:600;">${escapeHtml(rec.format)}</span>`);
+        }
         if (rec.discoverStatus === "Featured" || rec.discoverStatus === "Featured + Latest") {
           meta.push(`<span class="badge featured">Featured</span>`);
+        }
+        if (rec.duration) {
+          meta.push(`<span class="badge duration">${escapeHtml(rec.duration)} min</span>`);
         }
         if (rec.product) {
           meta.push(renderProductBadge(rec.product));
@@ -2660,16 +2679,49 @@ function renderDrawerLink(label, url, actionLabel, recordId){
         document.getElementById("drawerMeta").innerHTML = meta.join("");
 
         const primaryUrl = getPrimaryLink(rec);
+        const isSaved = SAVED_ARCADES.has(rec.recordId);
 
         document.getElementById("drawerBody").innerHTML = `
+          <div class="drawerSection" style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+            ${primaryUrl ? `<a class="btn launch" href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" onclick="trackIndividualArcade('launch_demo', '${escapeAttr(rec.recordId)}');" style="text-decoration:none;">${getLaunchButtonLabel(rec)}</a>` : ''}
+
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="btn small muted icon-only${isSaved ? ' saved' : ''}" onclick="toggleSavedArcade('${escapeAttr(rec.recordId)}'); this.classList.toggle('saved', SAVED_ARCADES.has('${escapeAttr(rec.recordId)}')); syncCardBookmarkIcons_();" title="${isSaved ? 'Saved' : 'Save Demo'}">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5"><path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2z"/></svg>
+              </button>
+              ${primaryUrl ? `<button class="btn small muted" onclick="copyText('${escapeAttr(primaryUrl)}');" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+                Copy Link
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>
+              </button>` : ''}
+            </div>
+          </div>
+
           <div class="drawerSection">
-            <div class="drawerKicker">Overview</div>
+            <div class="drawerKicker">About</div>
+            <div class="desc" style="display:block;-webkit-line-clamp:unset">${formatDescription_(rec.description)}</div>
+          </div>
+
+          <div class="drawerSection">
+            <div class="drawerKicker">Creator</div>
             <div class="kv">
-              <div class="k">Duration</div><div class="v">${rec.duration ? escapeHtml(rec.duration) + ' min' : '—'}</div>
+              <div class="k">Name</div><div class="v">${escapeHtml(rec.creatorName || "—")}</div>
+              <div class="k">Email</div><div class="v">${rec.creatorEmail ? `<a href="mailto:${escapeAttr(rec.creatorEmail)}" style="color:var(--accent);">${escapeHtml(rec.creatorEmail)}</a>` : "—"}</div>
+              <div class="k">Team</div><div class="v">${escapeHtml(rec.creatorTeam || "—")}</div>
+            </div>
+          </div>
+
+          <details class="drawerSection" style="cursor:pointer;">
+            <summary class="drawerKicker" style="list-style:none;display:flex;align-items:center;gap:6px;">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="transition:transform 0.2s;transform:rotate(0deg);">
+                <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+              </svg>
+              Technical
+            </summary>
+            <div class="kv" style="margin-top:12px;">
               ${rec.primaryProduct ? '<div class="k">Primary Product</div><div class="v">' + escapeHtml(rec.primaryProduct) + '</div>' : ''}
-              ${rec.secondaryProduct ? '<div class="k">Product</div><div class="v">' + escapeHtml(rec.secondaryProduct) + '</div>' : ''}
+              ${rec.secondaryProduct ? '<div class="k">Secondary Product</div><div class="v">' + escapeHtml(rec.secondaryProduct) + '</div>' : ''}
               ${rec.primaryTopic ? '<div class="k">Primary Topic</div><div class="v">' + escapeHtml(rec.primaryTopic) + '</div>' : ''}
-              ${rec.secondaryTopic ? '<div class="k">Topic</div><div class="v">' + escapeHtml(rec.secondaryTopic) + '</div>' : ''}
+              ${rec.secondaryTopic ? '<div class="k">Secondary Topic</div><div class="v">' + escapeHtml(rec.secondaryTopic) + '</div>' : ''}
               <div class="k">TDP</div><div class="v">${escapeHtml(rec.tdp || "—")}</div>
               <div class="k">Marketing Program</div><div class="v">${escapeHtml(rec.marketingProgram || "—")}</div>
               <div class="k">Sales Tactic</div><div class="v">${escapeHtml(rec.salesTactic || "—")}</div>
@@ -2677,32 +2729,18 @@ function renderDrawerLink(label, url, actionLabel, recordId){
               <div class="k">Language</div><div class="v">${escapeHtml(rec.language || "—")}</div>
               <div class="k">Global ID</div><div class="v">${escapeHtml(rec.globalId || "—")}</div>
             </div>
-          </div>
+          </details>
 
           <div class="drawerSection">
-            <div class="drawerKicker">Description</div>
-            <div class="desc" style="display:block;-webkit-line-clamp:unset">${formatDescription_(rec.description)}</div>
-          </div>
-
-          <div class="drawerSection">
-            <div class="drawerKicker">Creator Info</div>
-            <div class="kv">
-              <div class="k">Creator Name</div><div class="v">${escapeHtml(rec.creatorName || "—")}</div>
-              <div class="k">Creator Email</div><div class="v">${rec.creatorEmail ? `<a href="mailto:${escapeAttr(rec.creatorEmail)}" style="color:var(--accent);">${escapeHtml(rec.creatorEmail)}</a>` : "—"}</div>
-              <div class="k">Creator Team</div><div class="v">${escapeHtml(rec.creatorTeam || "—")}</div>
-            </div>
-          </div>
-
-          <div class="drawerSection">
-            <div class="drawerKicker">Links</div>
+            <div class="drawerKicker">Additional Links</div>
             ${(isYouTubeItem(rec) || isVideoDemo(rec))
               ? (rec.productionLink ? renderDrawerLink("Video Demo", rec.productionLink, "Watch Video", rec.recordId) : '')
                 + (rec.productionLink ? '<p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">The published video demo.</p>' : '')
               : (getLaunchLink(rec) ? renderDrawerLink("Demo Page", getLaunchLink(rec), "Launch Demo", rec.recordId) : '')
                 + (rec.productionLink ? renderDrawerLink("Production Link", rec.productionLink) : '')
                 + (rec.productionLink ? '<p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">The published version of this demo, embedded on the demo page.</p>' : '')
-                + (getEditLink(rec) ? renderDrawerLink("Creation Link", getEditLink(rec), "Edit in Arcade") : '')
-                + (getEditLink(rec) ? '<p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">The editable source in Arcade. Changes here won\'t appear on the live demo page automatically. To publish updates, submit a new version through the creator intake form or contact the team at interactive-experiences@redhat.com.</p>' : '')
+                + (hasEditableSource(rec) && getEditLink(rec) ? renderDrawerLink("Creation Link", getEditLink(rec), "Edit in Arcade") : '')
+                + (hasEditableSource(rec) && getEditLink(rec) ? '<p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">The editable source in Arcade. Changes here won\'t appear on the live demo page automatically. To publish updates, submit a new version through the creator intake form or contact the team at interactive-experiences@redhat.com.</p>' : '')
             }
           </div>
 

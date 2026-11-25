@@ -68,6 +68,45 @@ function testBrowseByExperience() {
   console.log('✓ Test 2 passed');
 }
 
+// Test 2b: Content type toggle behavior (deselect returns to All Experiences)
+function testContentTypeToggle() {
+  console.log('Test 2b: Content type toggle deselects and returns to All Experiences');
+
+  // Set up initial state with search and other filters to verify preservation
+  document.getElementById('globalSearch').value = 'kubernetes';
+  filterState.products = ['Red Hat OpenShift'];
+  filterState.tdps = ['Container Management'];
+  filterState.formats = [];
+
+  // Click Interactive Demos
+  browseByExperience('Interactive Demo');
+  assert(filterState.formats.length === 1 && filterState.formats[0] === 'Interactive Demo', 'FAIL: Format should be set to Interactive Demo');
+
+  // Verify visuals show Interactive Demos as active
+  const interactiveDemoCard = Array.from(document.querySelectorAll('.discover-card:not(.discover-card-external)'))
+    .find(card => card.querySelector('.discover-card-label')?.textContent.trim() === 'Interactive Demos');
+  assert(interactiveDemoCard?.classList.contains('active'), 'FAIL: Interactive Demos card should be active');
+
+  // Click Interactive Demos AGAIN (toggle off)
+  browseByExperience('Interactive Demo');
+
+  // Should deselect and return to All Experiences
+  assert(filterState.formats.length === 0, 'FAIL: Formats should be empty after toggle');
+
+  // Verify search and other filters are preserved
+  assert(document.getElementById('globalSearch').value === 'kubernetes', 'FAIL: Search should be preserved after toggle');
+  assert(filterState.products.includes('Red Hat OpenShift'), 'FAIL: Product filter should be preserved after toggle');
+  assert(filterState.tdps.includes('Container Management'), 'FAIL: TDP filter should be preserved after toggle');
+
+  // Verify visuals show All Experiences as active
+  const allExperiencesCard = Array.from(document.querySelectorAll('.discover-card:not(.discover-card-external)'))
+    .find(card => card.querySelector('.discover-card-label')?.textContent.trim() === 'All Experiences');
+  assert(allExperiencesCard?.classList.contains('active'), 'FAIL: All Experiences card should be active after toggle');
+  assert(!interactiveDemoCard?.classList.contains('active'), 'FAIL: Interactive Demos card should NOT be active after toggle');
+
+  console.log('✓ Test 2b passed');
+}
+
 // Test 3: Advanced filter changes sync Quick Filter visuals
 function testAdvancedFilterSync() {
   console.log('Test 3: Advanced filter sync to Quick Filters');
@@ -275,6 +314,7 @@ function runPackage3ATests() {
   try {
     testQuickFilterToggle();
     testBrowseByExperience();
+    testContentTypeToggle();
     testAdvancedFilterSync();
     testManualApplyVsImmediate();
     testPendingIndication();
