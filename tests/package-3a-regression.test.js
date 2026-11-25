@@ -68,6 +68,34 @@ function testBrowseByExperience() {
   console.log('✓ Test 2 passed');
 }
 
+// Test 2b: Content type toggle deselects when clicking selected type
+function testContentTypeToggle() {
+  console.log('Test 2b: Content type toggle deselects');
+
+  // Set up with search and filters
+  document.getElementById('globalSearch').value = 'kubernetes';
+  filterState.products = ['Red Hat OpenShift'];
+  filterState.tdps = ['Container Management'];
+  filterState.formats = [];
+
+  // Click Interactive Demos
+  browseByExperience('Interactive Demo');
+  assert(filterState.formats.length === 1 && filterState.formats[0] === 'Interactive Demo',
+    'FAIL: Format should be set to Interactive Demo');
+
+  // Click AGAIN (toggle off)
+  browseByExperience('Interactive Demo');
+  assert(filterState.formats.length === 0, 'FAIL: Format should be cleared after toggle');
+  assert(document.getElementById('globalSearch').value === 'kubernetes',
+    'FAIL: Search should be preserved after toggle');
+  assert(filterState.products.includes('Red Hat OpenShift'),
+    'FAIL: Product filter should be preserved after toggle');
+  assert(filterState.tdps.includes('Container Management'),
+    'FAIL: TDP filter should be preserved after toggle');
+
+  console.log('✓ Test 2b passed');
+}
+
 // Test 3: Advanced filter changes sync Quick Filter visuals
 function testAdvancedFilterSync() {
   console.log('Test 3: Advanced filter sync to Quick Filters');
@@ -143,18 +171,25 @@ function testMoreFiltersCollapsed() {
 
   const panel = document.querySelector('.moreFiltersPanel');
   const btn = document.getElementById('moreFiltersBtn');
+  const chevron = btn?.querySelector('.moreFiltersChevron');
 
+  // Initial state: collapsed
   assert(panel?.classList.contains('collapsed'), 'FAIL: Panel should start collapsed');
-  assert(btn?.textContent === 'More filters', 'FAIL: Button should say "More filters"');
+  assert(btn?.getAttribute('aria-expanded') === 'false', 'FAIL: aria-expanded should be false');
+  assert(btn?.getAttribute('aria-controls') === 'moreFiltersPanel', 'FAIL: aria-controls should reference panel');
+  assert(chevron?.style.transform === 'rotate(0deg)' || chevron?.style.transform === '', 'FAIL: Chevron should point down');
 
-  // Toggle
+  // Toggle to expand
   toggleMoreFilters();
   assert(!panel?.classList.contains('collapsed'), 'FAIL: Panel should expand');
-  assert(btn?.textContent === 'Fewer filters', 'FAIL: Button should say "Fewer filters"');
+  assert(btn?.getAttribute('aria-expanded') === 'true', 'FAIL: aria-expanded should be true when expanded');
+  assert(chevron?.style.transform === 'rotate(180deg)', 'FAIL: Chevron should point up when expanded');
 
-  // Toggle back
+  // Toggle back to collapse
   toggleMoreFilters();
   assert(panel?.classList.contains('collapsed'), 'FAIL: Panel should collapse');
+  assert(btn?.getAttribute('aria-expanded') === 'false', 'FAIL: aria-expanded should be false when collapsed');
+  assert(chevron?.style.transform === 'rotate(0deg)', 'FAIL: Chevron should point down when collapsed');
 
   console.log('✓ Test 6 passed');
 }
@@ -275,6 +310,7 @@ function runPackage3ATests() {
   try {
     testQuickFilterToggle();
     testBrowseByExperience();
+    testContentTypeToggle();
     testAdvancedFilterSync();
     testManualApplyVsImmediate();
     testPendingIndication();
