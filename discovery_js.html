@@ -1244,8 +1244,14 @@ Shared via The Interact Hub`;
 
       function getPrimaryLink(item){
         let baseUrl = getLaunchLink(item) || getEditLink(item);
+
+        // For Video Demo and YouTube, fall back to productionLink if no launch page exists
+        if (!baseUrl && (isYouTubeItem(item) || isVideoDemo(item))) {
+          baseUrl = item.productionLink || "";
+        }
+
         if (!baseUrl) return "";
-        
+
         // Add TDP-based campaign tracking
         return addCampaignTracking(baseUrl, item.tdp);
       }
