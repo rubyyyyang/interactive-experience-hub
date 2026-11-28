@@ -823,6 +823,19 @@
         color:#fff;
       }
 
+      .btn.drawerPrimaryLaunch{
+        background:var(--accent);
+        color:#fff;
+        width:100%;
+        justify-content:center;
+        font-size:15px;
+        padding:12px 20px;
+      }
+      .btn.drawerPrimaryLaunch:hover{
+        background:#5b21b6;
+        color:#fff;
+      }
+
       .btn.muted{
         background:transparent;
         border-color:var(--border);
@@ -1196,11 +1209,58 @@
         border:1px solid var(--border);
         border-radius:18px;
         box-shadow:var(--shadow);
+        padding:0;
+        display:flex;
+        flex-direction:column;
+        min-height:260px;
+        position:relative;
+      }
+
+      .cardHeader{
+        background:linear-gradient(135deg, rgba(109,40,217,0.03), rgba(109,40,217,0.08));
+        border-radius:18px 18px 0 0;
+        padding:12px 14px 10px 14px;
+        display:flex;
+        flex-direction:column;
+        border-bottom:1px solid rgba(109,40,217,0.12);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) .cardHeader {
+          background:linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.14));
+          border-bottom-color:rgba(139,92,246,0.18);
+        }
+      }
+
+      [data-theme="dark"] .cardHeader {
+        background:linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.14));
+        border-bottom-color:rgba(139,92,246,0.18);
+      }
+
+      .cardExperienceType{
+        display:flex;
+        align-items:center;
+        gap:6px;
+        flex:1;
+        min-width:0;
+      }
+
+      .cardExperienceTypeLabel{
+        font-size:11px;
+        font-weight:700;
+        text-transform:uppercase;
+        letter-spacing:0.5px;
+        color:var(--muted);
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
+
+      .cardBody{
         padding:14px;
         display:flex;
         flex-direction:column;
-        height:440px;
-        position:relative;
+        flex:1;
       }
 
 
@@ -1211,9 +1271,16 @@
         font-weight:800;
         line-height:1.3;
         display:-webkit-box;
-        -webkit-line-clamp:2;
+        -webkit-line-clamp:3;
         -webkit-box-orient:vertical;
         overflow:hidden;
+        min-height:62px;
+      }
+
+      @media (max-width: 700px) {
+        .title {
+          min-height:auto;
+        }
       }
 
       .badges{
@@ -1290,6 +1357,28 @@
         min-height:58px;
       }
 
+      .cardProductName{
+        font-size:14px;
+        font-weight:500;
+        color:var(--ink);
+        margin-bottom:8px;
+        line-height:1.4;
+        display:-webkit-box;
+        -webkit-line-clamp:2;
+        -webkit-box-orient:vertical;
+        overflow:hidden;
+        min-height:39px;
+      }
+
+      @media (max-width: 700px) {
+        .cardProductName {
+          min-height:auto;
+        }
+        .desc {
+          min-height:auto;
+        }
+      }
+
       .links{
         margin-top:12px;
         display:grid;
@@ -1322,20 +1411,16 @@
 
       .more-info-link{
         display:inline-block;
-        margin-top:auto;
-        padding-top:8px;
-        font-size:12px;
-        font-weight:600;
-        color:var(--accent);
+        font-size:13px;
+        font-weight:500;
+        color:var(--muted);
         cursor:pointer;
+        text-decoration:none;
+        transition:color 0.2s;
       }
-      .more-info-link:hover{ text-decoration:underline; }
-
-      .cardActions{
-        display:flex;
-        gap:8px;
-        flex-wrap:wrap;
-        padding-top:10px;
+      .more-info-link:hover{
+        color:var(--accent);
+        text-decoration:none;
       }
 
       .pager{
@@ -1372,7 +1457,7 @@
         display:flex;
         align-items:stretch;
         justify-content:flex-end;
-        z-index:100;
+        z-index:1050;
         pointer-events:none;
         transition:background .25s ease;
       }
@@ -1412,10 +1497,15 @@
       }
 
       .drawerSection{
-        border:1px solid var(--border);
-        border-radius:16px;
-        padding:14px;
-        margin-bottom:12px;
+        margin-bottom:16px;
+      }
+
+      .drawerSection:first-child{
+        margin-bottom:18px;
+      }
+
+      .drawerSection:last-child{
+        margin-bottom:0;
       }
 
       .drawerKicker{
@@ -1423,7 +1513,8 @@
         color:var(--muted);
         text-transform:uppercase;
         letter-spacing:.25px;
-        margin-bottom:8px;
+        margin-bottom:12px;
+        font-weight:700;
       }
 
       .kv{
@@ -1435,6 +1526,37 @@
 
       .k{color:var(--muted)}
       .v{word-break:break-word}
+
+      details.drawerSection{
+        border:1px solid var(--border);
+        border-radius:12px;
+        padding:14px;
+      }
+
+      details.drawerSection summary{
+        cursor:pointer;
+        list-style:none;
+        display:flex;
+        align-items:center;
+        gap:8px;
+      }
+
+      details.drawerSection summary .drawerKicker {
+        margin-bottom: 0;
+      }
+
+      details.drawerSection summary svg {
+        transition:transform 0.2s;
+        flex-shrink:0;
+      }
+
+      details.drawerSection[open] summary svg {
+        transform: rotate(90deg);
+      }
+
+      details.drawerSection summary::-webkit-details-marker {
+        display: none;
+      }
 
       .drawerLink{
         border:1px solid var(--border);
@@ -1701,8 +1823,8 @@
 
       .cardCheckbox{
         position:absolute;
-        top:12px;
-        left:12px;
+        top:14px;
+        left:14px;
         width:20px;
         height:20px;
         border:2px solid var(--border);
@@ -1730,8 +1852,8 @@
         font-weight:bold;
       }
 
-      .card.selectable .title{
-        padding-left:32px;
+      .card.selectable .cardHeader{
+        padding-left:42px;
       }
 
       /* Floating Selection System */
